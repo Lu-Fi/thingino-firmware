@@ -198,7 +198,7 @@
                   <th scope="col">Codec</th>
                   <th scope="col" class="text-end">FPS</th>
                   <th scope="col" class="text-end">Bitrate</th>
-                  <th scope="col" class="text-end">Avg bitrate</th>
+                  <th scope="col" class="text-end" title="Measured average bitrate on T31; encoder queue backlog (frames not yet claimed) on every other platform">Avg / queue</th>
                   <th scope="col" class="text-end">GOP</th>
                   <th scope="col">Profile</th>
                   <th scope="col">RC mode</th>
@@ -376,7 +376,7 @@
       cells.gop.textContent = "—";
       cells.profile.textContent = "—";
       cells.rc.textContent = "—";
-      cells.avgBitrate.textContent = "—";
+      cells.avgBitrate.textContent = "";
       statsBody.appendChild(tr);
       const row = { cells, history: [] };
       streamRows[chn] = row;
@@ -407,9 +407,9 @@
 
     // slow path: one GET /control every 5s while the card is visible - fills
     // in the fields the stats SSE doesn't carry (config-level gop/profile/
-    // rc_mode, the T31-only measured ave_bitrate, and day/night + motion
-    // status). Only updates rows the fast path already created; a stream
-    // absent from stats_json (disabled) never gets a control-only row.
+    // rc_mode, the encoder telemetry below, and day/night + motion status).
+    // Only updates rows the fast path already created; a stream absent from
+    // stats_json (disabled) never gets a control-only row.
     function applyControlSnapshot(j) {
       if (!j) return;
       const video = j.video || {}, enc = j.encoder || {};
@@ -420,9 +420,27 @@
         row.cells.gop.textContent = String(vcfg.gop);
         row.cells.profile.textContent = profileLabel(vcfg.profile);
         row.cells.rc.textContent = String(vcfg.rc_mode || "").toUpperCase();
+        // ave_bitrate (IMP_Encoder_GetChnAveBitrate) only exists on T31; every
+        // other platform - and a T31 stream before its first frame - reports
+        // -1 and control.c omits the field entirely. IMP_Encoder_Query's
+        // queue-backlog counters (left_pics/left_stream_bytes/left_stream_frames)
+        // ARE available on all 9 platforms, so use them as an always-present
+        // encoder-health stand-in instead of leaving the cell as a permanent
+        // "-" placeholder: a healthy encoder keeps this at/near 0, a rising
+        // value means it isn't keeping up with the source.
         const es = enc[k];
-        row.cells.avgBitrate.textContent =
-          (es && typeof es.ave_bitrate === "number") ? formatKbps(es.ave_bitrate) : "—";
+        if (es && typeof es.ave_bitrate === "number") {
+          row.cells.avgBitrate.textContent = formatKbps(es.ave_bitrate);
+          row.cells.avgBitrate.title = "";
+        } else if (es) {
+          row.cells.avgBitrate.textContent = es.left_pics + " q";
+          row.cells.avgBitrate.title = "encoder backlog: " + es.left_pics +
+            " frame(s) queued, " + formatBytes(es.left_stream_bytes) +
+            " / " + es.left_stream_frames + " stream frame(s) unclaimed";
+        } else {
+          row.cells.avgBitrate.textContent = "";
+          row.cells.avgBitrate.title = "";
+        }
       });
       const dn = j.daynight || {};
       if (statsDaynight) {

@@ -9,9 +9,14 @@
 (function () {
   "use strict";
   if (!window.timpsApi) return;
-  window.timpsApi.get().then(function (j) {
-    var v = j && j.version;
-    if (!v) return;
+
+  function render(v) {
+    var slot = document.getElementById("footer-timps-version");
+    if (slot) {
+      slot.textContent = "timps " + v;
+      slot.title = "timps build version";
+      return;
+    }
     var el = document.createElement("div");
     el.textContent = v;
     el.title = "timps build version";
@@ -19,5 +24,19 @@
       "position:fixed;right:6px;bottom:3px;font-size:.7rem;opacity:.35;" +
       "font-family:monospace;pointer-events:none;z-index:1;user-select:none;";
     document.body.appendChild(el);
-  }).catch(function () {});
+  }
+
+  function tryRender() {
+    window.timpsApi.get().then(function (j) {
+      var v = j && j.version;
+      if (!v) return;
+      render(v);
+    }).catch(function () {});
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", tryRender, { once: true });
+  } else {
+    tryRender();
+  }
 })();

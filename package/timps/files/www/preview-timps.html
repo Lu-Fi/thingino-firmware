@@ -444,6 +444,7 @@
     async function startStats() {
       if (statsEs || !window.EventSource) return;
       const info = await window.timpsTokenInfo;
+      if (statsCard.style.display === "none") return; // toggled off while awaiting the token
       const b = info ? (info.tls ? "https" : "http") + "://" + host + ":" + (info.port || MS_PORT) : base;
       const tok = info && info.token ? "&token=" + encodeURIComponent(info.token) : "";
       statsEs = new EventSource(b + "/events?stream=stats" + tok);

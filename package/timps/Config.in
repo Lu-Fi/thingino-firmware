@@ -108,7 +108,7 @@ config BR2_PACKAGE_TIMPS_SRT
 
 config BR2_PACKAGE_TIMPS_OSD_HINTING
 	bool "OSD text autohinting (geometric stem snapping)"
-	default n
+	default y
 	help
 	  Enable the opt-in geometric autohinting pass in the TTF rasterizer
 	  (msttf.c), which snaps long, near-vertical/near-horizontal glyph

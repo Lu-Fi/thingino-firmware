@@ -46,7 +46,7 @@
 #                 the runtime script treats them.
 #
 # A pin that inject-uboot-mmc-dt.sh turns into a DT binding (gpio.mmc_cd ->
-# cd-gpios, single-object gpio.mmc_power -> vmmc regulator, gpio.button_reset
+# cd-gpios, single-pin gpio.mmc_power (object or bare int) -> vmmc regulator, gpio.button_reset
 # -> gpio-keys) is never hogged: a hog claims the gpio at DM init and the
 # binding's own request then fails, breaking the subsystem that needed it
 # (cinnado_b6 lists pin 61 as both mmc_cd and a motor phase - card-detect
@@ -60,14 +60,17 @@
 # Usage: inject-uboot-gpio-dt.sh <thingino.json> <leaf.dts> <dt-name>
 set -e
 
-JSON="$1"; DTS="$2"; DT="$3"
+JSON="$1"
+DTS="$2"
+DT="$3"
 [ -f "$JSON" ] && [ -f "$DTS" ] || exit 0
 
 # Already injected on a previous incremental build?
 grep -q 'thingino GPIO presets' "$DTS" && exit 0
 
 # Emit "<name>:<pin>:<level>" tokens, or nothing when there is nothing to hog.
-vals=$(python3 - "$JSON" 2>/dev/null <<'PY'
+vals=$(
+	python3 - "$JSON" 2>/dev/null <<'PY'
 import json, sys
 
 root = json.load(open(sys.argv[1]))
@@ -227,6 +230,8 @@ if isinstance(cd, int) and cd >= 0:
     reserved.add(cd)
 if isinstance(mp, dict) and isinstance(mp.get("pin"), int) and mp["pin"] >= 0:
     reserved.add(mp["pin"])
+elif isinstance(mp, int) and not isinstance(mp, bool) and mp >= 0:
+    reserved.add(mp)  # short notation: bare int = active-high pin
 br = g.get("button_reset")
 bp = br.get("pin") if isinstance(br, dict) else br
 if isinstance(bp, int) and bp >= 0:
@@ -247,8 +252,8 @@ PY
 
 # gpio number -> bank label letter (PA=a..PE=e), empty if out of range
 bank() {
-	case $(( $1 / 32 )) in
-	0) echo a ;; 1) echo b ;; 2) echo c ;; 3) echo d ;; 4) echo e ;; *) echo "" ;;
+	case $(($1 / 32)) in
+		0) echo a ;; 1) echo b ;; 2) echo c ;; 3) echo d ;; 4) echo e ;; *) echo "" ;;
 	esac
 }
 
@@ -272,12 +277,12 @@ emitted=""
 		printf '\t%s_%s {\n' "$NAME" "$PIN"
 		printf '\t\tgpio-hog;\n'
 		printf '\t\t%s;\n' "$STATE"
-		printf '\t\tgpios = <%s 0>;\t/* GPIO_ACTIVE_HIGH */\n' "$(( PIN % 32 ))"
+		printf '\t\tgpios = <%s 0>;\t/* GPIO_ACTIVE_HIGH */\n' "$((PIN % 32))"
 		printf '\t};\n'
 		printf '};\n'
 		emitted="$emitted $NAME/$PIN=$STATE"
 	done
-} >> "$DTS"
+} >>"$DTS"
 
 [ -n "$emitted" ] && echo "U-Boot: injected GPIO presets:$emitted"
 exit 0

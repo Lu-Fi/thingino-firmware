@@ -24,14 +24,22 @@ else
 SOC_TARGET_ARCH := mipsel
 endif
 
-# Get SoC model from BR2_INGENIC_SOC_MODEL (single source of truth)
+# The SoC model, from whichever vendor's symbol carries it. Kconfig keeps them
+# mutually exclusive -- each depends on its vendor and the vendor is a choice --
+# so at most one is ever set and the order below is not a precedence. Testing
+# after qstrip rather than before is what makes an empty BR2_..._SOC_MODEL=""
+# fall through, since "" is two characters to make and not an empty string.
 SOC_MODEL_INPUT := $(call qstrip,$(BR2_INGENIC_SOC_MODEL))
+ifeq ($(SOC_MODEL_INPUT),)
+SOC_MODEL_INPUT := $(call qstrip,$(BR2_SIGMASTAR_SOC_MODEL))
+endif
 ifneq ($(SOC_MODEL_INPUT),)
 	SOC_MODEL := $(shell echo $(SOC_MODEL_INPUT) | tr A-Z a-z)
 
 	# One file per SoC family under soc/<vendor>/. Each sets SOC_FAMILY,
 	# SOC_ARCH, SOC_RAM_MB and, where the vendor uses BR2_TARGET_UBOOT,
-	# SOC_UBOOT_NOR / SOC_UBOOT_NAND / SOC_UBOOT_BIN. Anything a SoC does not
+	# SOC_UBOOT / SOC_UBOOT_BIN. SOC_UBOOT is the U-Boot board/defconfig
+	# name, already resolved for the flash type. Anything a SoC does not
 	# have, it does not set -- consumers below use $(or ...) for the fallback.
 	#
 	# All of them are included and each opens with a $(filter) on its own
@@ -434,13 +442,8 @@ export FLASH_SIZE_MB
 #
 
 ifeq ($(BR2_TARGET_UBOOT_BOARDNAME),)
-	# Get U-Boot board name based on flash type. A SoC with no separate NAND
-	# board falls back to its NOR one.
-	ifeq ($(BR2_THINGINO_FLASH_NAND),y)
-		UBOOT_BOARDNAME := $(or $(SOC_UBOOT_NAND),$(SOC_UBOOT_NOR),unknown)
-	else
-		UBOOT_BOARDNAME := $(or $(SOC_UBOOT_NOR),unknown)
-	endif
+	# SOC_UBOOT is resolved for the flash type by the soc/<vendor>/ file.
+	UBOOT_BOARDNAME := $(or $(SOC_UBOOT),unknown)
 	BR2_TARGET_UBOOT_BOARDNAME := $(UBOOT_BOARDNAME)
 else
 	# Defconfig provided a U-Boot board name; derive the unquoted version.
@@ -497,11 +500,7 @@ ifeq ($(BR2_TARGET_UBOOT_FORMAT_CUSTOM_NAME),)
 endif
 
 ifeq ($(BR2_TARGET_UBOOT_BOARD_DEFCONFIG),)
-	ifeq ($(BR2_THINGINO_FLASH_NAND),y)
-		UBOOT_DEFCONFIG := $(or $(SOC_UBOOT_NAND),$(SOC_UBOOT_NOR),unknown)
-	else
-		UBOOT_DEFCONFIG := $(or $(SOC_UBOOT_NOR),unknown)
-	endif
+	UBOOT_DEFCONFIG := $(or $(SOC_UBOOT),unknown)
 	BR2_TARGET_UBOOT_BOARD_DEFCONFIG := $(UBOOT_DEFCONFIG)
 endif
 UBOOT_DEFCONFIG := $(subst ",,$(BR2_TARGET_UBOOT_BOARD_DEFCONFIG))

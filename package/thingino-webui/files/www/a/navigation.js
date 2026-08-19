@@ -73,9 +73,8 @@
       { label: "Admin profile", href: "/config-admin.html" },
     ];
 
+    settingsItems.push({ label: "Network", href: "/config-network.html" });
     settingsItems.push(
-      { label: "Network", href: "/config-network.html" },
-      { label: "RTSP/ONVIF access", href: "/config-rtsp.html" },
       { label: "Remote logging", href: "/config-syslog.html" },
       { label: "Time", href: "/config-time.html" },
       { label: "Web Interface", href: "/config-webui.html" },
@@ -144,11 +143,7 @@
         type: "dropdown",
         id: "ddServices",
         label: "Services",
-        items: [
-          { label: "Timelapse Recorder", href: "/tool-timelapse.html" },
-          { label: "Video Recorder", href: "/tool-record.html" },
-          { label: "Home Assistant", href: "/config-ha.html" },
-        ],
+        items: [{ label: "Home Assistant", href: "/config-ha.html" }],
       },
       {
         type: "dropdown",

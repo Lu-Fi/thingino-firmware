@@ -1,0 +1,118 @@
+GARBAGE=""
+GARBAGE_FILE="$(mktemp "${TMPDIR:-/tmp}/send2_garbage.XXXXXX")" || {
+	echo "send2: unable to create garbage tracker" >&2
+	exit 1
+}
+export GARBAGE_FILE
+
+add_to_garbage() {
+	[ -n "$1" ] || return
+	GARBAGE="${GARBAGE:+$GARBAGE }$1"
+	[ -n "$GARBAGE_FILE" ] && printf '%s\n' "$1" >> "$GARBAGE_FILE"
+}
+
+_cleanup() {
+	if [ -n "$GARBAGE_FILE" ] && [ -f "$GARBAGE_FILE" ]; then
+		while IFS= read -r garbage_path; do
+			[ -n "$garbage_path" ] && rm -f -- "$garbage_path"
+		done < "$GARBAGE_FILE"
+		rm -f -- "$GARBAGE_FILE"
+	fi
+	GARBAGE=""
+}
+
+thingino_send2_wait_stable_file() {
+	# Wait until path exists and size is stable for 2 consecutive checks.
+	_path=$1
+	_max=${2:-20}
+	_i=0
+	while [ ! -f "$_path" ] && [ "$_i" -lt "$_max" ]; do
+		sleep 1
+		_i=$((_i + 1))
+	done
+	[ -f "$_path" ] || return 1
+
+	_prev=0
+	_curr=$(stat -c%s "$_path" 2>/dev/null || echo 0)
+	_stable=0
+	_i=0
+	while [ "$_stable" -lt 2 ] && [ "$_i" -lt "$_max" ]; do
+		sleep 1
+		_prev=$_curr
+		_curr=$(stat -c%s "$_path" 2>/dev/null || echo 0)
+		if [ "$_curr" -eq "$_prev" ] && [ "$_curr" -gt 0 ]; then
+			_stable=$((_stable + 1))
+		else
+			_stable=0
+		fi
+		_i=$((_i + 1))
+	done
+	[ -s "$_path" ]
+}
+
+copy_photo() {
+	# Use existing photo from motion if available
+	if [ -n "$MOTION_PHOTO_FILE" ] && [ -f "$MOTION_PHOTO_FILE" ]; then
+		# Create atomically (mktemp, not "mktemp -u") so cp can't follow a symlink
+		# pre-planted at a predictable name in the sticky /tmp; pin to /tmp so a
+		# hostile TMPDIR can't redirect it.
+		local tmpfile
+		tmpfile="$(mktemp /tmp/send2_photo.XXXXXX)" || return
+		cp "$MOTION_PHOTO_FILE" "$tmpfile"
+		add_to_garbage "$tmpfile"
+		echo "$tmpfile"
+		return
+	fi
+
+	local tmpfile
+	tmpfile="$(mktemp /tmp/send2_photo.XXXXXX)" || return
+	prudyntctl snapshot -c 0 >"$tmpfile"
+	add_to_garbage "$tmpfile"
+	echo "$tmpfile"
+}
+
+copy_video() {
+	# Use existing video from motion if available
+	if [ -n "$MOTION_VIDEO_FILE" ] && [ -f "$MOTION_VIDEO_FILE" ]; then
+		# Create atomically (see copy_photo): cp target must not be a planted symlink.
+		local tmpfile
+		tmpfile="$(mktemp /tmp/send2_video.XXXXXX)" || return
+		cp "$MOTION_VIDEO_FILE" "$tmpfile"
+		add_to_garbage "$tmpfile"
+		echo "$tmpfile"
+		return
+	fi
+
+	# Clip target: record_clip()/prudynt create the file themselves with O_EXCL,
+	# so it must NOT pre-exist -> name only (mktemp -u), but pinned to /tmp so it
+	# satisfies record_clip's required /tmp/ prefix regardless of TMPDIR.
+	local tmpfile
+	tmpfile="$(mktemp -u /tmp/send2_clip.XXXXXX)"
+	local duration=${SEND2_CLIP_SECS:-10}
+
+	# Check if mp4ctl interface exists
+	if [ ! -e "/run/prudynt/mp4ctl" ]; then
+		echo "$tmpfile"
+		return 1
+	fi
+
+	# Send recording command
+	if ! echo "START $tmpfile $duration 0" >/run/prudynt/mp4ctl 2>/dev/null; then
+		echo "$tmpfile"
+		return 1
+	fi
+
+	if ! thingino_send2_wait_stable_file "$tmpfile" 20; then
+		echo "$tmpfile"
+		return 1
+	fi
+
+	add_to_garbage "$tmpfile"
+	echo "$tmpfile"
+}
+
+get_value() {
+	jct "$config_file" get "$domain.$1" 2>/dev/null
+}
+
+trap _cleanup EXIT

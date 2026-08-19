@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck disable=SC2015
 # timps-selftest - on-device smoke test of the timps HTTP API and features.
 # Run on the camera:  timps-selftest        (or: timps-selftest -v  for bodies)
 # Exits 0 when nothing FAILED (warnings are non-fatal: they usually mean a

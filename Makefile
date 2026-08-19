@@ -161,6 +161,10 @@ ifeq ($(origin THINGINO_BUILD_START_EPOCH), undefined)
 THINGINO_BUILD_START_EPOCH := $(shell date +%s)
 endif
 export THINGINO_BUILD_START_EPOCH
+ifeq ($(origin THINGINO_BUILD_START_DISK_SECTORS), undefined)
+THINGINO_BUILD_START_DISK_SECTORS := $(shell $(SCRIPTS_DIR)/disk_sectors_written.sh)
+endif
+export THINGINO_BUILD_START_DISK_SECTORS
 THINGINO_LOG_TARGETS := all fast dev cleanbuild build build_fast pack repack
 
 define print_build_user_files_section
@@ -447,7 +451,7 @@ define thingino_run_build
 endef
 
 .PHONY: all bootstrap build build_fast build-info clean clean-nfs-debug cleanbuild \
-	defconfig dev distclean fast help pack repack remove_bins \
+	defconfig dev distclean fast help pack ram-build ram-dev ram-setup repack remove_bins \
 	sdk toolchain update br-% \
 	check-config force-config show-config-deps clean-config \
 	tftpd-start tftpd-stop tftpd-restart tftpd-status tftpd-logs tftp-copy tftp-upload \

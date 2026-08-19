@@ -67,7 +67,6 @@ const stream_params = [
   "rtsp_endpoint",
   "audio_enabled",
 ];
-const osd_params = ["enabled"];
 const previewEndpointState = {
   rtsp: {
     username: "thingino",
@@ -307,85 +306,6 @@ async function initPreviewEndpoints() {
 
 initPreviewEndpoints();
 
-function handleOsdData(osd, streamIndex) {
-  if (!osd) return;
-
-  if (osd.enabled !== undefined) {
-    const el = $(`#osd${streamIndex}_enabled`);
-    if (el) {
-      el.checked = osd.enabled;
-      el.disabled = false;
-    }
-  }
-  // Time element
-  if (osd.time) {
-    if (osd.time.enabled !== undefined) {
-      const el = $(`#osd${streamIndex}_time_enabled`);
-      if (el) {
-        el.checked = osd.time.enabled;
-        el.disabled = false;
-      }
-    }
-    if (osd.time.format !== undefined) {
-      const el = $(`#osd${streamIndex}_time_format`);
-      if (el) {
-        el.value = osd.time.format;
-        el.disabled = false;
-      }
-    }
-    if (osd.time.position !== undefined) {
-      const el = $(`#osd${streamIndex}_time_position`);
-      if (el) {
-        el.value = osd.time.position;
-        el.disabled = false;
-      }
-    }
-  }
-
-  // Uptime element
-  if (osd.uptime) {
-    if (osd.uptime.enabled !== undefined) {
-      const el = $(`#osd${streamIndex}_uptime_enabled`);
-      if (el) {
-        el.checked = osd.uptime.enabled;
-        el.disabled = false;
-      }
-    }
-    if (osd.uptime.position !== undefined) {
-      const el = $(`#osd${streamIndex}_uptime_position`);
-      if (el) {
-        el.value = osd.uptime.position;
-        el.disabled = false;
-      }
-    }
-  }
-
-  // Usertext element
-  if (osd.usertext) {
-    if (osd.usertext.enabled !== undefined) {
-      const el = $(`#osd${streamIndex}_usertext_enabled`);
-      if (el) {
-        el.checked = osd.usertext.enabled;
-        el.disabled = false;
-      }
-    }
-    if (osd.usertext.format !== undefined) {
-      const el = $(`#osd${streamIndex}_usertext_format`);
-      if (el) {
-        el.value = osd.usertext.format;
-        el.disabled = false;
-      }
-    }
-    if (osd.usertext.position !== undefined) {
-      const el = $(`#osd${streamIndex}_usertext_position`);
-      if (el) {
-        el.value = osd.usertext.position;
-        el.disabled = false;
-      }
-    }
-  }
-}
-
 function handleMessage(msg) {
   if (msg.motion && msg.motion.enabled !== undefined) {
     const motionBtn = $("#motion");
@@ -434,7 +354,6 @@ function handleMessage(msg) {
         setValue(msg.stream0, "stream0", param);
       }
     });
-    handleOsdData(msg.stream0.osd, 0);
   }
 
   // Handle stream1 params
@@ -444,7 +363,6 @@ function handleMessage(msg) {
         setValue(msg.stream1, "stream1", param);
       }
     });
-    handleOsdData(msg.stream1.osd, 1);
   }
 
   // Override FPS from config file so night-mode halving doesn't persist
@@ -483,6 +401,24 @@ async function loadMotorParams() {
 
 async function loadConfig() {
   showBusy("Loading camera configuration...");
+  const helper = window.thinginoStreamer;
+  if (helper && helper.preferAgent && helper.preferAgent()) {
+    try {
+      const cfg = await helper.agentRequest("/api/v1/config", {
+        cache: "no-store",
+      });
+      const msg = helper.configToMessage(cfg);
+      handleMessage(msg);
+      if (typeof helper.hideUnsupportedControls === "function") {
+        helper.hideUnsupportedControls();
+      }
+      return;
+    } catch (err) {
+      console.warn("Agent config load failed, falling back:", err);
+    } finally {
+      hideBusy();
+    }
+  }
   const BASE = "http://" + location.hostname + ":8080/api/v1/config/";
   try {
     const [image, motion, privacy, rtsp, stream0, stream1] = await Promise.all([
@@ -505,6 +441,21 @@ var API_BASE = "http://" + location.hostname + ":8080/api/v1/config";
 
 async function sendToEndpoint(payload) {
   console.log(ts(), "--->", payload);
+  const helper = window.thinginoStreamer;
+  if (helper && helper.preferAgent && helper.preferAgent()) {
+    try {
+      const obj =
+        typeof payload === "string" ? JSON.parse(payload) : payload || {};
+      const applied = await helper.applyPayload(obj);
+      if (!applied) {
+        console.warn(ts(), "No agent-mapped fields in payload", obj);
+      }
+      return;
+    } catch (err) {
+      console.error("Agent send error", err);
+      return;
+    }
+  }
   const payloadStr =
     typeof payload === "string" ? payload : JSON.stringify(payload);
   console.log(ts(), "===>", payloadStr);
@@ -933,9 +884,49 @@ function applyFieldMetadata(field, data) {
   updateImagingLabel(field, data.value);
 }
 
+function preferStreamerAgent() {
+  const helper = window.thinginoStreamer;
+  return !!(helper && helper.preferAgent && helper.preferAgent());
+}
+
+async function fetchImagingStateFromAgent() {
+  const helper = window.thinginoStreamer;
+  const cfg = await helper.agentRequest("/api/v1/config", {
+    cache: "no-store",
+  });
+  const image = (cfg && cfg.image) || {};
+  const mapped = {
+    brightness: image.brightness,
+    contrast: image.contrast,
+    sharpness: image.sharpness,
+    saturation: image.saturation,
+  };
+  imagingFields.forEach((field) => {
+    const value = mapped[field];
+    if (value === undefined || value === null) {
+      applyFieldMetadata(field, { supported: false });
+      return;
+    }
+    const input = $(`#${field}`);
+    const min = input ? Number(input.dataset.min) : 0;
+    const max = input ? Number(input.dataset.max) : 255;
+    applyFieldMetadata(field, {
+      supported: true,
+      min: Number.isFinite(min) ? min : 0,
+      max: Number.isFinite(max) ? max : 255,
+      value: Number(value),
+      default: Number(value),
+    });
+  });
+}
+
 async function fetchImagingState() {
   showBusy("Loading imaging settings...");
   try {
+    if (preferStreamerAgent()) {
+      await fetchImagingStateFromAgent();
+      return;
+    }
     const res = await fetch("/x/json-imaging.cgi", { cache: "no-store" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const payload = await res.json();
@@ -964,11 +955,17 @@ async function persistImagingSetting(field, value) {
 }
 
 async function sendImagingUpdate(field, value, element) {
-  const params = new URLSearchParams({ cmd: "set" });
-  params.append(field, value);
   element?.setAttribute("data-busy", "1");
   element?.classList.add("opacity-75");
   try {
+    if (preferStreamerAgent()) {
+      // Agent-backed streamers (raptor) have no json-imaging.cgi — PATCH leaves directly.
+      await persistImagingSetting(field, value);
+      updateImagingLabel(field, value);
+      return;
+    }
+    const params = new URLSearchParams({ cmd: "set" });
+    params.append(field, value);
     const res = await fetch("/x/json-imaging.cgi", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -1251,13 +1248,23 @@ if (exportConfigBtn) {
 const saveConfigBtn = $("#save-config");
 if (saveConfigBtn) {
   saveConfigBtn.addEventListener("click", async () => {
+    const helper = window.thinginoStreamer;
     const confirmed = await confirm(
-      "Save the current configuration to /etc/prudynt.json?\n\nThis will overwrite the saved configuration file on the camera.",
+      (helper && helper.saveConfirmMessage && helper.saveConfirmMessage()) ||
+        "Save the current streamer configuration?\n\nThis will overwrite the saved configuration file on the camera.",
     );
     if (!confirmed) return;
 
     try {
       saveConfigBtn.disabled = true;
+      if (helper && helper.saveConfig) {
+        await helper.saveConfig();
+        alert(
+          (helper.saveSuccessMessage && helper.saveSuccessMessage()) ||
+            "Configuration saved successfully",
+        );
+        return;
+      }
 
       const payload = { action: { save_config: null } };
       const res = await apiFetch(API_BASE, {
@@ -1270,7 +1277,7 @@ if (saveConfigBtn) {
       const data = await res.json();
 
       if (data.action && data.action.save_config === "ok") {
-        alert("Configuration saved successfully to /etc/prudynt.json");
+        alert("Configuration saved successfully");
       } else {
         throw new Error("Save failed");
       }
@@ -1287,6 +1294,7 @@ fetchImagingState();
 
 async function loadConfigFps() {
   try {
+    if (preferStreamerAgent()) return;
     const resp = await fetch("/etc/prudynt.json", { cache: "no-store" });
     if (!resp.ok) return;
     const cfg = await resp.json();

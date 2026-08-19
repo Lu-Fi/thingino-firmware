@@ -12,7 +12,7 @@ This document provides comprehensive documentation for working with the Thingino
 - [Package Management](#package-management)
 - [Buildroot Integration](#buildroot-integration)
 - [Firmware Deployment](#firmware-deployment)
-  - [Overlay Backup](#overlay-backup)
+- [Overlay Backup](#overlay-backup)
 - [Shared Host Directory](#shared-host-directory)
 - [Advanced Usage](#advanced-usage)
 - [Troubleshooting](#troubleshooting)
@@ -220,6 +220,65 @@ make distclean
 Remove only configuration files.
 ```bash
 make clean-config
+```
+
+### RAM Builds
+
+Build the entire output tree on a tmpfs (RAM) so the build's writes never
+reach the SSD, then copy the finished artifacts back to disk. This is intended
+for **cold builds**: a from-scratch build is the most disk-write-intensive
+operation, pushing roughly 9 GB of compilation output at the storage device.
+Incremental development rebuilds (`make fast`) are cheap on the SSD and should
+be done on a real disk instead.
+
+```bash
+make ram-setup        # once per boot: raise the tmpfs inode limit
+CAMERA=<camera> make ram-build
+```
+
+#### `ram-setup`
+Remounts the tmpfs backing `RAM_BUILD_DIR` (default `/tmp/thingino-build`)
+with `nr_inodes=4m`. A full build creates ~1.1M files and dirs (per-package
+dirs alone are ~800k entries), which exceeds the stock `/tmp` limit of
+`nr_inodes=1m`. The remount is lost on reboot, so re-run it after each boot or
+make it permanent with a `tmp.mount` drop-in.
+
+#### `ram-build`
+Redirects `OUTPUT_DIR` to the tmpfs, runs a normal build (`all`), then:
+
+1. copies `images/` and `logs/` back to the disk output dir,
+2. copies `.config*`, `buildscope-report.json`, and `uenv.txt` back,
+3. removes the tmpfs tree, freeing RAM for the next camera.
+
+The generated `images/<camera>.md` records a `Disk Writes:` line - bytes
+written to the physical disk during the build, measured from
+`/proc/diskstats` - so the wear savings of a RAM build versus a disk build can
+be compared directly.
+
+Every `ram-build` is a cold build because the tmpfs tree is wiped afterward.
+ccache (`~/.buildroot-ccache`) and the download cache (`dl/`) stay on disk and
+make the recompile cheap.
+
+#### `ram-dev`
+Resumable parallel dev build on the same tmpfs.  It runs the same parallel
+incremental build (`fast`) but NEVER wipes the tmpfs output tree, so if the
+build crashes partway through you can simply re-run it and pick up exactly where
+it stopped - Buildroot rebuilds only the packages whose stamp files were left
+incomplete by the failed run.
+
+```bash
+CAMERA=<camera> make ram-dev       # first (or fresh) run
+CAMERA=<camera> make ram-dev       # re-run anytime to resume after a crash
+```
+
+The tmpfs inode check is relaxed on resume (a nearly-complete build may have
+consumed most of the inode budget, which would otherwise block you from
+continuing).  On success the images/logs are copied back to disk but the tmpfs
+tree is kept for the next iteration.  To abandon the tree and force a clean
+build, wipe it by hand and run again:
+
+```bash
+rm -rf /tmp/thingino-build
 ```
 
 ---

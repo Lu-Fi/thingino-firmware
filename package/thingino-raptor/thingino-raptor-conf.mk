@@ -206,6 +206,7 @@ define THINGINO_RAPTOR_PATCH_CONF
 	rset rtsp session_timeout "$(call qstrip,$(BR2_PACKAGE_THINGINO_RAPTOR_CONF_RTSP_SESSION_TIMEOUT))"; \
 	rset rtsp tcp_sndbuf "$(call qstrip,$(BR2_PACKAGE_THINGINO_RAPTOR_CONF_RTSP_TCP_SNDBUF))"; \
 	rset rtsp backchannel "$(call raptor_bval,RTSP_BACKCHANNEL)"; \
+	rset rtsp backchannel_codecs "$(call qstrip,$(BR2_PACKAGE_THINGINO_RAPTOR_CONF_RTSP_BACKCHANNEL_CODECS))"; \
 	rset rtsp sei_timecode "$(call raptor_bval,RTSP_SEI_TIMECODE)"; \
 	\
 	rset http enabled "$(call raptor_bval,HTTP_ENABLED)"; \
@@ -256,6 +257,7 @@ define THINGINO_RAPTOR_PATCH_CONF
 	rset ircut night_luma "$(call qstrip,$(BR2_PACKAGE_THINGINO_RAPTOR_CONF_IRCUT_NIGHT_LUMA))"; \
 	rset ircut night_gain "$(call qstrip,$(BR2_PACKAGE_THINGINO_RAPTOR_CONF_IRCUT_NIGHT_GAIN))"; \
 	rset ircut day_gain_pct "$(call qstrip,$(BR2_PACKAGE_THINGINO_RAPTOR_CONF_IRCUT_DAY_GAIN_PCT))"; \
+	rset ircut night_fps "$(call qstrip,$(BR2_PACKAGE_THINGINO_RAPTOR_CONF_IRCUT_NIGHT_FPS))"; \
 	rset ircut adc_channel "$(call qstrip,$(BR2_PACKAGE_THINGINO_RAPTOR_CONF_IRCUT_ADC_CHANNEL))"; \
 	rset ircut adc_night "$(call qstrip,$(BR2_PACKAGE_THINGINO_RAPTOR_CONF_IRCUT_ADC_NIGHT))"; \
 	rset ircut adc_day "$(call qstrip,$(BR2_PACKAGE_THINGINO_RAPTOR_CONF_IRCUT_ADC_DAY))"; \
@@ -290,6 +292,11 @@ define THINGINO_RAPTOR_PATCH_CONF
 	rset recording sei_timecode "$(call raptor_bval,RECORDING_SEI_TIMECODE)"; \
 	rset recording sign "$(call raptor_bval,RECORDING_SIGN)"; \
 	rset recording sign_key "$(call qstrip,$(BR2_PACKAGE_THINGINO_RAPTOR_CONF_RECORDING_SIGN_KEY))"; \
+	rset timelapse enabled "$(call raptor_bval,TIMELAPSE_ENABLED)"; \
+	rset timelapse interval "$(call qstrip,$(BR2_PACKAGE_THINGINO_RAPTOR_CONF_TIMELAPSE_INTERVAL))"; \
+	rset timelapse playback_fps "$(call qstrip,$(BR2_PACKAGE_THINGINO_RAPTOR_CONF_TIMELAPSE_PLAYBACK_FPS))"; \
+	rset timelapse file_frames "$(call qstrip,$(BR2_PACKAGE_THINGINO_RAPTOR_CONF_TIMELAPSE_FILE_FRAMES))"; \
+	rset timelapse max_mb "$(call qstrip,$(BR2_PACKAGE_THINGINO_RAPTOR_CONF_TIMELAPSE_MAX_MB))"; \
 	\
 	rset webrtc enabled "$(call raptor_bval,WEBRTC_ENABLED)"; \
 	rset webrtc udp_port "$(call qstrip,$(BR2_PACKAGE_THINGINO_RAPTOR_CONF_WEBRTC_UDP_PORT))"; \

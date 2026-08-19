@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck disable=SC1091
 # timps replacement for the stock (prudynt-flavored) snapshot CGIs. The stock
 # scripts shell out to prudyntctl, which does not exist on a timps image; this
 # one fetches timps's own /snapshot.jpg endpoint over loopback (timps skips

@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC1003,SC2005,SC2012,SC2034,SC2059,SC2064,SC2183
 #
 # thingino-snmp-monitor.sh - Monitor multiple Thingino cameras via SNMP
 #

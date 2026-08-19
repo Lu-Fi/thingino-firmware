@@ -74,7 +74,8 @@ def generate_mtdparts_string(
     """Generate MTD partitions string."""
     return (
         f"mtdparts={flash_controller}:{u_boot_kb}k(boot),{ub_env_kb}k(env),"
-        f"{backup_kb}k(backup),{kernel_kb}k(kernel),{rootfs_kb}k(rootfs),{data_kb}k(data)"
+        f"{backup_kb}k(backup),{kernel_kb}k(kernel),{rootfs_kb}k(rootfs),{data_kb}k(data),"
+        f"{flash_kb}k@0(all)"
     )
 
 
@@ -83,6 +84,17 @@ def format_duration(duration_seconds):
     hours, remainder = divmod(max(duration_seconds, 0), 3600)
     minutes, seconds = divmod(remainder, 60)
     return f"{hours}:{minutes:02d}:{seconds:02d}"
+
+
+def format_bytes(size_bytes):
+    """Format a byte count as a compact human-readable string."""
+    for unit in ('B', 'K', 'M', 'G', 'T'):
+        if size_bytes < 1024 or unit == 'T':
+            if unit == 'B':
+                return f"{int(size_bytes)}B"
+            return f"{size_bytes:.1f}{unit}".replace('.0', '')
+        size_bytes /= 1024
+    return f"{size_bytes}B"
 
 
 def main():
@@ -123,6 +135,7 @@ def main():
     parser.add_argument('data_size_kb', type=int)
     parser.add_argument('flash_size_kb', type=int)
     parser.add_argument('build_duration_seconds', type=int)
+    parser.add_argument('disk_bytes_written', type=int)
     parser.add_argument('flash_controller', nargs='?', default='jz_sfc')
 
     args = parser.parse_args()
@@ -202,7 +215,7 @@ MTD Partition Details
 
 Build: {args.git_branch}+{args.git_hash}, {args.build_date}
 Build Duration: {format_duration(args.build_duration_seconds)} ({args.build_duration_seconds}s)
-
+Disk Writes: {format_bytes(args.disk_bytes_written)} ({args.disk_bytes_written} bytes)
 """
 
     # Write to file

@@ -32,13 +32,22 @@ switch_to_color() {
 	# Record the mode only if the daemon took it. Writing regardless made
 	# "color status" report a mode that was never set when timpsd was down,
 	# and "toggle" then inverted from the wrong side.
-	curl -s $TIMPS_CURL_K -m 5 -X POST "$CONTROL_URL" -d '{"image":{"running_mode":0}}' >/dev/null 2>&1 &&
+	if curl -s $TIMPS_CURL_K -m 5 -X POST "$CONTROL_URL" -d '{"image":{"running_mode":0}}' >/dev/null 2>&1; then
 		echo "1" >"$MODE_FILE"
+	else
+		# switches are rare (few per day), a line per failure cannot storm
+		logger -t color "POST $CONTROL_URL failed - color mode NOT set (timpsd down?)"
+		return 1
+	fi
 }
 
 switch_to_monochrome() {
-	curl -s $TIMPS_CURL_K -m 5 -X POST "$CONTROL_URL" -d '{"image":{"running_mode":1}}' >/dev/null 2>&1 &&
+	if curl -s $TIMPS_CURL_K -m 5 -X POST "$CONTROL_URL" -d '{"image":{"running_mode":1}}' >/dev/null 2>&1; then
 		echo "0" >"$MODE_FILE"
+	else
+		logger -t color "POST $CONTROL_URL failed - monochrome mode NOT set (timpsd down?)"
+		return 1
+	fi
 }
 
 case "$1" in

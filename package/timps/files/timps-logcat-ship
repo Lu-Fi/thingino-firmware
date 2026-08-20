@@ -9,7 +9,15 @@ STATE=/tmp/.logcat-ship
 DUMP=/tmp/.logcat-dump.$$
 
 trap 'rm -f "$DUMP"' EXIT
-logcat -t >"$DUMP" 2>/dev/null || exit 0
+if ! logcat -t >"$DUMP" 2>/dev/null; then
+	# once per boot (marker in tmpfs): the shipper itself must not die silently
+	if [ ! -f /tmp/.logcat-ship-broken ]; then
+		logger -t "$TAG" "logcat -t failed - alog lines are no longer shipped to syslog"
+		touch /tmp/.logcat-ship-broken
+	fi
+	exit 0
+fi
+rm -f /tmp/.logcat-ship-broken
 [ -s "$DUMP" ] || exit 0
 
 last=0

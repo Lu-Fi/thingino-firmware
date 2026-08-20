@@ -275,3 +275,23 @@ config BR2_PACKAGE_TIMPS_DIAG_TOOLS
 
 	  This is separate from TIMPS_TRACE, which instruments the daemon
 	  itself and is deliberately not reachable from menuconfig.
+
+config BR2_PACKAGE_TIMPS_DROP_LIBSTDCPP
+	bool "Drop libstdc++.so from the image when nothing links it"
+	depends on BR2_PACKAGE_TIMPS_SRT
+	help
+	  libsrt is C++, so an SRT build drags libstdc++.so.6 into the
+	  image - 2130 KB, the largest single file in a 5 MB rootfs.
+	  timps links the C++ runtime statically (-static-libstdc++), so
+	  the shared copy is only still needed by Ingenic's proprietary
+	  libaudioProcess.so. Replace that with libaudioprocess-neo (pure
+	  C) and nothing links libstdc++ at all.
+
+	  This removes it in a target-finalize hook, but only after
+	  checking that no ELF in the image has a NEEDED entry for it - if
+	  anything still does, the file stays and the build prints why.
+	  The check cannot see dlopen, which is why this is opt-in.
+
+	  Do NOT extend this to libgcc_s.so.1: uClibc dlopens that one for
+	  pthread_cancel with no NEEDED entry, and removing it aborts the
+	  daemon right after audio init.

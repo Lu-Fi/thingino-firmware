@@ -34,5 +34,15 @@ echo "$ROW" >> "$OUT"
 # Optional syslog copy - OFF by default: this runs once a MINUTE.
 #   jct /etc/thingino.json set dnlog.isp_syslog true|false
 # The local CSV is written either way and stays authoritative (syslog is UDP).
-[ "$(jct /etc/thingino.json get dnlog.isp_syslog 2>/dev/null)" = "true" ] &&
+# Say so once per boot when the switch is missing: this ran silently for four
+# days after a profile snapshot overwrote /etc/thingino.json, and nothing in
+# the fleet noticed. The CSV kept being written, so only the central series
+# went quiet.
+SW=$(jct /etc/thingino.json get dnlog.isp_syslog 2>/dev/null)
+if [ "$SW" = "true" ]; then
 	logger -t dnisp "$ROW" 2>/dev/null
+	rm -f /tmp/.dnisp-off
+elif [ ! -f /tmp/.dnisp-off ]; then
+	: > /tmp/.dnisp-off
+	logger -t dnisp "dnlog.isp_syslog is ${SW:-unset} - exposure series is NOT shipped to syslog (local CSV still written); enable with: jct /etc/thingino.json set dnlog.isp_syslog true"
+fi

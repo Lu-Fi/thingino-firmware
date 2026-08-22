@@ -129,3 +129,32 @@ deliberate reproduction would settle all three.
 The flashing procedure is deliberately left unchanged (2026-08-20). The
 operational rule instead: **always `make ota`, never `ota-rootfs`** — see the
 memory note and timps `docs/flash-footprint-srt-2026-08-20.md`.
+
+## A second way to flash the wrong thing: the packed image lags the build
+
+`make ota` installs whatever `images/*.bin` currently holds, and two separate
+mechanisms let that file hold a binary older than the source tree.
+
+**Buildroot will not rebuild a package whose stamp is valid.** With
+`TIMPS_OVERRIDE_SRCDIR` set, committing and tagging in the timps checkout does
+not invalidate `.stamp_built`. A plain `make` then repacks fresh images around
+the *previous* binary. Measured 2026-08-21: `make` after tagging v1.9.2
+produced images dated 14:12 containing a v1.9.1 `timpsd`, byte-identical to the
+one built at 10:37. Use `make rebuild-<pkg>` (dirclean + build + reinstall).
+
+**Within one make run the images are packed before the forced install lands.**
+Running `make rebuild-timps && make` is still not enough: on 192.168.241.102 the
+squashfs was written 14:24:30 and `target/usr/bin/timpsd` at 14:25:28 — the
+image predates the binary it was supposed to contain. The pack has to happen in
+a *separate* invocation, after the rebuild has fully settled.
+
+Neither failure is visible from the outside. The image is freshly dated, the
+build exits 0, and on one board both versions even had the same file size
+(274100 B), so a size check would have passed too. The only reliable check is to
+read the binary back out of the packed image:
+
+    unsquashfs -q -d /tmp/x -f images/rootfs.squashfs usr/bin/timpsd
+    strings /tmp/x/usr/bin/timpsd | grep -m1 '^v[0-9]'
+
+Do that before every flash, and loop the pack step until it matches. Timestamps
+and file sizes are not evidence here; the extracted version string is.

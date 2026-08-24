@@ -131,9 +131,20 @@ endef
 TARGET_FINALIZE_HOOKS += THINGINO_MOTORS_PURGE_DEAD_WWW
 endif
 
+# -ffunction-sections/-fdata-sections (compile) + --gc-sections (link): lets
+# the linker drop dead code per-function instead of per-object-file. Measured
+# on the real production command line, WS build: 62904 -> 55224 bytes
+# (-7680 B, -12.2%) - the .pdr/.reginfo MIPS debug-metadata sections (unused
+# on this Linux target) disappear entirely, plus four already-orphaned dead
+# functions left over from the switch-case extraction refactor become
+# link-time removable for the first time (they were unremovable before this
+# flag because without per-function sections the whole .o was one
+# indivisible blob). Verified: both marker strings ("nested too deeply",
+# "keepalive timeout") and every WS/auth symbol survive; ws_selftest's 48
+# assertions pass unchanged before and after.
 define THINGINO_MOTORS_BUILD_CMDS
-	$(TARGET_CC) $(TARGET_LDFLAGS) -Os -s $(@D)/src/motor.c -o $(@D)/motors -ljct
-	$(TARGET_CC) $(TARGET_LDFLAGS) -Os -s $(THINGINO_MOTORS_DAEMON_DEFS) $(THINGINO_MOTORS_DAEMON_SRCS) -o $(@D)/motors-daemon $(THINGINO_MOTORS_DAEMON_LIBS)
+	$(TARGET_CC) $(TARGET_LDFLAGS) -Os -s -ffunction-sections -fdata-sections $(@D)/src/motor.c -o $(@D)/motors -ljct -Wl,--gc-sections
+	$(TARGET_CC) $(TARGET_LDFLAGS) -Os -s -ffunction-sections -fdata-sections $(THINGINO_MOTORS_DAEMON_DEFS) $(THINGINO_MOTORS_DAEMON_SRCS) -o $(@D)/motors-daemon $(THINGINO_MOTORS_DAEMON_LIBS) -Wl,--gc-sections
 endef
 
 define THINGINO_MOTORS_INSTALL_TARGET_CMDS

@@ -127,24 +127,29 @@
   transition: none;
 }
 
-/* Live position, driven by the daemon's status pushes. */
+/* Live position, driven by the daemon's status pushes - two bars matching
+ * the physical axes rather than a stacked pair of identical rows: pan
+ * (left/right) as a horizontal bar under the ring, tilt (up/down) as a
+ * vertical one beside it. Both are positioned off --motor-stick-size, so
+ * they track the ring wherever sizeStick() (preview-motors.js) puts it,
+ * and sizeStick() reserves room for the pan bar + text below centre so
+ * this can never run past the frame's own overflow:hidden edge the way a
+ * fixed 76px offset eventually did once the ring's size stopped being a
+ * constant. */
 #motor-pos {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 150px;
-  margin: 76px 0 0 -75px;
   font-size: 11px;
   font-weight: 500;
-  line-height: 1.6;
   color: #fff;
-  text-align: center;
   text-shadow: 0 1px 2px #000000cc;
-  /* Never let the readout eat a drag that overshoots the ring downward. */
+  /* Never let the readout eat a drag that overshoots the ring. */
   pointer-events: none;
 }
 
 .motor-pos-row {
+  position: absolute;
   display: flex;
   align-items: center;
   gap: 5px;
@@ -154,12 +159,11 @@
   width: 9px;
   font-weight: 600;
   opacity: 0.75;
+  flex: none;
 }
 
 .motor-pos-track {
   display: block;
-  flex: 1;
-  height: 4px;
   border-radius: 2px;
   background: #ffffff40;
   overflow: hidden;
@@ -167,10 +171,67 @@
 
 .motor-pos-track i {
   display: block;
+  background: #ff8800;
+}
+
+.motor-pos-pan {
+  top: calc(var(--motor-stick-size, 450px) / 2 + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 120px;
+}
+
+.motor-pos-pan .motor-pos-track {
+  flex: 1;
+  height: 4px;
+}
+
+.motor-pos-pan .motor-pos-track i {
   width: 0;
   height: 100%;
-  background: #ff8800;
   /* Slightly longer than the 200ms push interval, so consecutive samples
      blend into a glide instead of a staircase. */
   transition: width 220ms linear;
+}
+
+/* Tilt sits beside the ring rather than stacked under the pan bar - two
+ * rows both crammed under a ring that can now be quite short (a portrait
+ * phone) is what actually overran the frame before this. Its own label
+ * rotates with it (writing-mode, not a transform - simpler to reason about
+ * than rotating the whole flex row and its fill direction) since sideways
+ * text next to a sideways bar reads more naturally than upright text does. */
+.motor-pos-tilt {
+  left: calc(var(--motor-stick-size, 450px) / 2 + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  flex-direction: column;
+  height: 90px;
+}
+
+.motor-pos-tilt b {
+  width: auto;
+  writing-mode: vertical-rl;
+}
+
+.motor-pos-tilt .motor-pos-track {
+  flex: 1;
+  width: 4px;
+  display: flex;
+  align-items: flex-end;
+}
+
+.motor-pos-tilt .motor-pos-track i {
+  width: 100%;
+  height: 0;
+  /* Matches the pan bar's transition, just on the dimension that actually
+     moves here. */
+  transition: height 220ms linear;
+}
+
+#motor-pos-text {
+  position: absolute;
+  top: calc(var(--motor-stick-size, 450px) / 2 + 26px);
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
 }

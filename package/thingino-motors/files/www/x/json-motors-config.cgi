@@ -130,6 +130,7 @@ handle_post() {
 	preview_control_mode_value=${POST_preview_control_mode:-step}
 	steps_pan_value=$POST_steps_pan
 	steps_tilt_value=$POST_steps_tilt
+	joystick_sensitivity_value=${POST_joystick_sensitivity:-0.25}
 
 	[ "$homing_value" = "true" ] || homing_value="false"
 
@@ -164,6 +165,18 @@ handle_post() {
 			;;
 	esac
 
+	# Not integer-only like the fields above, so [ -le ]/[ -lt ] can't
+	# validate it (busybox ash's test has no floating point); reject
+	# anything that isn't plainly numeric first, then let awk (which does
+	# do floating point) clamp it into motor-daemon.c's own accepted
+	# range (see parse_modern_layout()'s joystick_sensitivity handling) so
+	# a value this endpoint would reject can never reach the daemon either.
+	case "$joystick_sensitivity_value" in
+		'' | *[!0-9.]* | *.*.*) joystick_sensitivity_value="0.25" ;;
+	esac
+	joystick_sensitivity_value=$(awk -v v="$joystick_sensitivity_value" \
+		'BEGIN { if (v < 0.05) v = 0.05; if (v > 2) v = 2; printf "%.2f", v }')
+
 	if [ "true" != "$is_spi_value" ]; then
 		motors_set_value gpio_pan "$gpio_pan_1 $gpio_pan_2 $gpio_pan_3 $gpio_pan_4"
 		motors_set_value gpio_tilt "$gpio_tilt_1 $gpio_tilt_2 $gpio_tilt_3 $gpio_tilt_4"
@@ -177,6 +190,7 @@ handle_post() {
 	motors_set_value accel_tilt "$accel_tilt_value"
 	motors_set_value motion_driver "$motion_driver_value"
 	motors_set_value preview_control_mode "$preview_control_mode_value"
+	motors_set_value joystick_sensitivity "$joystick_sensitivity_value"
 	motors_set_value homing "$homing_value"
 
 	if [ -n "$pos_0_x" ] && [ -n "$pos_0_y" ]; then
@@ -184,6 +198,15 @@ handle_post() {
 	else
 		motors_set_value pos_0 ""
 	fi
+
+	# motor_ctl_reload() (motors -R) re-reads /etc/thingino.json into the
+	# running daemon without touching the kernel module - see its own
+	# comment in motor-daemon.c for exactly which fields that covers
+	# (speeds, accel, timeouts, pos_0, joystick_sensitivity; NOT the GPIO
+	# pins, which stay a "requires reboot" kernel-module parameter as
+	# before). Failure here is not fatal to the save - the value is on
+	# disk either way and takes effect on the daemon's next start.
+	motors -R >/dev/null 2>&1
 
 	respond_with_config
 }

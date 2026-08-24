@@ -75,6 +75,19 @@
     }
   }
 
+  function updateJoystickSensitivityInputs() {
+    const modeEl = $("#preview_control_mode");
+    const wrap = $("#joystick-sensitivity-field");
+    const slider = $("#joystick_sensitivity");
+    const valueLabel = $("#joystick_sensitivity-value");
+    if (!modeEl || !wrap) return;
+
+    const isJoystick = normalizePreviewControlMode(modeEl.value) === "joystick";
+    wrap.classList.toggle("opacity-50", !isJoystick);
+    if (slider) slider.disabled = !isJoystick;
+    if (valueLabel && slider) valueLabel.textContent = slider.value;
+  }
+
   function showAlert(variant, message, timeout = 6000) {
     if (!message) return;
 
@@ -179,6 +192,15 @@
         config.preview_control_mode,
       );
     }
+    const joystickSensitivityEl = $("#joystick_sensitivity");
+    if (joystickSensitivityEl) {
+      const parsed = parseFloat(config.joystick_sensitivity);
+      joystickSensitivityEl.value =
+        Number.isFinite(parsed) && parsed >= 0.05 && parsed <= 2
+          ? parsed
+          : 0.25;
+    }
+    updateJoystickSensitivityInputs();
     const homingEl = $("#homing");
     if (homingEl) {
       homingEl.checked = config.homing === true || config.homing === "true";
@@ -451,6 +473,23 @@
   const motionDriverSelect = $("#motion_driver");
   if (motionDriverSelect) {
     motionDriverSelect.addEventListener("change", updateMotionDriverInputs);
+  }
+
+  const previewControlModeSelect = $("#preview_control_mode");
+  if (previewControlModeSelect) {
+    previewControlModeSelect.addEventListener(
+      "change",
+      updateJoystickSensitivityInputs,
+    );
+  }
+  const joystickSensitivitySlider = $("#joystick_sensitivity");
+  if (joystickSensitivitySlider) {
+    // "input" rather than "change": the live value label should track the
+    // thumb while dragging, not only jump once the drag ends.
+    joystickSensitivitySlider.addEventListener(
+      "input",
+      updateJoystickSensitivityInputs,
+    );
   }
 
   // ------------------------------------------------------------------

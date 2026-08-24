@@ -533,15 +533,22 @@ document.addEventListener("DOMContentLoaded", async function () {
      * div sized by an img-fluid <img>'s intrinsic aspect ratio. Both are the
      * positioned ancestor #motor-overlay actually centres against. */
     // Pan's bar+text sit below the ring, tilt's beside it - both outside the
-    // circle itself. Shrinking the ring to guarantee both always have room
-    // was tried first and made the ring needlessly small on an ordinary
-    // mobile frame just to protect a corner case; the ring is the control
-    // that actually matters, so it is now sized without regard for the
-    // readout, and each readout piece is independently hidden if it would
-    // not fit next to the ring that resulted - a bar clipped by
-    // .ms-video-wrap's overflow:hidden is worse than no bar, but a needlessly
-    // small ring was worse still.
-    const POS_GAP = 8;
+    // circle itself. Checking after the fact whether they'd fit next to a
+    // ring sized purely from the frame turned out unreliable: on a 16:9
+    // frame the short side is height, so the ring is normally sized off
+    // 85% of height - which leaves only 15% of the half-height as margin,
+    // consistently less than the ~42px the pan block actually needs on all
+    // but quite tall frames. That's not a corner case, it's most frames, so
+    // the "hide what doesn't fit" version hid the pan bar almost everywhere,
+    // desktop included.
+    //
+    // Reserving the exact pixels each piece needs (once, not doubled) before
+    // sizing the ring instead guarantees both fit whenever the ring isn't
+    // sitting at its 132px floor - by construction, not by chance - and the
+    // floor case (a genuinely too-short/narrow frame) is the only situation
+    // where hiding a piece is still needed.
+    const PAN_REACH = 42; // radius + 26px offset (CSS) + ~14px of text + slop
+    const TILT_REACH = 30; // radius + 8px gap + ~20px of label+track
     const panEl = $(".motor-pos-pan");
     const tiltEl = $(".motor-pos-tilt");
     const textEl = $("#motor-pos-text");
@@ -550,25 +557,21 @@ document.addEventListener("DOMContentLoaded", async function () {
       if (!frame) return;
       const box = frame.getBoundingClientRect();
       if (!box.width || !box.height) return;
+      const availHeight = box.height - 2 * PAN_REACH;
+      const availWidth = box.width - 2 * TILT_REACH;
       // Headroom so the ring sits inside the video, not flush with its
-      // edges, at roughly 85% of whichever side is shorter.
-      const fit = Math.min(box.width, box.height) * 0.85;
+      // edges, at roughly 92% of whichever side is shorter once the space
+      // above reserves for the readout.
+      const fit = Math.min(availWidth, availHeight) * 0.92;
       const size = Math.max(132, Math.min(450, fit));
       stick.style.setProperty("--motor-stick-size", size.toFixed(0) + "px");
 
       const radius = size / 2;
-      if (panEl || textEl) {
-        // #motor-pos-text sits further out than the bar itself (see
-        // preview-motors.css: radius + 26px top offset, ~14px of text below
-        // that), so its own reach is what decides this.
-        const panFits = radius + 42 <= box.height / 2;
-        if (panEl) panEl.style.display = panFits ? "" : "none";
-        if (textEl) textEl.style.display = panFits ? "" : "none";
-      }
-      if (tiltEl) {
-        const tiltFits = radius + POS_GAP + 30 <= box.width / 2;
-        tiltEl.style.display = tiltFits ? "" : "none";
-      }
+      const panFits = radius + PAN_REACH <= box.height / 2;
+      const tiltFits = radius + TILT_REACH <= box.width / 2;
+      if (panEl) panEl.style.display = panFits ? "" : "none";
+      if (textEl) textEl.style.display = panFits ? "" : "none";
+      if (tiltEl) tiltEl.style.display = tiltFits ? "" : "none";
     }
     sizeStick();
     window.addEventListener("resize", sizeStick);

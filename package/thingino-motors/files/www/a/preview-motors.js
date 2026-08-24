@@ -532,24 +532,43 @@ document.addEventListener("DOMContentLoaded", async function () {
      * prudynt/raptor use thingino-webui's stock preview.html, an "#frame"
      * div sized by an img-fluid <img>'s intrinsic aspect ratio. Both are the
      * positioned ancestor #motor-overlay actually centres against. */
-    // Pan's bar plus the combined "x / y" text sit below the ring, both
-    // outside the circle - not covered by shrinking the ring itself. This is
-    // the vertical space they need below centre; sizeStick() below reserves
-    // it on both sides of centre (simpler than tracking that it is really
-    // only needed on one side) so the pan bar can never end up clipped by
-    // the frame's own overflow:hidden the way a fixed-pixel offset was.
-    const POS_READOUT_RESERVE = 40;
+    // Pan's bar+text sit below the ring, tilt's beside it - both outside the
+    // circle itself. Shrinking the ring to guarantee both always have room
+    // was tried first and made the ring needlessly small on an ordinary
+    // mobile frame just to protect a corner case; the ring is the control
+    // that actually matters, so it is now sized without regard for the
+    // readout, and each readout piece is independently hidden if it would
+    // not fit next to the ring that resulted - a bar clipped by
+    // .ms-video-wrap's overflow:hidden is worse than no bar, but a needlessly
+    // small ring was worse still.
+    const POS_GAP = 8;
+    const panEl = $(".motor-pos-pan");
+    const tiltEl = $(".motor-pos-tilt");
+    const textEl = $("#motor-pos-text");
     function sizeStick() {
       const frame = $(".ms-video-wrap") || $("#frame");
       if (!frame) return;
       const box = frame.getBoundingClientRect();
       if (!box.width || !box.height) return;
-      const availHeight = box.height - 2 * POS_READOUT_RESERVE;
       // Headroom so the ring sits inside the video, not flush with its
       // edges, at roughly 85% of whichever side is shorter.
-      const fit = Math.min(box.width, availHeight) * 0.85;
+      const fit = Math.min(box.width, box.height) * 0.85;
       const size = Math.max(132, Math.min(450, fit));
       stick.style.setProperty("--motor-stick-size", size.toFixed(0) + "px");
+
+      const radius = size / 2;
+      if (panEl || textEl) {
+        // #motor-pos-text sits further out than the bar itself (see
+        // preview-motors.css: radius + 26px top offset, ~14px of text below
+        // that), so its own reach is what decides this.
+        const panFits = radius + 42 <= box.height / 2;
+        if (panEl) panEl.style.display = panFits ? "" : "none";
+        if (textEl) textEl.style.display = panFits ? "" : "none";
+      }
+      if (tiltEl) {
+        const tiltFits = radius + POS_GAP + 30 <= box.width / 2;
+        tiltEl.style.display = tiltFits ? "" : "none";
+      }
     }
     sizeStick();
     window.addEventListener("resize", sizeStick);

@@ -131,9 +131,10 @@
  * the physical axes rather than a stacked pair of identical rows: pan
  * (left/right) as a horizontal bar under the ring, tilt (up/down) as a
  * vertical one beside it. Both are positioned off --motor-stick-size, so
- * they track the ring wherever sizeStick() (preview-motors.js) puts it,
- * and sizeStick() reserves room for the pan bar + text below centre so
- * this can never run past the frame's own overflow:hidden edge the way a
+ * they track the ring wherever sizeStick() (preview-motors.js) puts it. On
+ * a frame too short/narrow for a piece to fit next to the resulting ring,
+ * sizeStick() hides that piece with an inline display:none rather than
+ * leaving it to run past the frame's own overflow:hidden edge the way a
  * fixed 76px offset eventually did once the ring's size stopped being a
  * constant. */
 #motor-pos {

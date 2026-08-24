@@ -38,16 +38,28 @@
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 132px;
-  height: 132px;
-  margin: -66px 0 0 -66px;
+  /* ~3.4x the original 132px: a bigger ring maps the same physical drag
+   * distance to a smaller slice of the 0..1000 deflection range, which is
+   * what "finer control" actually means here - the pointer, not the CSS
+   * box, is the limited resource. */
+  width: 450px;
+  height: 450px;
+  margin: -225px 0 0 -225px;
   border-radius: 50%;
-  background: #0000004d;
+  /* No fill: a 450px disc of translucent grey would sit over most of the
+   * video it is supposed to be controlling. The ring reads fine as a rim
+   * plus the centre pip plus the handle. */
+  background: transparent;
   border: 2px solid #ffffff59;
-  box-shadow: inset 0 0 12px #00000059;
+  /* Hidden until hovered/dragged - see the opacity rule below - so the ring
+   * costs nothing visually while the video is just being watched. */
+  opacity: 0;
+  transition: opacity 220ms ease;
   /* The preview page sets pointer-events:none on #motor-overlay/#motor so the
    * video's own controls stay reachable underneath, and pointer-events is
-   * inherited. Re-enabling it here is what makes the stick draggable at all. */
+   * inherited. Re-enabling it here is what makes the stick draggable AND
+   * hoverable at all - opacity:0 does not imply pointer-events:none, so the
+   * fade-in below still triggers from a mouse that cannot see the ring yet. */
   pointer-events: auto;
   /* Without this the browser claims the gesture for scrolling or pinch-zoom
    * on the first touchmove and the drag dies one frame in. */
@@ -56,6 +68,15 @@
    * page behind it. */
   user-select: none;
   -webkit-user-select: none;
+}
+
+/* Visible on hover, and for the whole gesture even if a fast drag carries
+ * the pointer outside the (now much larger) ring - pointer capture keeps the
+ * events coming, but :hover alone would drop with them, and a stick that
+ * vanishes mid-drag with the camera still moving is the wrong failure mode. */
+#motor-stick:hover,
+#motor-stick.dragging {
+  opacity: 1;
 }
 
 #motor-stick::after {

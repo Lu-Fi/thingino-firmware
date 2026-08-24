@@ -351,6 +351,18 @@
       formData.set("accel_tilt", "0");
     }
 
+    // #joystick_sensitivity is disabled outside joystick mode (see
+    // updateJoystickSensitivityInputs()), and FormData silently drops
+    // disabled controls - without this, saving the form in any other mode
+    // would submit no value at all and the CGI's own fallback would reset
+    // whatever sensitivity was previously configured back to its default.
+    // The input's own .value still holds the loaded config value even
+    // while disabled, so re-adding it here just carries it through.
+    const joystickSensitivityEl = $("#joystick_sensitivity");
+    if (joystickSensitivityEl) {
+      formData.set("joystick_sensitivity", joystickSensitivityEl.value);
+    }
+
     if (errors.length > 0) {
       showAlert("danger", "Please fix the following errors:", 0);
       errors.forEach((err) => showAlert("warning", err, 0));

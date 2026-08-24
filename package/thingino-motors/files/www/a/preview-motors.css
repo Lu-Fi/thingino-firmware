@@ -1,29 +1,15 @@
 /* Virtual analog stick for the preview PTZ overlay, used when
- * motors.preview_control_mode is "joystick".
- *
- * A plugin stylesheet rather than more rules in thingino-webui's main.css:
- * the markup it styles is contributed by this plugin's own manifest, so the
- * two have to arrive and disappear together. main.css keeps owning the
- * eight-sector .jst control it has always owned.
+ * motors.preview_control_mode is "joystick". Plugin stylesheet rather than
+ * more rules in main.css: markup comes from this plugin's own manifest.
  */
 
 #motor {
-  /* main.css sizes #motor (300x300) but never gives it a position, so an
-   * absolutely placed child would resolve against #motor-overlay instead -
-   * the same box today, but only by coincidence. */
   position: relative;
-  /* --motor-stick-size is written here at runtime by preview-motors.js's
-   * sizeStick(), NOT on #motor-stick: the readout rows below position
-   * themselves off the same variable and they are siblings of the ring, not
-   * its descendants. Custom properties only inherit downward, so setting it
-   * on the ring left every readout rule falling back to the 450px default
-   * and parking the bars far outside the video box (which clips). #motor is
-   * the nearest common ancestor of the ring and the readout. */
+  /* --motor-stick-size is written here at runtime (sizeStick() in
+   * preview-motors.js), not on #motor-stick: the readout rows are the
+   * ring's siblings and custom properties only inherit downward. */
 }
 
-/* Hidden until preview-motors.js has confirmed the mode. The markup ships on
- * every preview page whatever the setting says, and a stick that is visible
- * but bound to nothing is worse than no stick. */
 #motor-stick,
 #motor-pos {
   display: none;
@@ -34,9 +20,7 @@
   display: block;
 }
 
-/* The eight direction sectors are 5000px squares stacked over the whole
- * overlay. Left in place they would swallow every pointerdown that lands
- * outside the handle, including the ones that start a drag near the rim. */
+/* The eight direction sectors would otherwise swallow every pointerdown. */
 #motor.stick-mode .jst a.s {
   display: none;
 }
@@ -45,58 +29,29 @@
   position: absolute;
   left: 50%;
   top: 50%;
-  /* transform rather than a negative margin: --motor-stick-size changes at
-   * runtime (see below), and a margin hack would need to track that size
-   * too to stay centred. translate(-50%,-50%) centres on the element's own
-   * box whatever that box currently is. */
+  /* transform, not a margin hack: --motor-stick-size changes at runtime. */
   transform: translate(-50%, -50%);
-  /* Up to ~3.4x the original 132px: a bigger ring maps the same physical
-   * drag distance to a smaller slice of the 0..1000 deflection range, which
-   * is what "finer control" actually means here - the pointer, not the CSS
-   * box, is the limited resource. --motor-stick-size is set by
-   * preview-motors.js's sizeStick() from the actual video box, which knows
-   * the stream's aspect ratio and viewport in a way no fixed breakpoint
-   * can - the 450px here only matters before that first measurement lands. */
   width: var(--motor-stick-size, 450px);
   height: var(--motor-stick-size, 450px);
   border-radius: 50%;
-  /* No fill: a 450px disc of translucent grey would sit over most of the
-   * video it is supposed to be controlling. The ring reads fine as a rim
-   * plus the centre pip plus the handle. */
-  background: transparent;
+  background: transparent; /* no fill - would cover most of the video */
   border: 2px solid #ffffff59;
-  /* Hidden until hovered/dragged - see the opacity rule below - so the ring
-   * costs nothing visually while the video is just being watched. */
-  opacity: 0;
+  opacity: 0; /* hover/drag only, see below */
   transition: opacity 220ms ease;
-  /* The preview page sets pointer-events:none on #motor-overlay/#motor so the
-   * video's own controls stay reachable underneath, and pointer-events is
-   * inherited. Re-enabling it here is what makes the stick draggable AND
-   * hoverable at all - opacity:0 does not imply pointer-events:none, so the
-   * fade-in below still triggers from a mouse that cannot see the ring yet. */
-  pointer-events: auto;
-  /* Without this the browser claims the gesture for scrolling or pinch-zoom
-   * on the first touchmove and the drag dies one frame in. */
-  touch-action: none;
-  /* A drag that leaves the ring must not paint a text selection across the
-   * page behind it. */
+  pointer-events: auto; /* re-enables over #motor-overlay's pointer-events:none */
+  touch-action: none; /* else the browser claims the gesture for scrolling */
   user-select: none;
   -webkit-user-select: none;
 }
 
-/* Visible on hover, and for the whole gesture even if a fast drag carries
- * the pointer outside the (now much larger) ring - pointer capture keeps the
- * events coming, but :hover alone would drop with them, and a stick that
- * vanishes mid-drag with the camera still moving is the wrong failure mode. */
+/* .dragging too: pointer capture can carry a drag outside the ring. */
 #motor-stick:hover,
 #motor-stick.dragging {
   opacity: 1;
 }
 
 #motor-stick::after {
-  /* Centre pip: without it there is no visual reference for where the dead
-   * zone is, and a handle resting at centre looks like a button. */
-  content: "";
+  content: ""; /* centre pip, marks the dead zone */
   position: absolute;
   left: 50%;
   top: 50%;
@@ -119,10 +74,7 @@
   border: 3px solid #fffffff2;
   box-shadow: 0 2px 8px #000000a6;
   cursor: grab;
-  /* Only for the snap back to centre on release. Switched off during the drag
-   * below, or the handle renders 120ms behind the finger and the whole
-   * control feels broken. */
-  transition: transform 120ms ease-out;
+  transition: transform 120ms ease-out; /* snap-back only, off during drag */
 }
 
 #motor-stick.dragging {
@@ -134,20 +86,10 @@
   transition: none;
 }
 
-/* Live position, driven by the daemon's status pushes - two bars matching
- * the physical axes rather than a stacked pair of identical rows: pan
- * (left/right) as a horizontal bar under the ring, tilt (up/down) as a
- * vertical one beside it. Both are positioned off --motor-stick-size (set
- * on #motor, see above), so they track the ring wherever sizeStick()
- * (preview-motors.js) puts it. On a frame too short/narrow for a piece to
- * fit next to the resulting ring, sizeStick() hides that piece with an
- * inline display:none rather than leaving it to run past the frame's own
- * overflow:hidden edge.
- *
- * The numeric readout rides in the pan row rather than on a band of its own
- * underneath it. Stacked, the two cost ~42px of clearance below the ring;
- * a 16:9 preview on a portrait phone measures 317x178, which leaves ~23px
- * under a ring sized to that height. One row fits, two never did. */
+/* Live position readout: pan (left/right) as a horizontal bar under the
+ * ring, tilt (up/down) as a vertical one beside it - both positioned off
+ * --motor-stick-size, hidden individually by sizeStick() when they don't
+ * fit next to the ring. */
 #motor-pos {
   position: absolute;
   left: 50%;
@@ -156,7 +98,6 @@
   font-weight: 500;
   color: #fff;
   text-shadow: 0 1px 2px #000000cc;
-  /* Never let the readout eat a drag that overshoots the ring. */
   pointer-events: none;
 }
 
@@ -201,17 +142,12 @@
 .motor-pos-pan .motor-pos-track i {
   width: 0;
   height: 100%;
-  /* Slightly longer than the 200ms push interval, so consecutive samples
-     blend into a glide instead of a staircase. */
   transition: width 220ms linear;
 }
 
-/* Tilt sits beside the ring rather than stacked under the pan bar - two
- * rows both crammed under a ring that can now be quite short (a portrait
- * phone) is what actually overran the frame before this. Its own label
- * rotates with it (writing-mode, not a transform - simpler to reason about
- * than rotating the whole flex row and its fill direction) since sideways
- * text next to a sideways bar reads more naturally than upright text does. */
+/* Beside the ring, not stacked under the pan bar - two rows under a short
+ * (portrait-phone) ring is what overran the frame before. Label rotates via
+ * writing-mode (simpler than rotating the whole flex row + fill direction). */
 .motor-pos-tilt {
   left: calc(var(--motor-stick-size, 450px) / 2 + 8px);
   top: 50%;
@@ -235,14 +171,10 @@
 .motor-pos-tilt .motor-pos-track i {
   width: 100%;
   height: 0;
-  /* Matches the pan bar's transition, just on the dimension that actually
-     moves here. */
   transition: height 220ms linear;
 }
 
-/* Fixed width, not shrink-to-fit: the digits change twice a second and a
- * flex sibling that resizes with them would jog the pan track it sits next
- * to. 62px covers the widest pair this daemon reports ("4050 / 1000"). */
+/* Fixed width: changing digits next to a flex track would jog it otherwise. */
 #motor-pos-text {
   flex: none;
   width: 62px;

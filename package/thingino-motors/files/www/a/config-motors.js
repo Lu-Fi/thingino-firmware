@@ -484,8 +484,7 @@
   }
   const joystickSensitivitySlider = $("#joystick_sensitivity");
   if (joystickSensitivitySlider) {
-    // "input" rather than "change": the live value label should track the
-    // thumb while dragging, not only jump once the drag ends.
+    // "input", not "change": track the thumb while dragging.
     joystickSensitivitySlider.addEventListener(
       "input",
       updateJoystickSensitivityInputs,

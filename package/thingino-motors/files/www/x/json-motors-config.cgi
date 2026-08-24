@@ -165,12 +165,8 @@ handle_post() {
 			;;
 	esac
 
-	# Not integer-only like the fields above, so [ -le ]/[ -lt ] can't
-	# validate it (busybox ash's test has no floating point); reject
-	# anything that isn't plainly numeric first, then let awk (which does
-	# do floating point) clamp it into motor-daemon.c's own accepted
-	# range (see parse_modern_layout()'s joystick_sensitivity handling) so
-	# a value this endpoint would reject can never reach the daemon either.
+	# busybox ash's test has no floating point; reject non-numeric, then
+	# clamp via awk into motor-daemon.c's own accepted range.
 	case "$joystick_sensitivity_value" in
 		'' | *[!0-9.]* | *.*.*) joystick_sensitivity_value="0.25" ;;
 	esac
@@ -199,13 +195,8 @@ handle_post() {
 		motors_set_value pos_0 ""
 	fi
 
-	# motor_ctl_reload() (motors -R) re-reads /etc/thingino.json into the
-	# running daemon without touching the kernel module - see its own
-	# comment in motor-daemon.c for exactly which fields that covers
-	# (speeds, accel, timeouts, pos_0, joystick_sensitivity; NOT the GPIO
-	# pins, which stay a "requires reboot" kernel-module parameter as
-	# before). Failure here is not fatal to the save - the value is on
-	# disk either way and takes effect on the daemon's next start.
+	# Live-reloads the daemon config (see motor_ctl_reload() in
+	# motor-daemon.c for exactly which fields); GPIO still needs a reboot.
 	motors -R >/dev/null 2>&1
 
 	respond_with_config

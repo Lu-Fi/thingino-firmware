@@ -532,45 +532,65 @@ document.addEventListener("DOMContentLoaded", async function () {
      * prudynt/raptor use thingino-webui's stock preview.html, an "#frame"
      * div sized by an img-fluid <img>'s intrinsic aspect ratio. Both are the
      * positioned ancestor #motor-overlay actually centres against. */
-    // Pan's bar+text sit below the ring, tilt's beside it - both outside the
-    // circle itself. Checking after the fact whether they'd fit next to a
-    // ring sized purely from the frame turned out unreliable: on a 16:9
-    // frame the short side is height, so the ring is normally sized off
-    // 85% of height - which leaves only 15% of the half-height as margin,
-    // consistently less than the ~42px the pan block actually needs on all
-    // but quite tall frames. That's not a corner case, it's most frames, so
-    // the "hide what doesn't fit" version hid the pan bar almost everywhere,
-    // desktop included.
+    // The pan row sits below the ring and the tilt row beside it, both
+    // outside the circle. How far past the rim each one reaches is a
+    // question about font metrics, so it is measured off the elements
+    // rather than written down as a constant - two hand-derived pixel
+    // figures here were wrong for the real rows by enough to matter.
     //
-    // Reserving the exact pixels each piece needs (once, not doubled) before
-    // sizing the ring instead guarantees both fit whenever the ring isn't
-    // sitting at its 132px floor - by construction, not by chance - and the
-    // floor case (a genuinely too-short/narrow frame) is the only situation
-    // where hiding a piece is still needed.
-    const PAN_REACH = 42; // radius + 26px offset (CSS) + ~14px of text + slop
-    const TILT_REACH = 30; // radius + 8px gap + ~20px of label+track
+    // The variable goes on #motor, not on the ring: the readout rows read
+    // the same variable and are the ring's siblings, so a value set on the
+    // ring never reaches them. See preview-motors.css.
+    const GAP = 8; // matches the +8px offsets in preview-motors.css
+    // Below this the ring stops being drag-able with a fingertip, at which
+    // point the readout is what gives way, not the control.
+    const MIN_RING = 110;
+    const motorEl = $("#motor");
     const panEl = $(".motor-pos-pan");
     const tiltEl = $(".motor-pos-tilt");
-    const textEl = $("#motor-pos-text");
     function sizeStick() {
       const frame = $(".ms-video-wrap") || $("#frame");
       if (!frame) return;
       const box = frame.getBoundingClientRect();
       if (!box.width || !box.height) return;
-      const availHeight = box.height - 2 * PAN_REACH;
-      const availWidth = box.width - 2 * TILT_REACH;
-      // Headroom so the ring sits inside the video, not flush with its
-      // edges, at roughly 92% of whichever side is shorter once the space
-      // above reserves for the readout.
-      const fit = Math.min(availWidth, availHeight) * 0.92;
-      const size = Math.max(132, Math.min(450, fit));
-      stick.style.setProperty("--motor-stick-size", size.toFixed(0) + "px");
 
-      const radius = size / 2;
-      const panFits = radius + PAN_REACH <= box.height / 2;
-      const tiltFits = radius + TILT_REACH <= box.width / 2;
+      // Un-hide before measuring: a row this function hid on its previous
+      // run reports a zero-size box, which would then reserve nothing and
+      // latch the row hidden for the rest of the page's life.
+      if (panEl) panEl.style.display = "";
+      if (tiltEl) tiltEl.style.display = "";
+      const panReach = panEl
+        ? GAP + panEl.getBoundingClientRect().height
+        : 0;
+      const tiltReach = tiltEl ? GAP + tiltEl.getBoundingClientRect().width : 0;
+
+      // Reserve the readout on both sides of the ring first, then size the
+      // ring in what is left, at 92% of the shorter side so it does not sit
+      // flush against the video's edges. A ring sized this way has room for
+      // the readout by construction.
+      const reserved = Math.min(
+        box.width - 2 * tiltReach,
+        box.height - 2 * panReach,
+      );
+      let size = Math.min(450, reserved * 0.92);
+      let panFits = true;
+      let tiltFits = true;
+
+      if (size < MIN_RING) {
+        // Frame too small to carry ring and readout both. The ring is the
+        // control, so it gets the whole frame and whichever readout row the
+        // result leaves no room for is dropped - rather than kept and left
+        // to run past the frame's overflow:hidden edge, invisible anyway.
+        size = Math.max(
+          MIN_RING,
+          Math.min(450, Math.min(box.width, box.height) * 0.92),
+        );
+        panFits = size / 2 + panReach <= box.height / 2;
+        tiltFits = size / 2 + tiltReach <= box.width / 2;
+      }
+
+      motorEl.style.setProperty("--motor-stick-size", size.toFixed(0) + "px");
       if (panEl) panEl.style.display = panFits ? "" : "none";
-      if (textEl) textEl.style.display = panFits ? "" : "none";
       if (tiltEl) tiltEl.style.display = tiltFits ? "" : "none";
     }
     sizeStick();

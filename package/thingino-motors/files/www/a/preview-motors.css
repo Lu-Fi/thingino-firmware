@@ -12,6 +12,13 @@
    * absolutely placed child would resolve against #motor-overlay instead -
    * the same box today, but only by coincidence. */
   position: relative;
+  /* --motor-stick-size is written here at runtime by preview-motors.js's
+   * sizeStick(), NOT on #motor-stick: the readout rows below position
+   * themselves off the same variable and they are siblings of the ring, not
+   * its descendants. Custom properties only inherit downward, so setting it
+   * on the ring left every readout rule falling back to the 450px default
+   * and parking the bars far outside the video box (which clips). #motor is
+   * the nearest common ancestor of the ring and the readout. */
 }
 
 /* Hidden until preview-motors.js has confirmed the mode. The markup ships on
@@ -130,13 +137,17 @@
 /* Live position, driven by the daemon's status pushes - two bars matching
  * the physical axes rather than a stacked pair of identical rows: pan
  * (left/right) as a horizontal bar under the ring, tilt (up/down) as a
- * vertical one beside it. Both are positioned off --motor-stick-size, so
- * they track the ring wherever sizeStick() (preview-motors.js) puts it. On
- * a frame too short/narrow for a piece to fit next to the resulting ring,
- * sizeStick() hides that piece with an inline display:none rather than
- * leaving it to run past the frame's own overflow:hidden edge the way a
- * fixed 76px offset eventually did once the ring's size stopped being a
- * constant. */
+ * vertical one beside it. Both are positioned off --motor-stick-size (set
+ * on #motor, see above), so they track the ring wherever sizeStick()
+ * (preview-motors.js) puts it. On a frame too short/narrow for a piece to
+ * fit next to the resulting ring, sizeStick() hides that piece with an
+ * inline display:none rather than leaving it to run past the frame's own
+ * overflow:hidden edge.
+ *
+ * The numeric readout rides in the pan row rather than on a band of its own
+ * underneath it. Stacked, the two cost ~42px of clearance below the ring;
+ * a 16:9 preview on a portrait phone measures 317x178, which leaves ~23px
+ * under a ring sized to that height. One row fits, two never did. */
 #motor-pos {
   position: absolute;
   left: 50%;
@@ -179,7 +190,7 @@
   top: calc(var(--motor-stick-size, 450px) / 2 + 8px);
   left: 50%;
   transform: translateX(-50%);
-  width: 120px;
+  width: 176px;
 }
 
 .motor-pos-pan .motor-pos-track {
@@ -229,10 +240,13 @@
   transition: height 220ms linear;
 }
 
+/* Fixed width, not shrink-to-fit: the digits change twice a second and a
+ * flex sibling that resizes with them would jog the pan track it sits next
+ * to. 62px covers the widest pair this daemon reports ("4050 / 1000"). */
 #motor-pos-text {
-  position: absolute;
-  top: calc(var(--motor-stick-size, 450px) / 2 + 26px);
-  left: 50%;
-  transform: translateX(-50%);
+  flex: none;
+  width: 62px;
+  text-align: right;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }

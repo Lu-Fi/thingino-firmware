@@ -1,7 +1,17 @@
+# Pinned to Lu-Fi's fork, not upstream thingino/thingino-motors, while the
+# WebSocket PTZ control path (BR2_PACKAGE_THINGINO_MOTORS_WS below) lives only
+# on this branch there - same reasoning and same pattern as package/timps/
+# timps.mk pointing at Lu-Fi/timps instead of some upstream. VERSION is a raw
+# commit hash (this repo's existing convention even before this fork, see the
+# git blame on this line) rather than a tag, so SITE_BRANCH is cosmetic - git
+# fetches the exact commit regardless of which branch currently has it - kept
+# here only as a human pointer to where this hash lives.
+# TODO: retarget at upstream thingino/thingino-motors (or drop this comment
+# and the fork pin) once/if the WS work is upstreamed there instead.
 THINGINO_MOTORS_SITE_METHOD = git
-THINGINO_MOTORS_SITE = https://github.com/thingino/thingino-motors.git
-THINGINO_MOTORS_SITE_BRANCH = main
-THINGINO_MOTORS_VERSION = cc596f0c71b9bf26585a0e6de9d953f13e5c0727
+THINGINO_MOTORS_SITE = https://github.com/Lu-Fi/thingino-motors.git
+THINGINO_MOTORS_SITE_BRANCH = feature/websocket-daemon
+THINGINO_MOTORS_VERSION = 918213a2bfe2036e8d4b0298dfaf8da2be842c79
 THINGINO_MOTORS_LICENSE = MIT
 THINGINO_MOTORS_LICENSE_FILES = LICENSE
 

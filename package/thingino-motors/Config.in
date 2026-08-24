@@ -8,3 +8,38 @@ config BR2_PACKAGE_THINGINO_MOTORS_DW9714_ONLY
 	bool "DW9714 Focus Control"
 	help
 	  Enable support for DW9714 VCM, includes control script
+
+config BR2_PACKAGE_THINGINO_MOTORS_WS
+	bool "WebSocket PTZ control path"
+	depends on BR2_PACKAGE_THINGINO_MOTORS
+	depends on !BR2_PACKAGE_THINGINO_MOTORS_DW9714_ONLY
+	depends on BR2_TOOLCHAIN_HAS_THREADS
+	help
+	  Serve the PTZ control path over a WebSocket listener inside
+	  motors-daemon (ws://<camera>:8089/ws by default) in addition to
+	  the AF_UNIX socket the "motors" CLI speaks.
+
+	  Without this, holding a direction arrow in the WebUI fires one
+	  fetch() every 90ms, and each one costs three process spawns
+	  (busybox-httpd -> json-motor.cgi -> motors, then motors -j again
+	  for the status echo) plus two socket connections. With it the
+	  panel opens one connection, sends one command when the button
+	  goes down and one stop when it comes up, and receives position
+	  updates as server pushes.
+
+	  Enabling this compiles five extra source files into the daemon
+	  (sha1, sha256, the RFC 6455 framing, the token store and the
+	  motors command protocol), links -lpthread, and installs
+	  json-motor-token.cgi so the WebUI page can obtain the per-boot
+	  token that the listener requires. It costs roughly 25KB of text.
+
+	  The daemon's listener is additionally gated at runtime by
+	  motors.ws_enabled in /etc/thingino.json, and the WebUI falls back
+	  to the CGI path whenever the socket cannot be opened, so turning
+	  this on is not a one-way door.
+
+	  Requires a thingino-motors source tree that actually carries the
+	  WebSocket support. Until that is merged upstream and
+	  THINGINO_MOTORS_VERSION is bumped, point
+	  THINGINO_MOTORS_OVERRIDE_SRCDIR at a local checkout of the
+	  feature branch (see local.mk).

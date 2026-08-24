@@ -59,6 +59,8 @@ const motorWs = (function () {
   let connecting = null;
   let attempts = 0;
   let seq = 1;
+  let frameListener = null;
+  let pushIntervalMs = 0;
   const limits = { x: 0, y: 0 };
 
   function buildFlagSet() {
@@ -90,10 +92,13 @@ const motorWs = (function () {
        * which is the signal to keep using fixed-size steps instead. */
       if (typeof frame.x_max === "number") limits.x = frame.x_max;
       if (typeof frame.y_max === "number") limits.y = frame.y_max;
-      if (typeof frame.x === "number" && typeof frame.y === "number") {
-        console.log("Position:" + frame.x + "," + frame.y);
-      }
     }
+    /* Hand every frame on, errors included. The joystick needs the errors as
+     * much as the status: an "unknown_cmd" is how a page talking to a daemon
+     * older than the vector command finds out, and this fleet updates the
+     * WebUI and the daemon in the same image but not necessarily on the same
+     * day. */
+    if (frameListener) frameListener(frame);
   }
 
   function openSocket(info) {
@@ -121,13 +126,24 @@ const motorWs = (function () {
         clearTimeout(timer);
         socket = ws;
         attempts = 0;
-        /* Ask for position pushes. The daemon polls the driver server-side
-         * and only emits a frame when something changed, so an idle panel
-         * costs one heartbeat every 5s rather than a request per tick. */
-        try {
-          ws.send(JSON.stringify({ cmd: "subscribe", interval_ms: 200 }));
-        } catch (err) {
-          /* the send below will report it */
+        /* Position pushes are subscribed to only when something on the page
+         * is going to draw them - see subscribe() below. This used to be
+         * unconditional, which meant the daemon polled MOTOR_GET_STATUS
+         * several times a second for the whole life of every preview page so
+         * that onMessage() could console.log the result. The travel limits
+         * that step and continuous mode need do NOT depend on it: the daemon
+         * sends them unprompted in the "hello" frame. */
+        if (pushIntervalMs) {
+          try {
+            ws.send(
+              JSON.stringify({
+                cmd: "subscribe",
+                interval_ms: pushIntervalMs,
+              }),
+            );
+          } catch (err) {
+            /* the send below will report it */
+          }
         }
         resolve(ws);
       };
@@ -175,17 +191,23 @@ const motorWs = (function () {
   }
 
   /* Synchronous, and deliberately so: every caller is on a pointer event and
-   * has a CGI fallback ready. Returns false rather than queueing, so a
-   * half-open socket can never swallow a stop. */
+   * has a CGI fallback ready. Returns 0 rather than queueing, so a half-open
+   * socket can never swallow a stop.
+   *
+   * On success it returns the id it stamped on the message, which every
+   * existing caller may keep treating as a plain boolean - seq starts at 1
+   * and only grows, so a sent message never reports a falsy id. The joystick
+   * needs the actual number, to match an error frame back to the command
+   * that caused it. */
   function trySend(obj) {
-    if (!socket || socket.readyState !== WebSocket.OPEN) return false;
+    if (!socket || socket.readyState !== WebSocket.OPEN) return 0;
     try {
       obj.id = seq++;
       socket.send(JSON.stringify(obj));
-      return true;
+      return obj.id;
     } catch (err) {
       console.warn("motors: WebSocket send failed", err);
-      return false;
+      return 0;
     }
   }
 
@@ -195,11 +217,21 @@ const motorWs = (function () {
     isOpen: () => !!socket && socket.readyState === WebSocket.OPEN,
     limits,
     enabledAtBuild: buildFlagSet,
+    setFrameListener: (fn) => {
+      frameListener = fn;
+    },
+    /* Turn position pushes on, once there is something to draw them with.
+     * Safe to call before or after the socket opens: whichever happens
+     * second sends the subscribe. */
+    subscribe: (intervalMs) => {
+      pushIntervalMs = intervalMs;
+      trySend({ cmd: "subscribe", interval_ms: intervalMs });
+    },
   };
 })();
 
 function normalizePreviewControlMode(value) {
-  return value === "continuous" ? "continuous" : "step";
+  return value === "continuous" || value === "joystick" ? value : "step";
 }
 
 function getPreviewControlMode() {
@@ -299,7 +331,7 @@ document.addEventListener("DOMContentLoaded", async function () {
   motorWs.connect();
 
   let timer;
-  const stepMode = getPreviewControlMode() === "step";
+  const controlMode = getPreviewControlMode();
 
   function bindStepControls() {
     $$(".jst a.s").forEach((el) => {
@@ -425,10 +457,291 @@ document.addEventListener("DOMContentLoaded", async function () {
     });
   }
 
-  if (stepMode) {
-    bindStepControls();
-  } else {
+  /* Live pan/tilt readout, fed by the status pushes the socket already
+   * subscribes to.
+   *
+   * Those pushes predate this change and drove nothing but a console.log.
+   * The joystick is what finally justifies them: with the arrows the video IS
+   * the feedback, because the control sits where you are already looking and
+   * every press is a bounded nudge. A stick is held off to one side and runs
+   * the camera toward a limit the picture gives no warning of - "how much
+   * travel is left" is the one thing the video cannot show. So it is wired up
+   * here, and shown in joystick mode only; step and continuous mode render
+   * and behave exactly as before.
+   *
+   * Cadence stays at the 200ms the socket already asks for. Faster would buy
+   * a smoother bar at the cost of one more MOTOR_GET_STATUS ioctl per frame
+   * on a 64MB MIPS camera, to redraw a number a human reads maybe twice per
+   * gesture; the CSS transition on the bars does that job for free, and the
+   * daemon still sends nothing at all while the camera is parked. */
+  function bindPositionReadout() {
+    const wrap = $("#motor-pos");
+    const barX = $("#motor-pos-x");
+    const barY = $("#motor-pos-y");
+    const text = $("#motor-pos-text");
+    if (!wrap) return null;
+
+    motorWs.subscribe(200);
+
+    return function render(frame) {
+      if (typeof frame.x !== "number" || typeof frame.y !== "number") return;
+      const xMax = frame.x_max || motorWs.limits.x;
+      const yMax = frame.y_max || motorWs.limits.y;
+      if (barX) barX.style.width = xMax ? (frame.x / xMax) * 100 + "%" : "0";
+      if (barY) barY.style.width = yMax ? (frame.y / yMax) * 100 + "%" : "0";
+      if (text) text.textContent = frame.x + " / " + frame.y;
+    };
+  }
+
+  /* Virtual analog stick.
+   *
+   * The gesture is a drag, not a press: the handle's displacement from the
+   * centre of the ring is the whole command, direction and magnitude at once.
+   * What goes on the wire is that displacement as a per-mille deflection -
+   * neither a distance nor a speed - because the daemon is the only side that
+   * knows the travel limits, the configured speed cap, and (see
+   * motor_ctl_vector) whether this kernel can drive the two axes at different
+   * speeds at all. Sending a raw speed from here would mean guessing all
+   * three.
+   */
+  function bindJoystickControls() {
+    const stick = $("#motor-stick");
+    const handle = $("#motor-stick-handle");
+    if (!stick || !handle) {
+      /* The overlay markup comes from this plugin's own manifest, so this
+       * should not happen - but falling back beats leaving a camera with no
+       * PTZ control at all because one asset was stale. */
+      bindContinuousControls();
+      return;
+    }
+
+    $("#motor").classList.add("stick-mode");
+
+    /* Matches the CGI hold loop's 90ms, which is this codebase's existing
+     * answer to "how often may a held PTZ gesture talk to the camera": ~11
+     * messages/s, the exact figure motor-ws.c's rate limiter (25/s) is
+     * documented against. No reason to invent a second number - and over the
+     * socket a message that does not change direction costs the daemon one
+     * ioctl, not a move. */
+    const SEND_INTERVAL_MS = 90;
+    /* Dead zone as a fraction of the ring radius. The daemon enforces a
+     * smaller one of its own as a backstop; this is the one that is actually
+     * felt, and it has to be wide enough that resting a fingertip on the
+     * handle does not creep the camera. */
+    const DEAD_ZONE = 0.12;
+
+    let dragging = false;
+    let radius = 1;
+    let centre = { x: 0, y: 0 };
+    let vector = { x: 0, y: 0 };
+    let overSocket = false;
+    let vectorRejected = false;
+    let lastVectorId = 0;
+    let lastSentAt = 0;
+    let flushTimer = null;
+    let cgiInterval = null;
+
+    motorWs.setFrameListener((frame) => {
+      if (renderPosition && (frame.type === "status" || frame.type === "hello"))
+        renderPosition(frame);
+      /* A daemon that predates the vector command answers unknown_cmd. Give
+       * up on the socket for this control - permanently, not per press, so a
+       * user dragging for ten seconds does not send a hundred rejects - and
+       * finish the gesture on the CGI. */
+      if (
+        frame.type === "error" &&
+        frame.id === lastVectorId &&
+        (frame.code === "unknown_cmd" || frame.code === "no_limits")
+      ) {
+        console.warn("motors: daemon rejected the vector command", frame.code);
+        vectorRejected = true;
+        if (dragging && overSocket) {
+          motorWs.trySend({ cmd: "stop" });
+          overSocket = false;
+          startCgiNudges();
+        }
+      }
+    });
+
+    /* CGI fallback. That path has no speed field at all, so proportionality
+     * has to come out of the size of each nudge instead: the same 90ms tick
+     * as the classic hold, with the step scaled by how far the stick is
+     * pushed. Visibly stepped near the centre, where the nudges get small -
+     * but a coarse joystick beats a mode that silently does nothing on a
+     * camera whose listener is off. */
+    function startCgiNudges() {
+      stopCgiNudges();
+      const params = window.motorParams || {};
+      const stepX = Number(params.steps_pan) / 100 || 0;
+      const stepY = Number(params.steps_tilt) / 100 || 0;
+      cgiInterval = setInterval(() => {
+        const x = Math.round((stepX * vector.x) / 1000);
+        const y = Math.round((stepY * vector.y) / 1000);
+        if (x || y) runMotorCmd("d=g&x=" + x + "&y=" + y);
+      }, SEND_INTERVAL_MS);
+    }
+
+    function stopCgiNudges() {
+      if (cgiInterval) {
+        clearInterval(cgiInterval);
+        cgiInterval = null;
+      }
+    }
+
+    function sendVector() {
+      lastSentAt = performance.now();
+      lastVectorId = motorWs.trySend({
+        cmd: "vector",
+        x: vector.x,
+        y: vector.y,
+      });
+      if (!lastVectorId) {
+        /* Socket died mid-drag with the camera still running toward a limit.
+         * Switch transports rather than abandon the gesture. */
+        overSocket = false;
+        runMotorCmd("d=s");
+        startCgiNudges();
+      }
+    }
+
+    /* Throttle with a trailing edge. A leading-only throttle drops the last
+     * sample of every gesture that ends between two windows - and the last
+     * sample of a joystick drag is the one that says how fast to keep going,
+     * so the camera would hold whatever speed it had 90ms before the user
+     * stopped moving. */
+    function queueVector() {
+      const wait = SEND_INTERVAL_MS - (performance.now() - lastSentAt);
+      if (wait <= 0) {
+        if (flushTimer) {
+          clearTimeout(flushTimer);
+          flushTimer = null;
+        }
+        sendVector();
+        return;
+      }
+      if (!flushTimer) {
+        flushTimer = setTimeout(() => {
+          flushTimer = null;
+          /* overSocket as well as dragging: the transport can have switched
+           * to the CGI since this was queued, and sending then would trip
+           * sendVector()'s own failure path a second time. */
+          if (dragging && overSocket) sendVector();
+        }, wait);
+      }
+    }
+
+    function updateFromPointer(ev) {
+      let dx = ev.clientX - centre.x;
+      let dy = ev.clientY - centre.y;
+      const dist = Math.hypot(dx, dy);
+
+      /* Clamp to the ring. Without it the handle follows the pointer off the
+       * overlay and the deflection has no upper bound to be a fraction of. */
+      if (dist > radius) {
+        dx = (dx / dist) * radius;
+        dy = (dy / dist) * radius;
+      }
+
+      handle.style.transform = "translate(" + dx + "px," + dy + "px)";
+
+      const norm = Math.min(dist, radius) / radius;
+      if (norm < DEAD_ZONE) {
+        vector = { x: 0, y: 0 };
+        return;
+      }
+      /* Rescale so the useful throw starts at the dead-zone edge rather than
+       * jumping straight to 12% deflection the moment it is crossed. */
+      const scale = ((norm - DEAD_ZONE) / (1 - DEAD_ZONE)) * 1000;
+      vector = {
+        x: Math.round((dx / (dist || 1)) * scale),
+        /* Screen y grows downward, the motors' logical y grows upward - the
+         * same convention motorDirSigns() encodes for the arrows. */
+        y: Math.round((-dy / (dist || 1)) * scale),
+      };
+    }
+
+    function endDrag() {
+      if (!dragging) return;
+      dragging = false;
+      stick.classList.remove("dragging");
+      handle.style.transform = "";
+      if (flushTimer) {
+        clearTimeout(flushTimer);
+        flushTimer = null;
+      }
+      vector = { x: 0, y: 0 };
+      stopCgiNudges();
+      if (overSocket) {
+        overSocket = false;
+        if (!motorWs.trySend({ cmd: "stop" })) runMotorCmd("d=s");
+      }
+    }
+
+    stick.addEventListener("pointerdown", (ev) => {
+      ev.preventDefault();
+      const box = stick.getBoundingClientRect();
+      /* Geometry read from the element, so the ring's size stays a CSS
+       * decision and a responsive layout cannot desynchronise the two. */
+      radius = box.width / 2;
+      centre = { x: box.left + radius, y: box.top + box.height / 2 };
+      dragging = true;
+      stick.classList.add("dragging");
+      /* Capture keeps the pointermove/pointerup stream on this element once
+       * the drag leaves the ring - without it a fast flick ends on the video
+       * underneath and the release never arrives, which with a real move in
+       * flight means the camera pans to its limit.
+       *
+       * Guarded because setPointerCapture throws NotFoundError for a pointer
+       * id the browser does not consider active, and an exception here would
+       * skip everything below it: the gesture would then track the handle
+       * across the screen while never sending a single command. Found exactly
+       * that way, driving this control from a script. Capture is a safety
+       * net, not a precondition - losing it is worth a degraded drag, not a
+       * dead one. */
+      try {
+        if (stick.setPointerCapture && ev.pointerId !== undefined) {
+          stick.setPointerCapture(ev.pointerId);
+        }
+      } catch (err) {
+        /* no capture; the window blur/visibilitychange handlers below still
+         * catch the runaway case */
+      }
+      overSocket = motorWs.isOpen() && !vectorRejected;
+      updateFromPointer(ev);
+      if (overSocket) sendVector();
+      else startCgiNudges();
+    });
+
+    stick.addEventListener("pointermove", (ev) => {
+      if (!dragging) return;
+      ev.preventDefault();
+      updateFromPointer(ev);
+      if (overSocket) queueVector();
+    });
+
+    /* Same net as the arrows: with a real move in flight, a release event
+     * that never arrives leaves the camera panning to its limit, so every way
+     * a drag can end has to land here. */
+    ["pointerup", "pointercancel", "lostpointercapture"].forEach((name) =>
+      stick.addEventListener(name, endDrag),
+    );
+    stick.addEventListener("contextmenu", (ev) => ev.preventDefault());
+
+    window.addEventListener("blur", endDrag);
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) endDrag();
+    });
+  }
+
+  const renderPosition =
+    controlMode === "joystick" ? bindPositionReadout() : null;
+
+  if (controlMode === "joystick") {
+    bindJoystickControls();
+  } else if (controlMode === "continuous") {
     bindContinuousControls();
+  } else {
+    bindStepControls();
   }
 
   $(".jst a.b").onclick = (ev) => {

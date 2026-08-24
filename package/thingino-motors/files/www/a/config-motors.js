@@ -37,7 +37,7 @@
   }
 
   function normalizePreviewControlMode(value) {
-    return value === "continuous" ? "continuous" : "step";
+    return value === "continuous" || value === "joystick" ? value : "step";
   }
 
   function updateMotionDriverInputs() {
@@ -320,8 +320,8 @@
     }
 
     const previewControlMode = formData.get("preview_control_mode");
-    if (previewControlMode !== "step" && previewControlMode !== "continuous") {
-      errors.push("Preview PTZ controls must be step or continuous");
+    if (normalizePreviewControlMode(previewControlMode) !== previewControlMode) {
+      errors.push("Preview PTZ controls must be step, continuous or joystick");
     }
 
     if (motionDriver !== "profiled") {

@@ -158,7 +158,7 @@ handle_post() {
 	esac
 
 	case "$preview_control_mode_value" in
-		step | continuous) ;;
+		step | continuous | joystick) ;;
 		*)
 			preview_control_mode_value="step"
 			;;

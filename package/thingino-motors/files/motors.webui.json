@@ -14,12 +14,14 @@
       ]
     }
   ],
-  "styles": [],
+  "styles": [
+    "/a/preview-motors.css"
+  ],
   "preview": {
     "scripts": [
       "/a/preview-motors.js"
     ],
-    "html": "<div class=\"position-absolute top-50 start-50 translate-middle\" id=\"motor-overlay\" style=\"display:none\">\n  <div id=\"motor\">\n    <div class=\"jst\">\n      <a class=\"s\" data-dir=\"uc\"></a>\n      <a class=\"s\" data-dir=\"ur\"></a>\n      <a class=\"s\" data-dir=\"cr\"></a>\n      <a class=\"s\" data-dir=\"dr\"></a>\n      <a class=\"s\" data-dir=\"dc\"></a>\n      <a class=\"s\" data-dir=\"dl\"></a>\n      <a class=\"s\" data-dir=\"cl\"></a>\n      <a class=\"s\" data-dir=\"ul\"></a>\n      <a class=\"b\" data-dir=\"h\"></a>\n    </div>\n  </div>\n</div>"
+    "html": "<div class=\"position-absolute top-50 start-50 translate-middle\" id=\"motor-overlay\" style=\"display:none\">\n  <div id=\"motor\">\n    <div class=\"jst\">\n      <a class=\"s\" data-dir=\"uc\"></a>\n      <a class=\"s\" data-dir=\"ur\"></a>\n      <a class=\"s\" data-dir=\"cr\"></a>\n      <a class=\"s\" data-dir=\"dr\"></a>\n      <a class=\"s\" data-dir=\"dc\"></a>\n      <a class=\"s\" data-dir=\"dl\"></a>\n      <a class=\"s\" data-dir=\"cl\"></a>\n      <a class=\"s\" data-dir=\"ul\"></a>\n      <a class=\"b\" data-dir=\"h\"></a>\n    </div>\n    <div id=\"motor-stick\"><div id=\"motor-stick-handle\"></div></div>\n    <div id=\"motor-pos\" aria-hidden=\"true\">\n      <span class=\"motor-pos-row\"><b>P</b><span class=\"motor-pos-track\"><i id=\"motor-pos-x\"></i></span></span>\n      <span class=\"motor-pos-row\"><b>T</b><span class=\"motor-pos-track\"><i id=\"motor-pos-y\"></i></span></span>\n      <span id=\"motor-pos-text\">&#8211;</span>\n    </div>\n  </div>\n</div>"
   },
   "featureFlags": {
     "motors": true,

@@ -1,0 +1,148 @@
+/* Virtual analog stick for the preview PTZ overlay, used when
+ * motors.preview_control_mode is "joystick".
+ *
+ * A plugin stylesheet rather than more rules in thingino-webui's main.css:
+ * the markup it styles is contributed by this plugin's own manifest, so the
+ * two have to arrive and disappear together. main.css keeps owning the
+ * eight-sector .jst control it has always owned.
+ */
+
+#motor {
+  /* main.css sizes #motor (300x300) but never gives it a position, so an
+   * absolutely placed child would resolve against #motor-overlay instead -
+   * the same box today, but only by coincidence. */
+  position: relative;
+}
+
+/* Hidden until preview-motors.js has confirmed the mode. The markup ships on
+ * every preview page whatever the setting says, and a stick that is visible
+ * but bound to nothing is worse than no stick. */
+#motor-stick,
+#motor-pos {
+  display: none;
+}
+
+#motor.stick-mode #motor-stick,
+#motor.stick-mode #motor-pos {
+  display: block;
+}
+
+/* The eight direction sectors are 5000px squares stacked over the whole
+ * overlay. Left in place they would swallow every pointerdown that lands
+ * outside the handle, including the ones that start a drag near the rim. */
+#motor.stick-mode .jst a.s {
+  display: none;
+}
+
+#motor-stick {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 132px;
+  height: 132px;
+  margin: -66px 0 0 -66px;
+  border-radius: 50%;
+  background: #0000004d;
+  border: 2px solid #ffffff59;
+  box-shadow: inset 0 0 12px #00000059;
+  /* The preview page sets pointer-events:none on #motor-overlay/#motor so the
+   * video's own controls stay reachable underneath, and pointer-events is
+   * inherited. Re-enabling it here is what makes the stick draggable at all. */
+  pointer-events: auto;
+  /* Without this the browser claims the gesture for scrolling or pinch-zoom
+   * on the first touchmove and the drag dies one frame in. */
+  touch-action: none;
+  /* A drag that leaves the ring must not paint a text selection across the
+   * page behind it. */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#motor-stick::after {
+  /* Centre pip: without it there is no visual reference for where the dead
+   * zone is, and a handle resting at centre looks like a button. */
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border-radius: 50%;
+  background: #ffffff59;
+}
+
+#motor-stick-handle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 50px;
+  height: 50px;
+  margin: -25px 0 0 -25px;
+  border-radius: 50%;
+  background: #ff8800cc;
+  border: 3px solid #fffffff2;
+  box-shadow: 0 2px 8px #000000a6;
+  cursor: grab;
+  /* Only for the snap back to centre on release. Switched off during the drag
+   * below, or the handle renders 120ms behind the finger and the whole
+   * control feels broken. */
+  transition: transform 120ms ease-out;
+}
+
+#motor-stick.dragging {
+  border-color: #ff8800a6;
+}
+
+#motor-stick.dragging #motor-stick-handle {
+  cursor: grabbing;
+  transition: none;
+}
+
+/* Live position, driven by the daemon's status pushes. */
+#motor-pos {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 150px;
+  margin: 76px 0 0 -75px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.6;
+  color: #fff;
+  text-align: center;
+  text-shadow: 0 1px 2px #000000cc;
+  /* Never let the readout eat a drag that overshoots the ring downward. */
+  pointer-events: none;
+}
+
+.motor-pos-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.motor-pos-row b {
+  width: 9px;
+  font-weight: 600;
+  opacity: 0.75;
+}
+
+.motor-pos-track {
+  display: block;
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: #ffffff40;
+  overflow: hidden;
+}
+
+.motor-pos-track i {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: #ff8800;
+  /* Slightly longer than the 200ms push interval, so consecutive samples
+     blend into a glide instead of a staircase. */
+  transition: width 220ms linear;
+}

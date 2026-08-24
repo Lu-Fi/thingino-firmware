@@ -517,6 +517,41 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     $("#motor").classList.add("stick-mode");
 
+    /* The CSS gives the ring an up-to-450px size, but the actual preview box
+     * can be far shorter than it is wide, especially on a phone in portrait
+     * - a ring sized only from viewport width would still poke out above and
+     * below the video. Measure the real preview box instead of guessing from
+     * vw/vh media queries, which cannot know the stream's aspect ratio, and
+     * drive the ring through a CSS variable so all the sizing logic lives
+     * here rather than being split between JS and a breakpoint.
+     *
+     * Two different markups to support: timps ships its own preview.html
+     * (native MSE/fMP4 player) with a fixed-aspect-ratio ".ms-video-wrap";
+     * prudynt/raptor use thingino-webui's stock preview.html, an "#frame"
+     * div sized by an img-fluid <img>'s intrinsic aspect ratio. Both are the
+     * positioned ancestor #motor-overlay actually centres against. */
+    function sizeStick() {
+      const frame = $(".ms-video-wrap") || $("#frame");
+      if (!frame) return;
+      const box = frame.getBoundingClientRect();
+      if (!box.width || !box.height) return;
+      // Headroom so the ring sits inside the video, not flush with its
+      // edges, at roughly 85% of whichever side is shorter.
+      const fit = Math.min(box.width, box.height) * 0.85;
+      const size = Math.max(132, Math.min(450, fit));
+      stick.style.setProperty("--motor-stick-size", size.toFixed(0) + "px");
+    }
+    sizeStick();
+    window.addEventListener("resize", sizeStick);
+    // On the img-fluid markup the box only reaches its real aspect ratio
+    // once the first frame has actually loaded - before that #frame can
+    // still be showing the placeholder's own (different) proportions. The
+    // timps markup has no such element; querying a nonexistent #preview is
+    // a harmless no-op, since .ms-video-wrap's aspect-ratio is fixed by CSS
+    // and already correct from sizeStick()'s first call above.
+    const previewImg = $("#preview");
+    if (previewImg) previewImg.addEventListener("load", sizeStick);
+
     /* Matches the CGI hold loop's 90ms, which is this codebase's existing
      * answer to "how often may a held PTZ gesture talk to the camera": ~11
      * messages/s, the exact figure motor-ws.c's rate limiter (25/s) is

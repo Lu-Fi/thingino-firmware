@@ -38,13 +38,20 @@
   position: absolute;
   left: 50%;
   top: 50%;
-  /* ~3.4x the original 132px: a bigger ring maps the same physical drag
-   * distance to a smaller slice of the 0..1000 deflection range, which is
-   * what "finer control" actually means here - the pointer, not the CSS
-   * box, is the limited resource. */
-  width: 450px;
-  height: 450px;
-  margin: -225px 0 0 -225px;
+  /* transform rather than a negative margin: --motor-stick-size changes at
+   * runtime (see below), and a margin hack would need to track that size
+   * too to stay centred. translate(-50%,-50%) centres on the element's own
+   * box whatever that box currently is. */
+  transform: translate(-50%, -50%);
+  /* Up to ~3.4x the original 132px: a bigger ring maps the same physical
+   * drag distance to a smaller slice of the 0..1000 deflection range, which
+   * is what "finer control" actually means here - the pointer, not the CSS
+   * box, is the limited resource. --motor-stick-size is set by
+   * preview-motors.js's sizeStick() from the actual video box, which knows
+   * the stream's aspect ratio and viewport in a way no fixed breakpoint
+   * can - the 450px here only matters before that first measurement lands. */
+  width: var(--motor-stick-size, 450px);
+  height: var(--motor-stick-size, 450px);
   border-radius: 50%;
   /* No fill: a 450px disc of translucent grey would sit over most of the
    * video it is supposed to be controlling. The ring reads fine as a rim

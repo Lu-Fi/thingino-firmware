@@ -196,9 +196,9 @@
     if (joystickSensitivityEl) {
       const parsed = parseFloat(config.joystick_sensitivity);
       joystickSensitivityEl.value =
-        Number.isFinite(parsed) && parsed >= 0.05 && parsed <= 2
+        Number.isFinite(parsed) && parsed >= 0.05 && parsed <= 4
           ? parsed
-          : 0.25;
+          : 2;
     }
     updateJoystickSensitivityInputs();
     const homingEl = $("#homing");

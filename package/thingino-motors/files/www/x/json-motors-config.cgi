@@ -130,7 +130,7 @@ handle_post() {
 	preview_control_mode_value=${POST_preview_control_mode:-step}
 	steps_pan_value=$POST_steps_pan
 	steps_tilt_value=$POST_steps_tilt
-	joystick_sensitivity_value=${POST_joystick_sensitivity:-0.25}
+	joystick_sensitivity_value=${POST_joystick_sensitivity:-2.00}
 
 	[ "$homing_value" = "true" ] || homing_value="false"
 
@@ -168,10 +168,10 @@ handle_post() {
 	# busybox ash's test has no floating point; reject non-numeric, then
 	# clamp via awk into motor-daemon.c's own accepted range.
 	case "$joystick_sensitivity_value" in
-		'' | *[!0-9.]* | *.*.*) joystick_sensitivity_value="0.25" ;;
+		'' | *[!0-9.]* | *.*.*) joystick_sensitivity_value="2.00" ;;
 	esac
 	joystick_sensitivity_value=$(awk -v v="$joystick_sensitivity_value" \
-		'BEGIN { if (v < 0.05) v = 0.05; if (v > 2) v = 2; printf "%.2f", v }')
+		'BEGIN { if (v < 0.05) v = 0.05; if (v > 4) v = 4; printf "%.2f", v }')
 
 	if [ "true" != "$is_spi_value" ]; then
 		motors_set_value gpio_pan "$gpio_pan_1 $gpio_pan_2 $gpio_pan_3 $gpio_pan_4"

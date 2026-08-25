@@ -202,20 +202,13 @@ toolchain: defconfig
 ota: ota-full
 
 # Full firmware OTA (default)
-#
-# -B is not optional here. A full image spans the whole flash, so sysupgrade
-# rewrites *every* partition - including "data" (the overlayfs upperdir) and
-# "backup" (the cfg-backup snapshot). Without -B the everyday flash path wipes
-# all runtime config AND the snapshot that docs/sysupgrade.md tells the user to
-# restore from, leaving no way back. With -B, sysupgrade writes the snapshot
-# first and then skips the backup region, so "cfg-backup restore" works.
 ota-full:
 	@$(TEAL) "$@"
 	@[ -n "$(CAMERA_IP_ADDRESS)" ] || { echo "ERROR: IP is required for $@. Use 'make $@ IP=<camera-ip>'."; exit 1; }
 	@fw_path="$(FIRMWARE_BIN_FULL)"; \
 	if [ ! -f "$$fw_path" ]; then fw_path="$(GENERIC_FIRMWARE_BIN_FULL)"; fi; \
 	test -f "$$fw_path" || { echo "ERROR: Neither $(FIRMWARE_BIN_FULL) nor $(GENERIC_FIRMWARE_BIN_FULL) was found. Run make first."; exit 1; }; \
-	$(SCRIPTS_DIR)/fw_ota.sh -a $(CAMERA_IP_ADDRESS) -p "$$fw_path" $(if $(filter 1 y yes true,$(FORCE)),-f) -B -m all
+	$(SCRIPTS_DIR)/fw_ota.sh -a $(CAMERA_IP_ADDRESS) -p "$$fw_path" $(if $(filter 1 y yes true,$(FORCE)),-f) -m all
 
 # Kernel-only OTA
 ota-kernel:

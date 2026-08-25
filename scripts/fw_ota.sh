@@ -373,18 +373,7 @@ if [ "$MODE" = "full" ]; then
 	ota_log=$(mktemp)
 	[ "$DO_BACKUP" -eq 1 ] && SUP_FLAG="-B" || SUP_FLAG=""
 
-	# Echo the remote log to the terminal when there is one. Unguarded, this
-	# redirection fails outright under nohup/CI/cron ("/dev/tty: No such device
-	# or address"), which breaks the pipeline and loses $ota_log - so the
-	# "Rebooting" / "Flash process running with PID" checks below both miss and
-	# a perfectly good flash gets reported as a failure.
-	# The test has to actually open /dev/tty: `[ -w /dev/tty ]` only checks the
-	# 0666 permission bits and passes even with no controlling terminal.
-	if (exec 3>/dev/tty) 2>/dev/null; then
-		remote_run "$REMOTE_SCRIPT -x $SUP_FLAG $REMOTE_FW_FILE" 2>&1 | tee /dev/tty | tee "$ota_log" >/dev/null
-	else
-		remote_run "$REMOTE_SCRIPT -x $SUP_FLAG $REMOTE_FW_FILE" 2>&1 | tee "$ota_log" >/dev/null
-	fi
+	remote_run "$REMOTE_SCRIPT -x $SUP_FLAG $REMOTE_FW_FILE" 2>&1 | tee /dev/tty | tee "$ota_log" >/dev/null
 	ota_status=${PIPESTATUS[0]}
 
 	if grep -q "Rebooting" "$ota_log"; then

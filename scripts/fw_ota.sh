@@ -316,26 +316,6 @@ fi
 
 echo "Firmware compatibility verified."
 
-# A full image spans the whole flash, so sysupgrade's partition-by-partition
-# loop rewrites "data" too - and /overlay (the overlayfs upperdir) lives there.
-# Every full OTA is therefore a factory reset of runtime config: /etc/thingino.json
-# reverts to the copy baked into the squashfs at build time (configs/common.thingino.json
-# + the board fragment + user/<camera>[/<ip>]/thingino.json). Settings only appear
-# to "survive" when the baked-in default happens to carry the same value.
-# Say so out loud - this looked like a mystery config-reset bug for a whole evening.
-full_flash_config_notice() {
-	[ "$MODE" = "full" ] || return 0
-	echo
-	echo -e "\e[38;5;214mNote: a full flash rewrites the data partition, so /overlay was reset.\e[0m"
-	echo -e "\e[38;5;214m      Runtime config (/etc/thingino.json, ...) is back to image defaults.\e[0m"
-	if [ "$DO_BACKUP" -eq 1 ]; then
-		echo -e "\e[38;5;214m      A snapshot was taken first: run 'cfg-backup restore' on the camera\e[0m"
-		echo -e "\e[38;5;214m      (then reboot) to put the previous config back.\e[0m"
-	fi
-	echo -e "\e[38;5;214m      To make a setting survive every flash, put it in\e[0m"
-	echo -e "\e[38;5;214m      user/<camera>/[<ip>/]thingino.json so it is baked into the image.\e[0m"
-}
-
 free_overlay_space() {
 	echo "Freeing overlay space on device..."
 	remote_run "rm -rf /overlay/var /overlay/usr 2>/dev/null; mount -o remount / 2>/dev/null; echo done" >/dev/null || \
@@ -410,7 +390,6 @@ if [ "$MODE" = "full" ]; then
 	if grep -q "Rebooting" "$ota_log"; then
 		rm -f "$ota_log"
 		echo "Firmware flashed successfully. Device is rebooting."
-		full_flash_config_notice
 		exit 0
 	fi
 
@@ -418,7 +397,6 @@ if [ "$MODE" = "full" ]; then
 		if wait_for_reboot_after_detach; then
 			rm -f "$ota_log"
 			echo "Firmware flashed successfully. Device is rebooting."
-			full_flash_config_notice
 			exit 0
 		fi
 		remote_log_tail=$(remote_run "tail -n 50 /tmp/sysupgrade-flash.log" 2>/dev/null) && echo "$remote_log_tail" >&2

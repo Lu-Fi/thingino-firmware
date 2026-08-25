@@ -4,8 +4,8 @@
     "ir850": 50,
     "ircut": "16 17",
     "mmc_cd": 49,
-    "scl": "58i",
-    "sda": "57i",
+    "scl": 58,
+    "sda": 57,
     "white": 59,
     "wlan": 6
   },
@@ -18,7 +18,14 @@
     "invert_x": false,
     "invert_y": false,
     "is_spi": false,
-    "pos_0": "1000,0",
+    "presets": [
+      {
+        "id": 0,
+        "x": 1000,
+        "y": 0,
+        "description": "Home"
+      }
+    ],
     "speed_pan": 900,
     "speed_tilt": 0,
     "steps_pan": 2000,

@@ -7,7 +7,7 @@ Thingino (_/θinˈdʒiːno/_, _thin-jee-no_) is an open-source firmware for Inge
 
 ### Supported Hardware
 
-Please find [the full list of supported cameras](docs/supported_hardware.md)
+Please find [the full list of supported cameras](docs/hardware/supported-hardware.md)
 in a separate document. Visit [our website][0] for an illustrated version of
 the list.
 
@@ -17,10 +17,10 @@ the list.
 
 We've split the Thingino repository into two branches: stable and master, to better manage development and provide reliable releases for users.
 
-**Stable Branch**
+**Ciao Branch**
 
 Provides a reliable, tested version of Thingino for general use. It includes carefully selected, stable changes. It uses the original ONVIF server and Prudynt with libconfig.
-The stable branch will receive critical fixes. New features will only be added once they are thoroughly tested and mature in the master branch.
+The ciao branch will receive critical fixes. New features will only be added once they are thoroughly tested and mature in the master branch.
 
 For users who want a dependable version of Thingino without needing to build or contribute to development.
 
@@ -60,14 +60,14 @@ The build uses a prebuilt image from
 [ghcr.io/themactep/thingino-builder-image](https://github.com/themactep/thingino-builder-image),
 pulled automatically on first run. Requires Podman or Docker.
 
-Read [Building in a container](docs/container.md) for more info.
+Read [Building in a container](docs/build/container.md) for more info.
 
 ### Documentation
 
-- [Firmware Image Structure](docs/firmware-image-structure.md) - Partition layout and image assembly
-- [Firmware Dumping](docs/firmware.md) - How to backup existing firmware
-- [Camera Recovery](docs/camera-recovery.md) - Recovering from failed updates
-- [Local Build Settings](docs/local-build-settings.md) - Layered user-specific settings from `THINGINO_USER_DIR/common`, per camera, and per device IP
+- [Firmware Image Structure](docs/firmware/firmware-image-structure.md) - Partition layout and image assembly
+- [Firmware Dumping](docs/firmware/firmware.md) - How to backup existing firmware
+- [Camera Recovery](docs/firmware/camera-recovery.md) - Recovering from failed updates
+- [Local Build Settings](docs/build/local-build-settings.md) - Layered user-specific settings from `THINGINO_USER_DIR/common`, per camera, and per device IP
 
 ### Resources
 

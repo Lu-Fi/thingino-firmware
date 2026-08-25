@@ -49,12 +49,17 @@ json_ok() {
 
 [ -n "$QUERY_STRING" ] && eval $(echo "$QUERY_STRING" | sed "s/&/;/g")
 
-# URL-decode string params (name, n) — the rest are numeric/single char.
+# URL-decode string params (description, n); the rest are numeric/single char.
 urldecode() {
 	printf '%b' "$(echo "$1" | sed 's/+/ /g; s/%\([0-9A-Fa-f][0-9A-Fa-f]\)/\\x\1/g')"
 }
-[ -n "$name" ] && name=$(urldecode "$name")
+[ -n "$description" ] && description=$(urldecode "$description")
 [ -n "$n" ] && n=$(urldecode "$n")
+[ -n "$order" ] && order=$(urldecode "$order")
+
+json_escape() {
+	printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
+}
 
 [ -z "$x" ] && x=0
 [ -z "$y" ] && y=0
@@ -127,30 +132,16 @@ case "$d" in
 		json_ok "$payload"
 		;;
 	pg)
-		# List PTZ presets from /etc/ptz_presets.conf: [{"number":N,"name":"..","x":N,"y":N}]
-		presets_json="["
-		first=1
-		while IFS='=' read -r pnum rest; do
-			case "$pnum" in
-				\#* | "") continue ;;
-				*[!0-9]*) continue ;;
-			esac
-			pname="${rest%%,*}"
-			pcoords="${rest#*,}"
-			px="${pcoords%%,*}"
-			py="${pcoords#*,}"
-			[ -n "$px" ] && [ -n "$py" ] || continue
-			[ "$first" = "1" ] || presets_json="$presets_json,"
-			first=0
-			presets_json="$presets_json{\"number\":$pnum,\"name\":\"$pname\",\"x\":$px,\"y\":$py}"
-		done </etc/ptz_presets.conf 2>/dev/null
-		presets_json="$presets_json]"
+		# List PTZ presets from the motors.presets array in thingino.json:
+		# [{"id":N,"description":"..","x":N,"y":N}]
+		presets_json=$(jct /etc/thingino.json path '$.motors.presets[*]' --mode values 2>/dev/null)
+		[ -n "$presets_json" ] || presets_json='[]'
 		json_ok "{\"presets\":$presets_json}"
 		;;
 	ps)
 		# Save current motor position as a preset (auto slot)
-		[ -n "$name" ] || json_error "preset-name-required"
-		output=$(ptz_presets -a -1 "$name" 2>&1) || json_error "preset-save-failed"
+		[ -n "$description" ] || json_error "preset-description-required"
+		output=$(ptz_presets -a -1 "$description" 2>&1) || json_error "preset-save-failed"
 		json_ok "{\"status\":\"$output\"}"
 		;;
 	pr)
@@ -164,6 +155,26 @@ case "$d" in
 		[ -n "$n" ] || json_error "preset-number-required"
 		ptz_presets -r "$n" >/dev/null 2>&1
 		json_ok "{\"status\":\"preset $n deleted\"}"
+		;;
+	pu)
+		# Update an existing preset's description and coordinates
+		[ -n "$n" ] || json_error "preset-number-required"
+		[ -n "$description" ] || json_error "preset-description-required"
+		case "$x" in
+			'' | *[!0-9]*) json_error "preset-x-invalid" ;;
+		esac
+		case "$y" in
+			'' | *[!0-9]*) json_error "preset-y-invalid" ;;
+		esac
+		ptz_presets -a "$n" "$description" "$x" "$y" >/dev/null 2>&1 || json_error "preset-update-failed"
+		json_ok "{\"status\":\"preset $n updated\"}"
+		;;
+	po)
+		# Reorder presets: order is a comma-separated list of preset ids.
+		# Ids are stable; only the array order changes.
+		[ -n "$order" ] || json_error "preset-order-required"
+		output=$(ptz_presets -o "$order" 2>&1) || json_error "preset-reorder-failed"
+		json_ok "{\"status\":\"$output\"}"
 		;;
 	*)
 		json_error "motors-command-unsupported"

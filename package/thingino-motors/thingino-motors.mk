@@ -107,6 +107,8 @@ define THINGINO_MOTORS_INSTALL_WWW_CMDS
 		$(TARGET_DIR)/var/www/a/config-motors.js
 	$(INSTALL) -D -m 0644 $(THINGINO_MOTORS_PKGDIR)/files/www/a/preview-motors.js \
 		$(TARGET_DIR)/var/www/a/preview-motors.js
+	$(INSTALL) -D -m 0644 $(THINGINO_MOTORS_PKGDIR)/files/www/a/preview-motors-settings.js \
+		$(TARGET_DIR)/var/www/a/preview-motors-settings.js
 	$(INSTALL) -D -m 0644 $(THINGINO_MOTORS_PKGDIR)/files/www/a/preview-motors.css \
 		$(TARGET_DIR)/var/www/a/preview-motors.css
 	$(INSTALL) -D -m 0755 $(THINGINO_MOTORS_PKGDIR)/files/www/x/json-motor.cgi \
@@ -174,9 +176,6 @@ define THINGINO_MOTORS_INSTALL_TARGET_CMDS
 
 	$(INSTALL) -D -m 0755 $(THINGINO_MOTORS_PKGDIR)/files/ptz-ctrl \
 		$(TARGET_DIR)/usr/sbin/ptz-ctrl
-
-	$(INSTALL) -D -m 0644 $(THINGINO_MOTORS_PKGDIR)/files/ptz_presets.conf \
-		$(TARGET_DIR)/etc/ptz_presets.conf
 
 	$(THINGINO_MOTORS_INSTALL_JSON_CMDS)
 

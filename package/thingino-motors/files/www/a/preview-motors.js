@@ -201,7 +201,9 @@ async function ensureMotorParams() {
     return window.motorParams;
   }
   try {
-    const response = await fetch("/x/json-motor-params.cgi");
+    const response = await fetch("/x/json-motor-params.cgi", {
+      cache: "no-store",
+    });
     const motorParams = await response.json();
     window.motorParams = motorParams;
     return motorParams;

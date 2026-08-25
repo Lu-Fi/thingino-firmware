@@ -22,7 +22,14 @@
     "invert_x": false,
     "invert_y": false,
     "is_spi": false,
-    "pos_0": "3150,1250",
+    "presets": [
+      {
+        "id": 0,
+        "x": 3150,
+        "y": 1250,
+        "description": "Home"
+      }
+    ],
     "speed_pan": 700,
     "speed_tilt": 700,
     "steps_pan": 6300,

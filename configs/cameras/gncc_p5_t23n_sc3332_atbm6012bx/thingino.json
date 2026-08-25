@@ -4,8 +4,8 @@
     "ir850": 50,
     "ircut": "16 17",
     "mmc_cd": 49,
-    "scl": "58i",
-    "sda": "57i",
+    "scl": 58,
+    "sda": 57,
     "wlan": 6
   },
   "motors": {
@@ -17,7 +17,14 @@
     "invert_x": false,
     "invert_y": false,
     "is_spi": false,
-    "pos_0": "1991,398",
+    "presets": [
+      {
+        "id": 0,
+        "x": 1991,
+        "y": 398,
+        "description": "Home"
+      }
+    ],
     "speed_pan": 900,
     "speed_tilt": 900,
     "steps_pan": 3982,

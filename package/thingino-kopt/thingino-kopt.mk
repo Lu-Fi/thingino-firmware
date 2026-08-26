@@ -296,12 +296,23 @@ endif
 ################ USB MASS STORAGE ##################
 
 ifeq ($(BR2_PACKAGE_THINGINO_KOPT_USB_MASS_STORAGE),y)
+ifeq ($(SOC_FAMILY),a1)
+# SCSI and sd stay built in on the A1: its SATA needs them, and the vendor tree
+# cannot build ATA modular at all - libata-core.c calls sata_phy_reset(), which
+# ahci_ingenic.c defines, so libata.ko would need a symbol from a module that
+# depends on it. Only the USB half is modular, out of /etc/modules.d/30-storage.
 define THINGINO_KOPT_LINUX_CONFIG_FIXUPS_USB_MASS_STORAGE
-	$(call KCONFIG_ENABLE_OPT,CONFIG_USB_STORAGE)
+	$(call KCONFIG_ENABLE_OPT,CONFIG_SCSI)
+	$(call KCONFIG_ENABLE_OPT,CONFIG_BLK_DEV_SD)
+	$(call KCONFIG_SET_OPT,CONFIG_USB_STORAGE,m)
+endef
+else
+define THINGINO_KOPT_LINUX_CONFIG_FIXUPS_USB_MASS_STORAGE
 	$(call KCONFIG_ENABLE_OPT,CONFIG_SCSI)
 	$(call KCONFIG_ENABLE_OPT,CONFIG_BLK_DEV_SD)
 	$(call KCONFIG_ENABLE_OPT,CONFIG_USB_STORAGE)
 endef
+endif
 endif
 
 ################ EXT2/EXT4 FS #########################
@@ -496,6 +507,28 @@ endef
 endif
 endif
 
+################ WIREGUARD UDP TUNNEL #########################
+
+# wireguard needs udp_tunnel_xmit_skb() and friends, which live in
+# CONFIG_NET_UDP_TUNNEL. That symbol has no prompt, so buildroot's
+# wireguard-linux-compat reaches it by enabling NET_FOU, the one visible
+# selector - and NET_FOU also selects XFRM, which is a bool and so lands
+# built in. wireguard's source references neither fou nor xfrm; it just
+# needs the four udp_tunnel symbols. Take the dependency through VXLAN
+# instead, the cheapest selector that does not drag XFRM in, and the whole
+# IPsec framework leaves every image. br2-external fixups are applied after
+# buildroot's, so this wins over the package.
+#
+# 4.4 only. On 3.10 there is no include/net/udp_tunnel.h, so wireguard builds
+# its own bundled udp_tunnel shim and needs none of this; enabling VXLAN there
+# would only add a module nothing loads.
+ifeq ($(BR2_PACKAGE_WIREGUARD_LINUX_COMPAT)$(KERNEL_VERSION_4),yy)
+define THINGINO_KOPT_LINUX_CONFIG_FIXUPS_WIREGUARD_UDP_TUNNEL
+	$(call KCONFIG_DISABLE_OPT,CONFIG_NET_FOU)
+	$(call KCONFIG_SET_OPT,CONFIG_VXLAN,m)
+endef
+endif
+
 ####################################################
 #This is required for BR to successfully concatenate the kernel options when used with modules
 define THINGINO_KOPT_LINUX_CONFIG_FIXUPS
@@ -537,6 +570,7 @@ define THINGINO_KOPT_LINUX_CONFIG_FIXUPS
 	$(call THINGINO_KOPT_LINUX_CONFIG_FIXUPS_MMC_BOOT)
 	$(call THINGINO_KOPT_LINUX_CONFIG_FIXUPS_JZ_MAC_CLK)
 	$(call THINGINO_KOPT_LINUX_CONFIG_FIXUPS_AUDIO_DMIC)
+	$(call THINGINO_KOPT_LINUX_CONFIG_FIXUPS_WIREGUARD_UDP_TUNNEL)
 endef
 
 define THINGINO_KOPT_INSTALL_TARGET_CMDS

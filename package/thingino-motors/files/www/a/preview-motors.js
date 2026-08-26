@@ -13,9 +13,7 @@ function runMotorCmd(args) {
     .then((res) => res.json())
     .then(({ message }) => {
       const { xpos, ypos } = message || {};
-      if (xpos !== undefined && ypos !== undefined) {
-        console.log("Position:" + xpos + "," + ypos);
-      }
+      updatePositionDisplay(xpos, ypos);
       return message;
     });
 }
@@ -65,6 +63,11 @@ const motorWs = (function () {
       // Daemon's own travel limits; 0 means unknown, fall back to fixed steps.
       if (typeof frame.x_max === "number") limits.x = frame.x_max;
       if (typeof frame.y_max === "number") limits.y = frame.y_max;
+    }
+    // Keep window.motorPosition current from every WS push too, not just
+    // the CGI one-shot path - see updatePositionDisplay()'s own comment.
+    if (typeof frame.x === "number" && typeof frame.y === "number") {
+      updatePositionDisplay(frame.x, frame.y);
     }
     // Errors included - "unknown_cmd" is how a daemon older than the
     // vector command is detected.
@@ -264,7 +267,25 @@ async function moveMotor(dir, steps = 100, d = "g") {
   }
 }
 
-// Initialize motor controls when DOM is ready
+function updatePositionDisplay(xpos, ypos) {
+  if (xpos === undefined) return;
+  // Expose for other plugins/view models (e.g. the settings modal's
+  // "capture current position" button) - kept in sync from BOTH transports
+  // below (the CGI one-shot response and every WS position push), so a
+  // reader always gets the latest value without polling json-motor.cgi d=j
+  // itself. bindPositionReadout()'s own DOM bars are separate and unaffected.
+  window.motorPosition = { xpos, ypos };
+}
+
+// upstream's keyboard-jog (Shift+arrow) feature is deliberately not ported
+// here, same decision as this morning's merge: it depends on a
+// `currentStepName` module-level variable (and the step-size UI that sets
+// it) that this fork's own preview-motors.js never adopted, so pulling in
+// just this commit's refinement of it would reference an undeclared
+// variable. Revisit as one deliberate piece of work if this fork ever wants
+// keyboard PTZ, not as a side effect of a routine upstream sync.
+
+// --- initialization ----------------------------------------------------
 document.addEventListener("DOMContentLoaded", async function () {
   const uiConfig = window.thinginoUIConfig || {};
   const hasMotors = uiConfig.device && uiConfig.device.motors === true;

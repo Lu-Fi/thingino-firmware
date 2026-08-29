@@ -53,6 +53,27 @@ THINGINO_MOTORS_DAEMON_LIBS += -lpthread
 # side, a non-WS build fails to link on motor_ws_start().
 THINGINO_MOTORS_DAEMON_DEFS += -DMOTORS_WS
 
+# --- wss:// (BR2_PACKAGE_THINGINO_MOTORS_WS_TLS) ---------------------------
+#
+# Nested inside the WS block on purpose: TLS wraps the listener, so without a
+# listener there is nothing to wrap, and Config.in enforces the same
+# dependency. Keeping the nesting here too means a hand-edited .config that
+# sets the TLS symbol without the WS one produces a plain WS build rather than
+# a compile error about a listener that does not exist.
+ifeq ($(BR2_PACKAGE_THINGINO_MOTORS_WS_TLS),y)
+THINGINO_MOTORS_DEPENDENCIES += mbedtls
+THINGINO_MOTORS_DAEMON_SRCS += $(@D)/src/ws_tls.c
+# All three, not just -lmbedtls: certificate parsing lives in libmbedx509 and
+# the entropy/DRBG in libmbedcrypto, and --gc-sections/--as-needed will not
+# pull them in transitively. Matches what package/timps/timps.mk links.
+THINGINO_MOTORS_DAEMON_LIBS += -lmbedtls -lmbedx509 -lmbedcrypto
+# ws.c and motor-ws.c both branch on this; ws_tls.c compiles to nothing
+# without it (the whole file is inside one #ifdef), which is what makes an
+# accidental half-configuration fail loudly at link time rather than silently
+# produce a daemon that has the TLS code and never uses it.
+THINGINO_MOTORS_DAEMON_DEFS += -DMOTORS_WS_TLS
+endif
+
 # Two things the browser needs that a plain build must not ship:
 #
 #  - json-motor-token.cgi, which hands the page the daemon's per-boot token

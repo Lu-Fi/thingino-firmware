@@ -43,6 +43,18 @@ case "$(jct "$CONFIG" get motors.ws_enabled 2>/dev/null)" in
 	false | 0 | no | off) enabled=false ;;
 esac
 
+# Whether the listener can actually speak wss://, so the page knows which
+# scheme to build. Reported the same way timps reports its own "tls" field to
+# preview.html/preview-motion.js, which pick http:// vs https:// from it.
+#
+# Read from a marker file the daemon writes (MOTOR_WS_TLS_FLAG_FILE in
+# motor-ws.h) rather than re-derived from the config here: TLS being available
+# is the outcome of a certificate actually LOADING, not of what the config
+# asked for, and a second copy of that resolution living in this script would
+# eventually disagree with the daemon's.
+tls=false
+[ -e /run/motors.tls ] && tls=true
+
 printf 'Status: 200 OK\r\n'
 printf 'Content-Type: application/json\r\n'
 printf 'Cache-Control: no-store\r\n'
@@ -58,7 +70,8 @@ token=""
 [ -r "$TOKEN_FILE" ] && token=$(head -n1 "$TOKEN_FILE" 2>/dev/null | tr -cd '0-9A-Za-z')
 
 if [ -n "$token" ]; then
-	printf '{"token":"%s","port":%s,"enabled":%s}\n' "$token" "$port" "$enabled"
+	printf '{"token":"%s","port":%s,"enabled":%s,"tls":%s}\n' \
+		"$token" "$port" "$enabled" "$tls"
 else
 	# Not an HTTP error: "the listener is not usable right now" is a normal
 	# answer (ws_enabled=false, or the daemon refused to mint a token) and

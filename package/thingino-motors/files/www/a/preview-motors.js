@@ -47,9 +47,32 @@ const motorWs = (function () {
   function usable() {
     if (!buildFlagSet()) return false;
     if (attempts >= MOTOR_WS_MAX_ATTEMPTS) return false;
-    // plain ws://, blocked as mixed content from an https:// page
-    if (location.protocol === "https:") return false;
+    // Whether an https:// page can use the socket depends on info.tls from
+    // the token endpoint, which we do not have yet here. openSocket() makes
+    // that call; this only screens out what is knowable up front.
     return true;
+  }
+
+  // ws:// or wss://, and the reason the answer is not simply "match the page".
+  //
+  //  - An https:// page MUST use wss://: a plain ws:// connection from it is
+  //    blocked as mixed content before it reaches the network. This is the
+  //    regression that this whole path exists to fix - enabling HTTPS on the
+  //    web UI silently demoted PTZ to the CGI fallback.
+  //  - An http:// page must NOT use wss:// even when the daemon offers it.
+  //    The certificate is self-signed, and a browser will not prompt for a
+  //    WebSocket the way it does for a top-level navigation - it just fails.
+  //    A camera on plain http:// therefore keeps the exact behaviour it had
+  //    before any of this existed, which is what makes this change safe to
+  //    ship to a fleet where most cameras have no HTTPS at all.
+  //
+  // info.tls is the daemon's own answer (a certificate loaded, so the
+  // listener will accept a TLS handshake), reported by json-motor-token.cgi -
+  // the same field, from the same kind of endpoint, that preview-motion.js
+  // reads to pick http:// vs https:// for timps.
+  function socketScheme(info) {
+    if (location.protocol !== "https:") return "ws";
+    return info && info.tls === true ? "wss" : null;
   }
 
   function onMessage(ev) {
@@ -76,9 +99,21 @@ const motorWs = (function () {
 
   function openSocket(info) {
     const port = parseInt(info.port, 10) || 8089;
+    const scheme = socketScheme(info);
+    if (!scheme) {
+      // https:// page, daemon has no certificate. Nothing to try - opening
+      // ws:// here would be blocked by the browser anyway, and the CGI path
+      // is a working fallback rather than a failure.
+      return Promise.reject(new Error("no wss:// on an https:// page"));
+    }
+    // Bracket a raw IPv6 literal, the same way preview.html does when it
+    // builds timps's base URL - location.hostname hands it back unbracketed.
+    let host = location.hostname;
+    if (host.indexOf(":") >= 0 && host[0] !== "[") host = "[" + host + "]";
     const url =
-      "ws://" +
-      location.hostname +
+      scheme +
+      "://" +
+      host +
       ":" +
       port +
       "/ws?token=" +
@@ -99,6 +134,12 @@ const motorWs = (function () {
         clearTimeout(timer);
         socket = ws;
         attempts = 0;
+        // Which transport actually won. The CGI fallback is silent by design
+        // (it is a working path, not an error), so without this line there is
+        // no way to tell a fast socket from a slow fallback except by feel -
+        // which is exactly how the https:// mixed-content regression went
+        // unnoticed until someone said the joystick felt worse.
+        console.info("motors: PTZ control over " + scheme + "://");
         // Position pushes only subscribed when something draws them (see
         // subscribe()) - travel limits arrive unprompted in "hello" either way.
         if (pushIntervalMs) {

@@ -1,8 +1,9 @@
 /**
  * Preview-page PTZ settings modal (thingino-motors).
  *
- * A floating PTZ button over the live view opens a modal with quick
- * settings (preview control mode, pan/tilt speed) and PTZ presets.
+ * An icon button in the Live View card header - alongside the motion-grid
+ * and stats toggles - opens a modal with quick settings (preview control
+ * mode, pan/tilt speed) and PTZ presets.
  *
  * Settings read/write through /x/json-motor-params.cgi (control mode and
  * speeds; the CGI reloads the motors-daemon config on save so speed
@@ -350,21 +351,41 @@
 
     document.body.insertAdjacentHTML("beforeend", MODAL_HTML);
 
-    // PTZ button in the Live View card header, next to Reload.
+    // PTZ button in the Live View card header, with the other view-option
+    // toggles.
+    //
+    // The row is found via #ms-stats-toggle's parent rather than by a class:
+    // preview.html's row is a bare <div class="d-flex flex-wrap gap-2"> with
+    // no identifying class of its own, and the ids of the buttons inside it
+    // are the stable thing to anchor to. (The previous ".preview-header-actions"
+    // selector matched nothing on the current page at all, so this fell all
+    // the way through to #frame and the button ended up floating at the
+    // bottom-left of the video instead of in the header.)
     const frame = $("#frame");
     const img = $("#preview");
-    const host =
-      document.querySelector(".preview-header-actions") ||
-      frame ||
-      (img && img.parentNode) ||
-      document.body;
+    const statsBtn = $("#ms-stats-toggle");
+    const connectBtn = $("#ms-connect");
+    const row =
+      (statsBtn && statsBtn.parentNode) || (connectBtn && connectBtn.parentNode);
+    const host = row || frame || (img && img.parentNode) || document.body;
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "btn btn-outline-secondary";
     btn.id = "preview-ptz";
+    // Icon only, so it reads as one of the view-option toggles next to it
+    // (grid, stats) rather than a labelled action. title= carries the name -
+    // without it an unlabelled icon would be the only undiscoverable control
+    // in the row.
     btn.title = "PTZ settings";
-    btn.innerHTML = '<i class="bi bi-arrows-move"></i> PTZ';
-    host.appendChild(btn);
+    btn.setAttribute("aria-label", "PTZ settings");
+    btn.innerHTML = '<i class="bi bi-arrows-move"></i>';
+    // Before Connect: grid, stats and PTZ are all "how am I looking at this"
+    // controls, and Connect is the primary action the row ends on. Falls back
+    // to appending when this is not that page and there is no Connect button
+    // to sit in front of.
+    if (row && connectBtn && connectBtn.parentNode === row)
+      row.insertBefore(btn, connectBtn);
+    else host.appendChild(btn);
 
     btn.addEventListener("click", async () => {
       try {

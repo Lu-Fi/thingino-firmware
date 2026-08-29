@@ -326,6 +326,21 @@
         if (data.speed_tilt !== undefined)
           window.motorParams.speed_tilt = data.speed_tilt;
       }
+      // The CGI has reloaded the daemon's config, and window.motorParams above
+      // now holds the new mode - but the joystick/step widget bound its
+      // handlers at page load, so tell preview-motors.js to rebind. Without
+      // this the saved mode only appears after a manual page reload.
+      const savedMode = normalizeControlMode(
+        data.preview_control_mode !== undefined
+          ? data.preview_control_mode
+          : mode,
+      );
+      document.dispatchEvent(
+        new CustomEvent("preview-motors:control-mode", {
+          detail: { mode: savedMode },
+        }),
+      );
+
       if (typeof showAlert === "function")
         showAlert("success", "PTZ settings saved.", 4000);
       const modal = bootstrap.Modal.getInstance($("#ptzModal"));

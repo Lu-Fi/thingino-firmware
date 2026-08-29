@@ -345,7 +345,19 @@ document.addEventListener("DOMContentLoaded", async function () {
   motorWs.connect();
 
   let timer;
-  const controlMode = getPreviewControlMode();
+
+  // Live pan/tilt readout callback for joystick mode, or null in the other
+  // modes. Re-assigned by applyControlMode() and read by the socket frame
+  // listener that bindJoystickControls() installs.
+  let renderPosition = null;
+
+  // The control mode currently bound to the widget, and an AbortController
+  // that owns every listener that mode registered. Swapping modes aborts the
+  // old controller, which removes those listeners in one go - including the
+  // window/document-level safety handlers that would otherwise stack up (and
+  // keep firing against a torn-down mode) every time the mode changed.
+  let activeControlMode = null;
+  let modeAbort = null;
 
   function bindStepControls() {
     $$(".jst a.s").forEach((el) => {
@@ -365,7 +377,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     });
   }
 
-  function bindContinuousControls() {
+  function bindContinuousControls(signal) {
     let holdInterval = null;
     let wsHolding = false;
     const intervalMs = 90;
@@ -438,19 +450,22 @@ document.addEventListener("DOMContentLoaded", async function () {
           el.setPointerCapture(ev.pointerId);
         }
         startContinuousMove(el.dataset.dir);
-      });
-      el.addEventListener("pointerup", stopHandler);
-      el.addEventListener("pointerleave", stopHandler);
-      el.addEventListener("pointercancel", stopHandler);
-      el.addEventListener("lostpointercapture", stopHandler);
-      el.addEventListener("contextmenu", (ev) => ev.preventDefault());
+      }, { signal });
+      el.addEventListener("pointerup", stopHandler, { signal });
+      el.addEventListener("pointerleave", stopHandler, { signal });
+      el.addEventListener("pointercancel", stopHandler, { signal });
+      el.addEventListener("lostpointercapture", stopHandler, { signal });
+      el.addEventListener("contextmenu", (ev) => ev.preventDefault(), { signal });
     });
 
     // A backgrounded tab gets no pointer event; catch it here too.
-    window.addEventListener("blur", stopContinuousMove);
+    window.addEventListener("blur", stopContinuousMove, { signal });
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) stopContinuousMove();
-    });
+    }, { signal });
+
+    // Switching mode mid-press must not leave the camera panning to its limit.
+    if (signal) signal.addEventListener("abort", stopContinuousMove);
   }
 
   // Live pan/tilt readout, joystick mode only - a held stick runs toward a
@@ -479,11 +494,12 @@ document.addEventListener("DOMContentLoaded", async function () {
   // Virtual analog stick. The drag deflection goes over the wire as a
   // per-mille value, not a distance/speed - only the daemon knows travel
   // limits, speed cap, and (motor_ctl_vector) per-axis speed support.
-  function bindJoystickControls() {
+  function bindJoystickControls(signal) {
     const stick = $("#motor-stick");
     const handle = $("#motor-stick-handle");
     if (!stick || !handle) {
-      bindContinuousControls(); // stale manifest asset; degrade rather than nothing
+      // stale manifest asset; degrade rather than nothing
+      bindContinuousControls(signal);
       return;
     }
 
@@ -540,11 +556,11 @@ document.addEventListener("DOMContentLoaded", async function () {
       if (tiltEl) tiltEl.style.display = tiltFits ? "" : "none";
     }
     sizeStick();
-    window.addEventListener("resize", sizeStick);
+    window.addEventListener("resize", sizeStick, { signal });
     // img-fluid markup only reaches its real aspect ratio once the first
     // frame loads; timps's markup has no #preview, so this is a no-op there.
     const previewImg = $("#preview");
-    if (previewImg) previewImg.addEventListener("load", sizeStick);
+    if (previewImg) previewImg.addEventListener("load", sizeStick, { signal });
 
     const SEND_INTERVAL_MS = 90; // matches the CGI hold loop's cadence
     const DEAD_ZONE = 0.12; // felt dead zone; daemon's own is a smaller backstop
@@ -700,37 +716,84 @@ document.addEventListener("DOMContentLoaded", async function () {
       updateFromPointer(ev);
       if (overSocket) sendVector();
       else startCgiNudges();
-    });
+    }, { signal });
 
     stick.addEventListener("pointermove", (ev) => {
       if (!dragging) return;
       ev.preventDefault();
       updateFromPointer(ev);
       if (overSocket) queueVector();
-    });
+    }, { signal });
 
     // Every way a drag can end has to land here, same reasoning as the arrows.
     ["pointerup", "pointercancel", "lostpointercapture"].forEach((name) =>
-      stick.addEventListener(name, endDrag),
+      stick.addEventListener(name, endDrag, { signal }),
     );
-    stick.addEventListener("contextmenu", (ev) => ev.preventDefault());
+    stick.addEventListener("contextmenu", (ev) => ev.preventDefault(), { signal });
 
-    window.addEventListener("blur", endDrag);
+    window.addEventListener("blur", endDrag, { signal });
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) endDrag();
+    }, { signal });
+
+    // Leaving joystick mode mid-drag must stop the motor, and the frame
+    // listener installed above must stop driving a readout this mode owns.
+    if (signal)
+      signal.addEventListener("abort", () => {
+        endDrag();
+        motorWs.setFrameListener(null);
+      });
+  }
+
+  /* Bind the widget to one control mode, replacing whatever was bound before.
+   * Safe to call repeatedly: the previous mode's listeners all went in under
+   * modeAbort's signal, so aborting it detaches them (and runs each mode's
+   * abort handler, which stops any motion still in flight) before the new
+   * mode binds. That makes the mode switchable live - the PTZ settings modal
+   * calls this after a successful save instead of asking for a page reload. */
+  function applyControlMode(mode) {
+    mode = normalizePreviewControlMode(mode);
+    if (mode === activeControlMode) return;
+
+    if (modeAbort) modeAbort.abort();
+    modeAbort = new AbortController();
+    const signal = modeAbort.signal;
+
+    // Step mode binds through .onclick/.ondblclick, which no signal covers.
+    $$(".jst a.s").forEach((el) => {
+      el.onclick = null;
+      el.ondblclick = null;
     });
+    // Joystick mode is the only one that sets this; clear it before rebinding
+    // so the arrows come back when leaving it.
+    const motorEl = $("#motor");
+    if (motorEl) motorEl.classList.remove("stick-mode");
+
+    activeControlMode = mode;
+    renderPosition = mode === "joystick" ? bindPositionReadout() : null;
+
+    if (mode === "joystick") {
+      bindJoystickControls(signal);
+    } else if (mode === "continuous") {
+      bindContinuousControls(signal);
+    } else {
+      bindStepControls();
+    }
   }
 
-  const renderPosition =
-    controlMode === "joystick" ? bindPositionReadout() : null;
+  applyControlMode(getPreviewControlMode());
 
-  if (controlMode === "joystick") {
-    bindJoystickControls();
-  } else if (controlMode === "continuous") {
-    bindContinuousControls();
-  } else {
-    bindStepControls();
-  }
+  /* Public re-render hook for preview-motors-settings.js. It persists the new
+   * mode (and updates window.motorParams) and then fires this event; keeping
+   * the contract to "tell me the mode changed" means the settings modal never
+   * has to know how this widget is built. */
+  window.previewMotors = window.previewMotors || {};
+  window.previewMotors.applyControlMode = applyControlMode;
+  document.addEventListener("preview-motors:control-mode", (ev) => {
+    applyControlMode(
+      (ev.detail && ev.detail.mode) || getPreviewControlMode(),
+    );
+  });
 
   $(".jst a.b").onclick = (ev) => {
     if (ev.detail === 1) {

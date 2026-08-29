@@ -36,11 +36,16 @@
 
   /* displayed content rect of the object-fit:contain video inside its box */
   function contentRect() {
-    // measure the display box from the (always-visible) video, falling back to
-    // the canvas; never rely on the canvas alone (it may still be display:none)
+    // measure the display box from the video, falling back to the canvas;
+    // never rely on the canvas alone (it may still be display:none). In the
+    // preview's real-time (WebCodecs) mode the <video> is only
+    // visibility:hidden - it keeps its box, but has no metadata of its own,
+    // so preview.html publishes the decoded frame size as window.msPreviewSize.
     const bw = video.clientWidth || canvas.clientWidth;
     const bh = video.clientHeight || canvas.clientHeight;
-    const vw = video.videoWidth, vh = video.videoHeight;
+    const rt = window.msPreviewSize;
+    const vw = video.videoWidth || (rt ? rt.w : 0);
+    const vh = video.videoHeight || (rt ? rt.h : 0);
     if (!bw || !bh) return null;
     if (!vw || !vh) return { x: 0, y: 0, w: bw, h: bh }; // no metadata yet
     const scale = Math.min(bw / vw, bh / vh);

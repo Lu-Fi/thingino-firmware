@@ -13,6 +13,8 @@
   "use strict";
 
   const POLL_MS = 250; // fallback poll rate, ~4 Hz
+  const POLL_MAX_BACKOFF_MS = 8000;  // ceiling once polls start failing
+  const PROBE_MAX_BACKOFF_MS = 30000; // ceiling for the initial capability probe
   const ES_MAX_ERRORS = 4; // consecutive EventSource errors before fallback
   const video = document.getElementById("ms-video");
   const canvas = document.getElementById("motion-overlay");
@@ -28,10 +30,34 @@
   let busy = false;
   let last = null;   // last motion status object (or null)
   let on = sessionStorage.getItem("ms.motionOverlay") !== "0";
+  let pollFails = 0;    // consecutive failed polls, drives the poll backoff
+  let nextPollAt = 0;   // performance.now() before which tick() stays quiet
+  let btnShown = null;  // null = never applied, so the first call always runs
+  let stopped = false;  // set on pagehide; stops the probe retry loop
 
   function setBtn() {
     btn.classList.toggle("active", on);
     btn.title = on ? "Hide motion grid overlay" : "Show motion grid overlay";
+  }
+
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  /* Show the toggle only while motion detection is BOTH compiled in and
+   * actually switched on: with motion.enabled=0 the grid has nothing to
+   * report, so a visible button would just toggle an empty overlay.
+   *
+   * Both flags ride along on every status update, and timps pushes a motion
+   * event on the enable AND the disable transition (imp_motion_start /
+   * imp_motion_stop both call events_motion_push), so toggling motion
+   * elsewhere in the WebUI is reflected here live, off the stream this page
+   * already holds open - no extra polling and no page reload. */
+  function applyAvailability(st) {
+    const usable = !!(st && st.available && st.enabled);
+    if (usable === btnShown) return;
+    btnShown = usable;
+    btn.style.display = usable ? "" : "none";
+    if (usable) setBtn();
+    else clear();
   }
 
   /* displayed content rect of the object-fit:contain video inside its box */
@@ -171,13 +197,28 @@
     if (document.hidden) return;
     if (!on) { clear(); return; }
     if (busy) return;
+    // honour the backoff set by a previous failure
+    if (performance.now() < nextPollAt) return;
     busy = true;
     try {
       last = await poll();
+      pollFails = 0;
+      nextPollAt = 0;
     } catch (e) {
-      last = null; // endpoint gone (streamer restart?): hide, keep trying
+      // endpoint gone (streamer restart?): hide, but back OFF rather than
+      // keep hammering. At the old flat 4 Hz, a poll failing for a persistent
+      // reason - the browser rejecting the certificate on the separate
+      // https://host:8880 origin, or timps's 8-slot HTTP pool being full -
+      // became ~4 fresh connection attempts every second for as long as the
+      // tab stayed open, which is itself enough to keep that pool exhausted
+      // and to bury the camera's log in TLS handshake failures.
+      pollFails++;
+      nextPollAt = performance.now() +
+        Math.min(POLL_MAX_BACKOFF_MS, POLL_MS * Math.pow(2, pollFails));
+      last = null;
     }
     busy = false;
+    applyAvailability(last);
     noteActive(last);
     ensureAnim();
   }
@@ -208,6 +249,8 @@
       } catch (err) {
         last = null;
       }
+      // carries available/enabled: a live motion on/off lands here
+      applyAvailability(last);
       noteActive(last);
       ensureAnim();
     });
@@ -256,18 +299,44 @@
     if (host.indexOf(":") >= 0 && host[0] !== "[") host = "[" + host + "]"; // raw IPv6
     base = (info.tls ? "https" : "http") + "://" + host + ":" + (info.port || 8880);
 
-    // probe once: only offer the overlay when this build HAS motion support
-    let st;
-    try {
-      st = await poll();
-    } catch (e) {
-      return; // :8880 unreachable (HTTPS mixed content?) -> stay hidden
+    // Bind teardown before the probe below can start waiting on the network.
+    window.addEventListener("pagehide", () => {
+      stopped = true;
+      stopPush();
+      stopPoll();
+    });
+
+    /* Probe for motion support, retrying with capped backoff.
+     *
+     * This used to be a single attempt whose failure hid the toggle for the
+     * life of the page, and the old comment's guess at the cause (mixed
+     * content) was wrong - :8880 is reachable over HTTPS. The failures that
+     * actually occur here are transient: timps's HTTP pool (8 slots) is
+     * momentarily full, or the browser has not yet accepted the certificate
+     * for the separate https://host:8880 origin. Neither is a permanent
+     * property of the build, so giving up forever on the first one was what
+     * made the button vanish. Retry slowly instead, and the toggle appears as
+     * soon as the probe gets through. */
+    let st = null;
+    for (let delay = 1000; !stopped; delay = Math.min(PROBE_MAX_BACKOFF_MS, delay * 2)) {
+      try {
+        st = await poll();
+        break;
+      } catch (e) {
+        await sleep(delay);
+      }
     }
-    if (!st || !st.available) return;
+    if (stopped || !st) return;
+    // "available" is a property of the BUILD (IMP_IVS compiled in), so its
+    // absence really is permanent and there is nothing to wait for. "enabled"
+    // is runtime config and can change under us, so it must not stop the
+    // wiring below - only the button's visibility depends on it.
+    if (!st.available) return;
     last = st;
 
-    btn.style.display = "";
-    setBtn();
+    // available/enabled decide whether the button is shown at all; the rest of
+    // the wiring below is set up either way, so a live enable makes it appear.
+    applyAvailability(last);
     draw(last);
     btn.addEventListener("click", () => {
       on = !on;
@@ -286,10 +355,7 @@
       if (document.hidden) pause();
       else resume();
     });
-    window.addEventListener("pagehide", () => {
-      stopPush();
-      stopPoll();
-    });
+    // teardown is already bound above, before the probe
   }
 
   init();

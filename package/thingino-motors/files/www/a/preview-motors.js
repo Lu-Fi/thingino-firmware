@@ -47,29 +47,12 @@ const motorWs = (function () {
   function usable() {
     if (!buildFlagSet()) return false;
     if (attempts >= MOTOR_WS_MAX_ATTEMPTS) return false;
-    // Whether an https:// page can use the socket depends on info.tls from
-    // the token endpoint, which we do not have yet here. openSocket() makes
-    // that call; this only screens out what is knowable up front.
-    return true;
+    return true; // https:// vs wss:// is decided later, in openSocket()
   }
 
-  // ws:// or wss://, and the reason the answer is not simply "match the page".
-  //
-  //  - An https:// page MUST use wss://: a plain ws:// connection from it is
-  //    blocked as mixed content before it reaches the network. This is the
-  //    regression that this whole path exists to fix - enabling HTTPS on the
-  //    web UI silently demoted PTZ to the CGI fallback.
-  //  - An http:// page must NOT use wss:// even when the daemon offers it.
-  //    The certificate is self-signed, and a browser will not prompt for a
-  //    WebSocket the way it does for a top-level navigation - it just fails.
-  //    A camera on plain http:// therefore keeps the exact behaviour it had
-  //    before any of this existed, which is what makes this change safe to
-  //    ship to a fleet where most cameras have no HTTPS at all.
-  //
-  // info.tls is the daemon's own answer (a certificate loaded, so the
-  // listener will accept a TLS handshake), reported by json-motor-token.cgi -
-  // the same field, from the same kind of endpoint, that preview-motion.js
-  // reads to pick http:// vs https:// for timps.
+  // https:// page must use wss:// (mixed content) or not connect at all -
+  // never ws:// even if the daemon offers it, since an untrusted self-signed
+  // wss:// cert has no browser prompt to fall back on.
   function socketScheme(info) {
     if (location.protocol !== "https:") return "ws";
     return info && info.tls === true ? "wss" : null;
@@ -101,9 +84,7 @@ const motorWs = (function () {
     const port = parseInt(info.port, 10) || 8089;
     const scheme = socketScheme(info);
     if (!scheme) {
-      // https:// page, daemon has no certificate. Nothing to try - opening
-      // ws:// here would be blocked by the browser anyway, and the CGI path
-      // is a working fallback rather than a failure.
+      // https:// page, daemon has no cert: fall back to the CGI path
       return Promise.reject(new Error("no wss:// on an https:// page"));
     }
     // Bracket a raw IPv6 literal, the same way preview.html does when it
@@ -134,11 +115,6 @@ const motorWs = (function () {
         clearTimeout(timer);
         socket = ws;
         attempts = 0;
-        // Which transport actually won. The CGI fallback is silent by design
-        // (it is a working path, not an error), so without this line there is
-        // no way to tell a fast socket from a slow fallback except by feel -
-        // which is exactly how the https:// mixed-content regression went
-        // unnoticed until someone said the joystick felt worse.
         console.info("motors: PTZ control over " + scheme + "://");
         // Position pushes only subscribed when something draws them (see
         // subscribe()) - travel limits arrive unprompted in "hello" either way.
@@ -346,18 +322,9 @@ document.addEventListener("DOMContentLoaded", async function () {
 
   let timer;
 
-  // Live pan/tilt readout callback for joystick mode, or null in the other
-  // modes. Re-assigned by applyControlMode() and read by the socket frame
-  // listener that bindJoystickControls() installs.
-  let renderPosition = null;
-
-  // The control mode currently bound to the widget, and an AbortController
-  // that owns every listener that mode registered. Swapping modes aborts the
-  // old controller, which removes those listeners in one go - including the
-  // window/document-level safety handlers that would otherwise stack up (and
-  // keep firing against a torn-down mode) every time the mode changed.
+  let renderPosition = null; // joystick mode's live pan/tilt readout, or null
   let activeControlMode = null;
-  let modeAbort = null;
+  let modeAbort = null; // owns every listener the active mode registered
 
   function bindStepControls() {
     $$(".jst a.s").forEach((el) => {
@@ -736,8 +703,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       if (document.hidden) endDrag();
     }, { signal });
 
-    // Leaving joystick mode mid-drag must stop the motor, and the frame
-    // listener installed above must stop driving a readout this mode owns.
+    // leaving mid-drag must stop the motor and the position-readout listener
     if (signal)
       signal.addEventListener("abort", () => {
         endDrag();
@@ -745,12 +711,8 @@ document.addEventListener("DOMContentLoaded", async function () {
       });
   }
 
-  /* Bind the widget to one control mode, replacing whatever was bound before.
-   * Safe to call repeatedly: the previous mode's listeners all went in under
-   * modeAbort's signal, so aborting it detaches them (and runs each mode's
-   * abort handler, which stops any motion still in flight) before the new
-   * mode binds. That makes the mode switchable live - the PTZ settings modal
-   * calls this after a successful save instead of asking for a page reload. */
+  // (Re-)bind the widget to one control mode; safe to call repeatedly since
+  // aborting modeAbort tears down the previous mode's listeners first.
   function applyControlMode(mode) {
     mode = normalizePreviewControlMode(mode);
     if (mode === activeControlMode) return;
@@ -759,13 +721,11 @@ document.addEventListener("DOMContentLoaded", async function () {
     modeAbort = new AbortController();
     const signal = modeAbort.signal;
 
-    // Step mode binds through .onclick/.ondblclick, which no signal covers.
+    // step mode's onclick/ondblclick aren't covered by the signal
     $$(".jst a.s").forEach((el) => {
       el.onclick = null;
       el.ondblclick = null;
     });
-    // Joystick mode is the only one that sets this; clear it before rebinding
-    // so the arrows come back when leaving it.
     const motorEl = $("#motor");
     if (motorEl) motorEl.classList.remove("stick-mode");
 
@@ -783,10 +743,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
   applyControlMode(getPreviewControlMode());
 
-  /* Public re-render hook for preview-motors-settings.js. It persists the new
-   * mode (and updates window.motorParams) and then fires this event; keeping
-   * the contract to "tell me the mode changed" means the settings modal never
-   * has to know how this widget is built. */
+  // re-render hook: preview-motors-settings.js fires this after a save
   window.previewMotors = window.previewMotors || {};
   window.previewMotors.applyControlMode = applyControlMode;
   document.addEventListener("preview-motors:control-mode", (ev) => {

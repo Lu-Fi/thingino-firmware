@@ -42,15 +42,8 @@
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  /* Show the toggle only while motion detection is BOTH compiled in and
-   * actually switched on: with motion.enabled=0 the grid has nothing to
-   * report, so a visible button would just toggle an empty overlay.
-   *
-   * Both flags ride along on every status update, and timps pushes a motion
-   * event on the enable AND the disable transition (imp_motion_start /
-   * imp_motion_stop both call events_motion_push), so toggling motion
-   * elsewhere in the WebUI is reflected here live, off the stream this page
-   * already holds open - no extra polling and no page reload. */
+  // gate on available && enabled; timps pushes a motion event on both the
+  // enable and disable transition, so this stays live off the open stream.
   function applyAvailability(st) {
     const usable = !!(st && st.available && st.enabled);
     if (usable === btnShown) return;
@@ -60,13 +53,9 @@
     else clear();
   }
 
-  /* displayed content rect of the object-fit:contain video inside its box */
+  // displayed content rect of the object-fit:contain video inside its box;
+  // real-time mode's <video> has no metadata, so fall back to window.msPreviewSize
   function contentRect() {
-    // measure the display box from the video, falling back to the canvas;
-    // never rely on the canvas alone (it may still be display:none). In the
-    // preview's real-time (WebCodecs) mode the <video> is only
-    // visibility:hidden - it keeps its box, but has no metadata of its own,
-    // so preview.html publishes the decoded frame size as window.msPreviewSize.
     const bw = video.clientWidth || canvas.clientWidth;
     const bh = video.clientHeight || canvas.clientHeight;
     const rt = window.msPreviewSize;
@@ -84,10 +73,7 @@
     if (rafId != null) { cancelAnimationFrame(rafId); rafId = null; }
   }
 
-  /* motion "afterglow": timps reports a cell active only on the frame it moved,
-   * then clears it, so raw highlights just flicker. Remember when each cell was
-   * last active and keep drawing it - fading out over HOLD_MS - so movement is
-   * actually visible. A rAF loop animates the fade between motion events. */
+  // afterglow: a cell is only reported active for one frame, so hold and fade it
   const HOLD_MS = 1200;
   let holds = null;   // Float64Array: last-active timestamp per cell
   let holdN = 0;
@@ -205,13 +191,7 @@
       pollFails = 0;
       nextPollAt = 0;
     } catch (e) {
-      // endpoint gone (streamer restart?): hide, but back OFF rather than
-      // keep hammering. At the old flat 4 Hz, a poll failing for a persistent
-      // reason - the browser rejecting the certificate on the separate
-      // https://host:8880 origin, or timps's 8-slot HTTP pool being full -
-      // became ~4 fresh connection attempts every second for as long as the
-      // tab stayed open, which is itself enough to keep that pool exhausted
-      // and to bury the camera's log in TLS handshake failures.
+      // back off instead of hammering a failing endpoint at a flat 4Hz
       pollFails++;
       nextPollAt = performance.now() +
         Math.min(POLL_MAX_BACKOFF_MS, POLL_MS * Math.pow(2, pollFails));
@@ -256,9 +236,7 @@
     });
     es.onopen = () => { esErrors = 0; };
     es.onerror = () => {
-      // EventSource reconnects on its own (server retry: 3000); only give
-      // up for good - old timpsd without /events, events.enabled=0 - after
-      // several consecutive failures without a single event in between
+      // give up for good only after several consecutive failures
       esErrors++;
       if (esErrors >= ES_MAX_ERRORS || (es && es.readyState === EventSource.CLOSED)) {
         fellBack = true;
@@ -306,17 +284,8 @@
       stopPoll();
     });
 
-    /* Probe for motion support, retrying with capped backoff.
-     *
-     * This used to be a single attempt whose failure hid the toggle for the
-     * life of the page, and the old comment's guess at the cause (mixed
-     * content) was wrong - :8880 is reachable over HTTPS. The failures that
-     * actually occur here are transient: timps's HTTP pool (8 slots) is
-     * momentarily full, or the browser has not yet accepted the certificate
-     * for the separate https://host:8880 origin. Neither is a permanent
-     * property of the build, so giving up forever on the first one was what
-     * made the button vanish. Retry slowly instead, and the toggle appears as
-     * soon as the probe gets through. */
+    // probe for motion support, retrying with backoff instead of giving up
+    // forever on one transient failure (pool full, cert not yet trusted)
     let st = null;
     for (let delay = 1000; !stopped; delay = Math.min(PROBE_MAX_BACKOFF_MS, delay * 2)) {
       try {
@@ -327,15 +296,9 @@
       }
     }
     if (stopped || !st) return;
-    // "available" is a property of the BUILD (IMP_IVS compiled in), so its
-    // absence really is permanent and there is nothing to wait for. "enabled"
-    // is runtime config and can change under us, so it must not stop the
-    // wiring below - only the button's visibility depends on it.
-    if (!st.available) return;
+    if (!st.available) return; // build-time property, permanent if absent
     last = st;
 
-    // available/enabled decide whether the button is shown at all; the rest of
-    // the wiring below is set up either way, so a live enable makes it appear.
     applyAvailability(last);
     draw(last);
     btn.addEventListener("click", () => {

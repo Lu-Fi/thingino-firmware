@@ -43,15 +43,8 @@ case "$(jct "$CONFIG" get motors.ws_enabled 2>/dev/null)" in
 	false | 0 | no | off) enabled=false ;;
 esac
 
-# Whether the listener can actually speak wss://, so the page knows which
-# scheme to build. Reported the same way timps reports its own "tls" field to
-# preview.html/preview-motion.js, which pick http:// vs https:// from it.
-#
-# Read from a marker file the daemon writes (MOTOR_WS_TLS_FLAG_FILE in
-# motor-ws.h) rather than re-derived from the config here: TLS being available
-# is the outcome of a certificate actually LOADING, not of what the config
-# asked for, and a second copy of that resolution living in this script would
-# eventually disagree with the daemon's.
+# marker file the daemon writes once a cert actually loads (not re-derived
+# from config here, to avoid a second copy of that resolution disagreeing)
 tls=false
 [ -e /run/motors.tls ] && tls=true
 

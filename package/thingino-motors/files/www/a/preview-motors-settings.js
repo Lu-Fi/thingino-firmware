@@ -326,10 +326,7 @@
         if (data.speed_tilt !== undefined)
           window.motorParams.speed_tilt = data.speed_tilt;
       }
-      // The CGI has reloaded the daemon's config, and window.motorParams above
-      // now holds the new mode - but the joystick/step widget bound its
-      // handlers at page load, so tell preview-motors.js to rebind. Without
-      // this the saved mode only appears after a manual page reload.
+      // tell preview-motors.js to rebind so the saved mode applies live
       const savedMode = normalizeControlMode(
         data.preview_control_mode !== undefined
           ? data.preview_control_mode
@@ -366,16 +363,8 @@
 
     document.body.insertAdjacentHTML("beforeend", MODAL_HTML);
 
-    // PTZ button in the Live View card header, with the other view-option
-    // toggles.
-    //
-    // The row is found via #ms-stats-toggle's parent rather than by a class:
-    // preview.html's row is a bare <div class="d-flex flex-wrap gap-2"> with
-    // no identifying class of its own, and the ids of the buttons inside it
-    // are the stable thing to anchor to. (The previous ".preview-header-actions"
-    // selector matched nothing on the current page at all, so this fell all
-    // the way through to #frame and the button ended up floating at the
-    // bottom-left of the video instead of in the header.)
+    // anchor off #ms-stats-toggle's parent (that row has no class of its
+    // own); the old ".preview-header-actions" selector matched nothing
     const frame = $("#frame");
     const img = $("#preview");
     const statsBtn = $("#ms-stats-toggle");
@@ -387,17 +376,9 @@
     btn.type = "button";
     btn.className = "btn btn-outline-secondary";
     btn.id = "preview-ptz";
-    // Icon only, so it reads as one of the view-option toggles next to it
-    // (grid, stats) rather than a labelled action. title= carries the name -
-    // without it an unlabelled icon would be the only undiscoverable control
-    // in the row.
-    btn.title = "PTZ settings";
+    btn.title = "PTZ settings"; // icon-only button, so this carries the name
     btn.setAttribute("aria-label", "PTZ settings");
     btn.innerHTML = '<i class="bi bi-arrows-move"></i>';
-    // Before Connect: grid, stats and PTZ are all "how am I looking at this"
-    // controls, and Connect is the primary action the row ends on. Falls back
-    // to appending when this is not that page and there is no Connect button
-    // to sit in front of.
     if (row && connectBtn && connectBtn.parentNode === row)
       row.insertBefore(btn, connectBtn);
     else host.appendChild(btn);

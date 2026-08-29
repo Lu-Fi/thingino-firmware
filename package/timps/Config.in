@@ -99,8 +99,14 @@ config BR2_PACKAGE_TIMPS_TLS
 	select BR2_PACKAGE_MBEDTLS
 	help
 	  Enable mbedTLS for HTTPS (HTTP preview port) and RTSPS (RTSP
-	  over TLS on port 322). Requires TLS certificates at
-	  /etc/ssl/certs/httpd.crt and /etc/ssl/private/httpd.key.
+	  over TLS on port 322). Certificates come from the paths in
+	  timps.conf (http.tls_cert / http.tls_key, default
+	  /etc/ssl/certs/timps.crt and /etc/ssl/private/timps.key).
+	  S95timps sets them up before timpsd starts: on an image with
+	  the web UI it symlinks them to uhttpd's own certificate, so
+	  :443 and the preview port present the same cert to the browser
+	  (self-signed trust is per host+PORT); otherwise it generates a
+	  self-signed pair.
 
 config BR2_PACKAGE_TIMPS_SRT
 	bool "SRT output (libsrt)"

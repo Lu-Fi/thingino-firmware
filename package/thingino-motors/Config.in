@@ -14,6 +14,7 @@ config BR2_PACKAGE_THINGINO_MOTORS_WS
 	depends on BR2_PACKAGE_THINGINO_MOTORS
 	depends on !BR2_PACKAGE_THINGINO_MOTORS_DW9714_ONLY
 	depends on BR2_TOOLCHAIN_HAS_THREADS
+	default y if BR2_PACKAGE_THINGINO_STREAMER_TIMPS
 	help
 	  Serve the PTZ control path over a WebSocket listener inside
 	  motors-daemon (ws://<camera>:8089/ws by default) in addition to
@@ -38,11 +39,25 @@ config BR2_PACKAGE_THINGINO_MOTORS_WS
 	  to the CGI path whenever the socket cannot be opened, so turning
 	  this on is not a one-way door.
 
-	  Requires a thingino-motors source tree that actually carries the
-	  WebSocket support. Until that is merged upstream and
-	  THINGINO_MOTORS_VERSION is bumped, point
-	  THINGINO_MOTORS_OVERRIDE_SRCDIR at a local checkout of the
-	  feature branch (see local.mk).
+	  Defaults on when timps is the selected streamer
+	  (BR2_PACKAGE_THINGINO_STREAMER_TIMPS) - overridable either way, so
+	  a timps build that genuinely wants the plain AF_UNIX-only daemon
+	  can still turn this off. Not selected outright: this symbol has
+	  its own depends on chain (a base motors build, no DW9714-only
+	  focus module, a threaded toolchain), and select bypasses depends
+	  on instead of respecting it, the same failure class documented on
+	  WS_TLS below.
+
+	  The source tree this pulls in switches with this option, not just
+	  a branch within one tree: on, thingino-motors.mk points at Lu-Fi's
+	  fork (where this feature actually lives); off, it points at
+	  upstream thingino/thingino-motors. Endorsed by the upstream
+	  maintainer (2026-09-01) as the intended way to carry a feature
+	  that has not been merged there yet without forcing every default
+	  build onto a personal fork. Point
+	  THINGINO_MOTORS_OVERRIDE_SRCDIR at a local checkout instead (see
+	  local.mk) only if testing changes to the WS code itself before
+	  they are pushed to that fork.
 
 config BR2_PACKAGE_THINGINO_MOTORS_WS_TLS
 	bool "wss:// (TLS) on the WebSocket PTZ listener"

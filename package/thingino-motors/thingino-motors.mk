@@ -1,16 +1,25 @@
-# Default source is upstream thingino/thingino-motors. A build that enables
-# the WebSocket PTZ control path (BR2_PACKAGE_THINGINO_MOTORS_WS below)
-# switches the SITE itself, not just a branch, to Lu-Fi's fork - the WS work
-# lives only there until/if it's upstreamed. Endorsed by the upstream
-# maintainer (Paul, 2026-09-01) as the intended way to gate an unmerged
-# feature on its own BR2_ option rather than forcing every default build onto
-# a personal fork. VERSION is a raw commit hash in both cases (this repo's
-# existing convention even before the fork, see the git blame on this line)
-# rather than a tag, so SITE_BRANCH is cosmetic - git fetches the exact
-# commit regardless of which branch currently has it - kept as a human
-# pointer to where each hash lives.
+# Default source is upstream thingino/thingino-motors. A build that either
+# enables the WebSocket PTZ control path (BR2_PACKAGE_THINGINO_MOTORS_WS
+# below) or has timps as its selected streamer switches the SITE itself, not
+# just a branch, to Lu-Fi's fork. Keyed on timps too, not only on the WS
+# flag, on purpose: a timps build must never end up on the plain upstream
+# daemon just because the WS toggle happens to be off (a stale .config from
+# before this option existed defaults it off - see the Kconfig-regen note on
+# BR2_PACKAGE_THINGINO_MOTORS_WS in Config.in). The fork commit pinned below
+# is a strict superset of the upstream one - every upstream commit plus
+# Lu-Fi's on top, verified 2026-09-01 - so pointing a non-WS timps build at
+# it costs nothing functionally.
+#
+# The WS work itself lives only on the fork until/if it's upstreamed.
+# Endorsed by the upstream maintainer (Paul, 2026-09-01) as the intended way
+# to gate an unmerged feature on its own BR2_ option rather than forcing
+# every default build onto a personal fork. VERSION is a raw commit hash in
+# both cases (this repo's existing convention even before the fork, see the
+# git blame on this line) rather than a tag, so SITE_BRANCH is cosmetic - git
+# fetches the exact commit regardless of which branch currently has it -
+# kept as a human pointer to where each hash lives.
 THINGINO_MOTORS_SITE_METHOD = git
-ifeq ($(BR2_PACKAGE_THINGINO_MOTORS_WS),y)
+ifneq ($(filter y,$(BR2_PACKAGE_THINGINO_MOTORS_WS) $(BR2_PACKAGE_THINGINO_STREAMER_TIMPS)),)
 THINGINO_MOTORS_SITE = https://github.com/Lu-Fi/thingino-motors.git
 THINGINO_MOTORS_SITE_BRANCH = thingino-motors-websocket
 THINGINO_MOTORS_VERSION = 833c4628816dc43b4dd110097ef4e0038d5b23be

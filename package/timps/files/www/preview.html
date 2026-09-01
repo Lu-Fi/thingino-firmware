@@ -163,6 +163,14 @@
               title="Motion grid overlay" style="display:none">
               <i class="bi bi-grid-3x3"></i>
             </button>
+            <!-- push-to-talk (browser mic -> camera speaker): hidden until
+                 /a/preview-talk.js confirms caps.backchannel.talk_ws AND that
+                 timps is reachable over TLS (getUserMedia needs a secure
+                 context, and only wss:// is openable from an https:// page) -->
+            <button type="button" class="btn btn-outline-secondary" id="ms-talk"
+              title="Talk to the camera (microphone -&gt; camera speaker)" style="display:none">
+              <i class="bi bi-mic"></i>
+            </button>
             <button type="button" class="btn btn-outline-secondary" id="ms-stats-toggle" title="Stream stats">
               <i class="bi bi-graph-up"></i>
             </button>
@@ -185,6 +193,10 @@
             <!-- THINGINO_PLUGIN_PREVIEW_BODY -->
           </div>
           <div class="ms-hint mt-2" id="ms-status"></div>
+          <!-- talk-channel state, written only by /a/preview-talk.js. Its own
+               element rather than sharing #ms-status: the player writes that
+               one continuously and the two would clobber each other. -->
+          <div class="ms-hint mt-1" id="ms-talk-status" style="display:none"></div>
         </div>
       </div>
     </section>
@@ -1313,5 +1325,6 @@
   })();
 </script>
 <script src="/a/preview-motion.js"></script>
+<script src="/a/preview-talk.js"></script>
 </body>
 </html>

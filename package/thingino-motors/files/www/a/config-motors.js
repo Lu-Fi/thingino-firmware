@@ -19,6 +19,7 @@
     ? submitLabel.textContent
     : "Save motors";
   const typeBadge = $("#motors-type-badge");
+  const versionBadge = $("#motors-version-badge");
   let initialLoadComplete = false;
   let motorIsSpi = false;
 
@@ -606,6 +607,26 @@
     }
   }
 
+  // The build version rides along in the same `motors -j` status the CGI
+  // already proxies, so no extra endpoint. Stays blank on an older daemon
+  // build that has no "version" field, or when the daemon is down.
+  async function loadMotorsVersion() {
+    if (!versionBadge) return;
+    try {
+      const res = await fetch(
+        "/x/json-motor.cgi?" + new URLSearchParams({ d: "j" }).toString(),
+      );
+      const payload = await res.json();
+      const version = payload && payload.message && payload.message.version;
+      if (!version) return;
+      versionBadge.textContent = "motors " + version;
+      versionBadge.className = "badge text-bg-secondary";
+      versionBadge.title = "motors build version";
+    } catch (err) {
+      console.error("Failed to read motors version", err);
+    }
+  }
+
   async function presetAction(action, extra) {
     try {
       const params = new URLSearchParams({ d: action });
@@ -642,6 +663,8 @@
   }
 
   loadPresets();
+
+  loadMotorsVersion();
 
   loadMotorsConfig();
 })();

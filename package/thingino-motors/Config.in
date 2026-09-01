@@ -16,99 +16,33 @@ config BR2_PACKAGE_THINGINO_MOTORS_WS
 	depends on BR2_TOOLCHAIN_HAS_THREADS
 	default y if BR2_PACKAGE_THINGINO_STREAMER_TIMPS
 	help
-	  Serve the PTZ control path over a WebSocket listener inside
-	  motors-daemon (ws://<camera>:8089/ws by default) in addition to
-	  the AF_UNIX socket the "motors" CLI speaks.
+	  Serve PTZ control over a WebSocket listener in motors-daemon
+	  (ws://<camera>:8089/ws), replacing one CGI round trip per move
+	  with a persistent connection. Costs ~25KB of text, -lpthread.
+	  Falls back to the CGI path if the socket can't be opened.
 
-	  Without this, holding a direction arrow in the WebUI fires one
-	  fetch() every 90ms, and each one costs three process spawns
-	  (busybox-httpd -> json-motor.cgi -> motors, then motors -j again
-	  for the status echo) plus two socket connections. With it the
-	  panel opens one connection, sends one command when the button
-	  goes down and one stop when it comes up, and receives position
-	  updates as server pushes.
+	  Defaults on when timps is the streamer. Not selected outright:
+	  select would bypass this symbol's own depends chain, same
+	  failure class as WS_TLS below.
 
-	  Enabling this compiles five extra source files into the daemon
-	  (sha1, sha256, the RFC 6455 framing, the token store and the
-	  motors command protocol), links -lpthread, and installs
-	  json-motor-token.cgi so the WebUI page can obtain the per-boot
-	  token that the listener requires. It costs roughly 25KB of text.
-
-	  The daemon's listener is additionally gated at runtime by
-	  motors.ws_enabled in /etc/thingino.json, and the WebUI falls back
-	  to the CGI path whenever the socket cannot be opened, so turning
-	  this on is not a one-way door.
-
-	  Defaults on when timps is the selected streamer
-	  (BR2_PACKAGE_THINGINO_STREAMER_TIMPS) - overridable either way, so
-	  a timps build that genuinely wants the plain AF_UNIX-only daemon
-	  can still turn this off. Not selected outright: this symbol has
-	  its own depends on chain (a base motors build, no DW9714-only
-	  focus module, a threaded toolchain), and select bypasses depends
-	  on instead of respecting it, the same failure class documented on
-	  WS_TLS below.
-
-	  The source tree this pulls in switches with this option, not just
-	  a branch within one tree: on, thingino-motors.mk points at Lu-Fi's
-	  fork (where this feature actually lives); off, it points at
-	  upstream thingino/thingino-motors. Endorsed by the upstream
-	  maintainer (2026-09-01) as the intended way to carry a feature
-	  that has not been merged there yet without forcing every default
-	  build onto a personal fork. Point
-	  THINGINO_MOTORS_OVERRIDE_SRCDIR at a local checkout instead (see
-	  local.mk) only if testing changes to the WS code itself before
-	  they are pushed to that fork.
+	  Switches thingino-motors.mk's source to Lu-Fi's fork, where this
+	  unmerged feature lives - endorsed by the upstream maintainer as
+	  the way to gate it without forcing every build onto a fork.
 
 config BR2_PACKAGE_THINGINO_MOTORS_WS_TLS
 	bool "wss:// (TLS) on the WebSocket PTZ listener"
 	depends on BR2_PACKAGE_THINGINO_MOTORS_WS
-	# depends on, NOT select: "select BR2_PACKAGE_MBEDTLS" closed a Kconfig
-	# dependency cycle - this symbol's "default y if" reads the uhttpd TLS
-	# choice member, that choice's own default reads BR2_PACKAGE_MBEDTLS, and
-	# the select pointed back at BR2_PACKAGE_MBEDTLS. kconfig reports
-	# "recursive dependency detected" and breaks the cycle by ignoring the
-	# defaults, which is why this option silently failed to auto-enable on
-	# regen (2026-08-29) and even destabilized
-	# BR2_PACKAGE_THINGINO_UHTTPD_TLS_MBEDTLS itself when this symbol was
-	# absent from .config. Every image that wants wss:// already carries
-	# mbedTLS (uhttpd TLS, thingino-ssl, timps), so requiring it instead of
-	# selecting it costs nothing here and makes both defaults reliable again.
+	# depends on, not select: select closed a real Kconfig dependency
+	# cycle against the uhttpd TLS default (regression 2026-08-29).
 	depends on BR2_PACKAGE_MBEDTLS
 	default y if BR2_PACKAGE_THINGINO_UHTTPD_TLS_MBEDTLS
 	help
-	  Also accept TLS-wrapped WebSocket connections, on the same
-	  listener and the same port.
+	  Also accept TLS-wrapped connections on the same port (ws:// and
+	  wss:// share it; the daemon peeks at the first byte). Needed if
+	  the web UI is served over https:// - otherwise the browser
+	  blocks plain ws:// as mixed content and PTZ silently falls back
+	  to one CGI round trip per command.
 
-	  Turn this on for any camera that serves its web UI over
-	  https://. A browser blocks a plain ws:// connection opened from
-	  an https:// page as mixed content, so without this the PTZ panel
-	  silently falls back to one CGI round trip per command - it keeps
-	  working, but at exactly the latency the WebSocket path exists to
-	  remove. That silent fallback is why the regression is easy to
-	  miss: nothing errors, the joystick just gets sluggish again.
-
-	  ws:// and wss:// share one port. The daemon looks at the first
-	  byte a client sends (0x16 begins a TLS record, 'G' begins "GET")
-	  and handles each connection accordingly, so enabling this changes
-	  nothing for a camera whose web UI is still plain http://.
-
-	  No certificate is generated here, and no second certificate
-	  policy is introduced. The daemon reads whatever S95timps'
-	  ensure_tls_certs() already resolved at
-	  /etc/ssl/certs/timps.crt, falls back to the web UI's own
-	  /etc/ssl/certs/uhttpd.crt (the same file that pair usually points
-	  at) for the cases S95timps has not covered by the time motors
-	  starts, and serves plain ws:// only when it finds neither.
-
-	  Sharing the certificate rather than minting one is the point: a
-	  browser trusts a self-signed certificate per origin -
-	  scheme+host+PORT - and iOS Safari offers no click-through at all
-	  for a failed WebSocket, so a certificate of our own on :8089
-	  would simply never connect. Same reasoning, and the same
-	  certificate, as the comment above ensure_tls_certs() in S95timps.
-
-	  Costs roughly 9KB of text in motors-daemon plus a dynamic link
-	  against mbedTLS (already on any image with uhttpd TLS or timps),
-	  and about 21KB of heap per CONNECTED TLS client - mbedTLS's
-	  per-session I/O buffers, bounded by motors.ws_max_clients
-	  (default 4).
+	  Reuses S95timps' certificate, no new one is minted. Costs ~9KB
+	  of text plus ~21KB heap per connected TLS client (default max 4
+	  clients).

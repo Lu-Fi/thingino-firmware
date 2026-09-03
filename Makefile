@@ -205,8 +205,13 @@ TOOLCHAIN_TYPE_TAG := $(if $(filter BUILDROOT,$(TOOLCHAIN_TYPE_RAW)),br,$(if $(f
 TOOLCHAIN_LIBC_TAG := $(shell echo "$(TOOLCHAIN_LIBC_RAW)" | tr 'A-Z' 'a-z')
 TOOLCHAIN_FRAGMENT_FILE := configs/fragments/toolchain/$(TOOLCHAIN_TYPE_TAG)-gcc$(TOOLCHAIN_GCC_RAW)-$(TOOLCHAIN_LIBC_TAG).fragment
 
-# Resolve U-Boot version fragment
-THINGINO_UBOOT_VERSION_RAW := $(if $(CAMERA_CONFIG_REAL),$(strip $(shell grep -h '^BR2_THINGINO_UBOOT_VERSION_' $(EARLY_TOOLCHAIN_INPUT_FILES) 2>/dev/null | grep '=y$$' | head -1 | sed 's/.*UBOOT_VERSION_\(.*\)=y/\1/')))
+# Resolve U-Boot version fragment.
+# Last match wins (tail -1): EARLY_TOOLCHAIN_INPUT_FILES lists shared fragments
+# first, then the camera defconfig, then user local.fragment files - so a
+# camera or user fragment can override core.fragment's default, matching the
+# precedence of the actual .config merge. (head -1 made the core default
+# unoverridable.)
+THINGINO_UBOOT_VERSION_RAW := $(if $(CAMERA_CONFIG_REAL),$(strip $(shell grep -h '^BR2_THINGINO_UBOOT_VERSION_' $(EARLY_TOOLCHAIN_INPUT_FILES) 2>/dev/null | grep '=y$$' | tail -1 | sed 's/.*UBOOT_VERSION_\(.*\)=y/\1/')))
 THINGINO_UBOOT_VERSION_RAW := $(if $(THINGINO_UBOOT_VERSION_RAW),$(THINGINO_UBOOT_VERSION_RAW),2013_07)
 THINGINO_UBOOT_VERSION_TAG := $(if $(filter 2026_07,$(THINGINO_UBOOT_VERSION_RAW)),2026-07,$(if $(filter 2026_04,$(THINGINO_UBOOT_VERSION_RAW)),2026-04,$(if $(filter 2013_07,$(THINGINO_UBOOT_VERSION_RAW)),2013-07,$(if $(filter CUSTOM_FORK,$(THINGINO_UBOOT_VERSION_RAW)),custom-fork,$(shell echo "$(THINGINO_UBOOT_VERSION_RAW)" | tr 'A-Z' 'a-z' | tr '_' '-')))))
 THINGINO_UBOOT_FRAGMENT_FILE := configs/fragments/uboot/v$(THINGINO_UBOOT_VERSION_TAG).fragment

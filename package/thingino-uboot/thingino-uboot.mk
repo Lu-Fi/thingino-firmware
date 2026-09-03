@@ -33,12 +33,22 @@ endif
 # the make option and the injected environment -- out of non-2013.07 builds.
 # Must be =y, not =1: U-Boot's drivers/net/Makefile selects the object with
 # COBJS-$(CONFIG_NETCONSOLE), and a command-line value overrides autoconf.mk.
-# THINGINO_UBOOT_NETCONSOLE is a single internal flag so a second network
-# transport (e.g. USB-Ethernet on OTG boards) can enable both effects later
-# from one more condition, without duplicating it here and in the env hook.
+# THINGINO_UBOOT_NETCONSOLE is a single internal flag so both effects -- the
+# make option and the injected environment -- follow from one condition.
+# THINGINO_UBOOT_NETCONSOLE_USB additionally marks boards that reach the
+# network over a USB-Ethernet dongle rather than the on-chip MAC: no wired
+# Ethernet, but a USB OTG data port. Their injected preboot runs `usb start`
+# and selects the dongle first (see THINGINO_GENERATE_UBOOT_ENV). The U-Boot
+# side needs nothing extra: isvp_common.h already builds the DWC2 host
+# controller and the ASIX host-Ethernet drivers on every board but T31LC.
 ifeq ($(BR2_PACKAGE_THINGINO_UBOOT_NETCONSOLE),y)
 THINGINO_UBOOT_NETCONSOLE = y
 UBOOT_MAKE_OPTS += CONFIG_NETCONSOLE=y
+ifneq ($(BR2_ETHERNET),y)
+ifeq ($(BR2_PACKAGE_THINGINO_KOPT_DWC2_OTG),y)
+THINGINO_UBOOT_NETCONSOLE_USB = y
+endif
+endif
 endif
 
 ifeq ($(BR2_PACKAGE_THINGINO_UBOOT_PHY_RESET_AFTER_CONFIG),y)
@@ -142,7 +152,7 @@ define THINGINO_GENERATE_UBOOT_ENV
 	@env BR2_PACKAGE_THINGINO_UBOOT_INIT='$(value BR2_PACKAGE_THINGINO_UBOOT_INIT)' sh -c 'grep -q "^init=" $(THINGINO_UENV_TXT) || echo "init=$$BR2_PACKAGE_THINGINO_UBOOT_INIT" | sed "s/=\"/=/;s/\"$$//" >> $(THINGINO_UENV_TXT)'
 	@env BR2_PACKAGE_THINGINO_UBOOT_SD_ENABLE='$(BR2_PACKAGE_THINGINO_UBOOT_SD_ENABLE)' sh -c 'if [ "$$BR2_PACKAGE_THINGINO_UBOOT_SD_ENABLE" = "y" ]; then grep -q "^disable_sd=" $(THINGINO_UENV_TXT) && sed -i "s/^disable_sd=.*/disable_sd=false/" $(THINGINO_UENV_TXT) || echo "disable_sd=false" >> $(THINGINO_UENV_TXT); else grep -q "^disable_sd=" $(THINGINO_UENV_TXT) && sed -i "s/^disable_sd=.*/disable_sd=true/" $(THINGINO_UENV_TXT) || echo "disable_sd=true" >> $(THINGINO_UENV_TXT); fi'
 	@env BR2_PACKAGE_THINGINO_UBOOT_ETH_ENABLE='$(BR2_PACKAGE_THINGINO_UBOOT_ETH_ENABLE)' sh -c 'if [ "$$BR2_PACKAGE_THINGINO_UBOOT_ETH_ENABLE" = "y" ]; then grep -q "^disable_eth=" $(THINGINO_UENV_TXT) && sed -i "s/^disable_eth=.*/disable_eth=false/" $(THINGINO_UENV_TXT) || echo "disable_eth=false" >> $(THINGINO_UENV_TXT); else grep -q "^disable_eth=" $(THINGINO_UENV_TXT) && sed -i "s/^disable_eth=.*/disable_eth=true/" $(THINGINO_UENV_TXT) || echo "disable_eth=true" >> $(THINGINO_UENV_TXT); fi'
-	@env THINGINO_UBOOT_NETCONSOLE='$(THINGINO_UBOOT_NETCONSOLE)' sh -c 'if [ "$$THINGINO_UBOOT_NETCONSOLE" = "y" ]; then grep -q "^preboot=" $(THINGINO_UENV_TXT) || echo "preboot=setenv stdout serial,nc;setenv stderr serial,nc;setenv stdin serial,nc" >> $(THINGINO_UENV_TXT); grep -q "^bootdelay=" $(THINGINO_UENV_TXT) || echo "bootdelay=5" >> $(THINGINO_UENV_TXT); fi'
+	@env THINGINO_UBOOT_NETCONSOLE='$(THINGINO_UBOOT_NETCONSOLE)' THINGINO_UBOOT_NETCONSOLE_USB='$(THINGINO_UBOOT_NETCONSOLE_USB)' sh -c 'if [ "$$THINGINO_UBOOT_NETCONSOLE" = "y" ]; then if [ "$$THINGINO_UBOOT_NETCONSOLE_USB" = "y" ]; then grep -q "^preboot=" $(THINGINO_UENV_TXT) || echo "preboot=usb start;setenv ethact \$${nc_ethact};setenv stdout serial,nc;setenv stderr serial,nc;setenv stdin serial,nc" >> $(THINGINO_UENV_TXT); grep -q "^nc_ethact=" $(THINGINO_UENV_TXT) || echo "nc_ethact=asx0" >> $(THINGINO_UENV_TXT); else grep -q "^preboot=" $(THINGINO_UENV_TXT) || echo "preboot=setenv stdout serial,nc;setenv stderr serial,nc;setenv stdin serial,nc" >> $(THINGINO_UENV_TXT); fi; grep -q "^bootdelay=" $(THINGINO_UENV_TXT) || echo "bootdelay=5" >> $(THINGINO_UENV_TXT); grep -q "^ipaddr=" $(THINGINO_UENV_TXT) || echo "ipaddr=192.168.1.10" >> $(THINGINO_UENV_TXT); fi'
 	@sed -i "s|\$$(UBOOT_FLASH_CONTROLLER)|$(THINGINO_UBOOT_FLASH_CONTROLLER)|g" $(THINGINO_UENV_TXT)
 	@sh -c '[ "$(SOC_FAMILY)" = "t40" -o "$(SOC_FAMILY)" = "t41" ] && sed -i "s|\$$(UBOOT_NMEM)|nmem=$$\{nmem\} |g" $(THINGINO_UENV_TXT) || sed -i "s|\$$(UBOOT_NMEM)||g" $(THINGINO_UENV_TXT)'
 	@sh -c '[ "$(SOC_FAMILY)" = "t20" -o "$(SOC_FAMILY)" = "t10" ] && sed -i "s|\$$(UBOOT_ISPMEM)| ispmem=$$\{ispmem\} |g" $(THINGINO_UENV_TXT) || sed -i "s|\$$(UBOOT_ISPMEM)| |g" $(THINGINO_UENV_TXT)'
@@ -204,44 +214,6 @@ define THINGINO_UBOOT_DISABLE_AUDIO
 endef
 UBOOT_PRE_BUILD_HOOKS += THINGINO_UBOOT_DISABLE_AUDIO
 endif
-endif
-
-# Inject this board's MMC card-detect + slot-power into the per-SoC U-Boot
-# device tree from thingino.json (the GPIOs are board-specific, so they can't
-# live in the shared .dts). The helper appends a vmmc-supply regulator and, on
-# pull-up-capable SoCs, cd-gpios, to this board's build copy of the leaf .dts -
-# so the mmc core powers and detects the slot natively, with no env gpio gate
-# or power-up. The helper reads thingino.json with python3 (already a U-Boot
-# build dependency via binman). (Ported from piuma.)
-ifneq ($(BR2_THINGINO_UBOOT_VERSION_2013_07),y)
-define THINGINO_UBOOT_INJECT_MMC_DT
-	@DT=$$(sed -n 's/^CONFIG_DEFAULT_DEVICE_TREE="\(.*\)"/\1/p' $(@D)/.config); \
-	[ -n "$$DT" ] && [ -f $(@D)/arch/mips/dts/$$DT.dts ] || exit 0; \
-	$(BR2_EXTERNAL_THINGINO_PATH)/package/thingino-uboot/inject-uboot-mmc-dt.sh \
-		$(BR2_EXTERNAL_THINGINO_PATH)/$(CAMERA_SUBDIR)/$(CAMERA)/thingino.json \
-		$(@D)/arch/mips/dts/$$DT.dts "$$DT"
-endef
-UBOOT_PRE_BUILD_HOOKS += THINGINO_UBOOT_INJECT_MMC_DT
-endif
-
-# Inject boot-window GPIO presets (gpio-hogs) into this board's U-Boot leaf
-# .dts from thingino.json, and enable CONFIG_GPIO_HOG so U-Boot drives them
-# right after DM init: PTZ stepper phases parked de-energised, Wi-Fi module
-# power/enable lines at their runtime resting level, multi-pin gpio.mmc_power
-# lists at their power-on level, and IR-cut filter coil pins at the
-# /usr/sbin/ircut idle level. The helper self-skips per domain from the json
-# content, so no per-domain config gate is needed. (Ported from piuma.)
-ifneq ($(BR2_THINGINO_UBOOT_VERSION_2013_07),y)
-define THINGINO_UBOOT_INJECT_GPIO_DT
-	@DT=$$(sed -n 's/^CONFIG_DEFAULT_DEVICE_TREE="\(.*\)"/\1/p' $(@D)/.config); \
-	[ -n "$$DT" ] && [ -f $(@D)/arch/mips/dts/$$DT.dts ] || exit 0; \
-	$(BR2_EXTERNAL_THINGINO_PATH)/package/thingino-uboot/inject-uboot-gpio-dt.sh \
-		$(BR2_EXTERNAL_THINGINO_PATH)/$(CAMERA_SUBDIR)/$(CAMERA)/thingino.json \
-		$(@D)/arch/mips/dts/$$DT.dts "$$DT"
-	$(call KCONFIG_ENABLE_OPT,CONFIG_GPIO_HOG,$(@D)/.config)
-	$(UBOOT_KCONFIG_MAKE) olddefconfig
-endef
-UBOOT_PRE_BUILD_HOOKS += THINGINO_UBOOT_INJECT_GPIO_DT
 endif
 
 endif

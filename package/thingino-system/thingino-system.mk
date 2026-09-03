@@ -31,6 +31,22 @@ define THINGINO_SYSTEM_INSTALL_TARGET_CMDS
 	# Utilities always installed
 	$(INSTALL) -D -m 0755 $(THINGINO_SYSTEM_PKGDIR)/files/firstboot \
 		$(TARGET_DIR)/usr/sbin/firstboot
+	$(INSTALL) -D -m 0755 $(THINGINO_SYSTEM_PKGDIR)/files/blink \
+		$(TARGET_DIR)/usr/sbin/blink
+	$(INSTALL) -D -m 0755 $(THINGINO_SYSTEM_PKGDIR)/files/gpio \
+		$(TARGET_DIR)/usr/sbin/gpio
+	$(INSTALL) -D -m 0755 $(THINGINO_SYSTEM_PKGDIR)/files/led \
+		$(TARGET_DIR)/usr/sbin/led
+	$(INSTALL) -D -m 0755 $(THINGINO_SYSTEM_PKGDIR)/files/lssdio \
+		$(TARGET_DIR)/usr/sbin/lssdio
+	$(INSTALL) -D -m 0755 $(THINGINO_SYSTEM_PKGDIR)/files/send2termbin \
+		$(TARGET_DIR)/usr/sbin/send2termbin
+	$(INSTALL) -D -m 0755 $(THINGINO_SYSTEM_PKGDIR)/files/service \
+		$(TARGET_DIR)/usr/sbin/service
+	$(INSTALL) -D -m 0755 $(THINGINO_SYSTEM_PKGDIR)/files/timectl \
+		$(TARGET_DIR)/usr/sbin/timectl
+	$(INSTALL) -D -m 0755 $(THINGINO_SYSTEM_PKGDIR)/files/tzselect \
+		$(TARGET_DIR)/usr/sbin/tzselect
 
 	# Optional utilities
 	if [ "$(BR2_PACKAGE_THINGINO_SYSTEM_ENTROPY_GENERATOR)" = "y" ]; then \
@@ -38,12 +54,15 @@ define THINGINO_SYSTEM_INSTALL_TARGET_CMDS
 			$(TARGET_DIR)/etc/init.d/S01entropy; \
 	fi
 
-	if [ "$(BR2_THINGINO_SDCARD)" = "y" ]; then \
+	if [ "$(BR2_PACKAGE_THINGINO_SYSTEM_AUTOMOUNT)" = "y" ]; then \
 		mkdir -p $(TARGET_DIR)/usr/lib/mdev; \
 		$(INSTALL) -D -m 0755 $(THINGINO_SYSTEM_PKGDIR)/files/automount \
 			$(TARGET_DIR)/usr/lib/mdev/automount; \
 		$(INSTALL) -D -m 0755 $(THINGINO_SYSTEM_PKGDIR)/files/S30mdev \
 			$(TARGET_DIR)/etc/init.d/S30mdev; \
+	fi
+
+	if [ "$(BR2_THINGINO_SDCARD)" = "y" ]; then \
 		$(INSTALL) -D -m 0755 $(THINGINO_SYSTEM_PKGDIR)/files/formatsd \
 			$(TARGET_DIR)/usr/sbin/formatsd; \
 		$(INSTALL) -D -m 0755 $(THINGINO_SYSTEM_PKGDIR)/files/envfromcard \

@@ -81,6 +81,26 @@ ifeq ($(BR2_PACKAGE_THINGINO_WEBUI),y)
 # plugin assembly finalize hook discovers the motors manifest.
 THINGINO_MOTORS_DEPENDENCIES += thingino-webui
 
+# WS-only extras. ifeq/endif cannot nest inside a define...endef body (it is
+# text handed to the shell, not re-parsed as Make), so these live in their own
+# conditionally-defined variable and are referenced unconditionally below -
+# empty when the WS path is not built.
+#
+# The manifest ships motorsWs:false and is flipped here rather than shipped in
+# two variants: the flag says "this image has the WebSocket control path", and
+# only the build knows that. The grep is the assertion - a manifest edit that
+# renamed or reformatted the key would otherwise leave the sed silently
+# matching nothing and the WS build permanently on the CGI transport.
+ifeq ($(BR2_PACKAGE_THINGINO_MOTORS_WS),y)
+define THINGINO_MOTORS_INSTALL_WS_WWW_CMDS
+	$(INSTALL) -D -m 0755 $(THINGINO_MOTORS_PKGDIR)/files/www/x/json-motor-token.cgi \
+		$(TARGET_DIR)/var/www/x/json-motor-token.cgi
+	$(SED) 's/"motorsWs": false/"motorsWs": true/' \
+		$(TARGET_DIR)/var/www/a/plugins/motors.webui.json
+	grep -q '"motorsWs": true' $(TARGET_DIR)/var/www/a/plugins/motors.webui.json
+endef
+endif
+
 define THINGINO_MOTORS_INSTALL_WWW_CMDS
 	$(INSTALL) -d $(TARGET_DIR)/var/www/a
 	$(INSTALL) -d $(TARGET_DIR)/var/www/x
@@ -93,6 +113,10 @@ define THINGINO_MOTORS_INSTALL_WWW_CMDS
 		$(TARGET_DIR)/var/www/a/preview-motors.js
 	$(INSTALL) -D -m 0644 $(THINGINO_MOTORS_PKGDIR)/files/www/a/preview-motors-settings.js \
 		$(TARGET_DIR)/var/www/a/preview-motors-settings.js
+	$(INSTALL) -D -m 0644 $(THINGINO_MOTORS_PKGDIR)/files/www/a/motors-version.js \
+		$(TARGET_DIR)/var/www/a/motors-version.js
+	$(INSTALL) -D -m 0644 $(THINGINO_MOTORS_PKGDIR)/files/www/a/preview-motors.css \
+		$(TARGET_DIR)/var/www/a/preview-motors.css
 	$(INSTALL) -D -m 0755 $(THINGINO_MOTORS_PKGDIR)/files/www/x/json-motor.cgi \
 		$(TARGET_DIR)/var/www/x/json-motor.cgi
 	$(INSTALL) -D -m 0755 $(THINGINO_MOTORS_PKGDIR)/files/www/x/json-motor-params.cgi \
@@ -105,6 +129,8 @@ define THINGINO_MOTORS_INSTALL_WWW_CMDS
 	# Install plugin manifest for build-time assembly by thingino-webui
 	$(INSTALL) -D -m 0644 $(THINGINO_MOTORS_PKGDIR)/files/motors.webui.json \
 		$(TARGET_DIR)/var/www/a/plugins/motors.webui.json
+
+	$(THINGINO_MOTORS_INSTALL_WS_WWW_CMDS)
 endef
 endif
 

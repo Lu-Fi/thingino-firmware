@@ -666,52 +666,12 @@ endef
 TARGET_FINALIZE_HOOKS := TIMPS_REAPPLY_WEBUI_OVERLAY $(TARGET_FINALIZE_HOOKS)
 TARGET_FINALIZE_HOOKS += TIMPS_PURGE_STOCK_WEBUI
 
-# Same prepend trick as TIMPS_REAPPLY_WEBUI_OVERLAY, for thingino-motors'
-# own www files instead of thingino-webui's: reapplied before assemble_plugins
-# runs, so a timps build always gets the joystick/CSS/CGIs, whether motors
-# ships from upstream (CGI transport, motorsWs stays false) or from the WS
-# fork (motorsWs flipped true below, wss:// if WS_TLS is also on - the JS
-# itself picks ws:// vs wss:// at runtime from the page's own protocol).
-# ifeq/endif can't nest inside a define...endef recipe body (it's just text
-# handed to the shell, not re-parsed as Make) - so the WS-only lines are a
-# separate variable, conditionally defined here and referenced unconditionally
-# below; empty when undefined.
-ifeq ($(BR2_PACKAGE_THINGINO_MOTORS_WS),y)
-define TIMPS_REAPPLY_MOTORS_WS_CMDS
-	$(INSTALL) -D -m 0755 $(TIMPS_PKGDIR)/files/www/motors-ui/json-motor-token.cgi \
-		$(TARGET_DIR)/var/www/x/json-motor-token.cgi
-	$(SED) 's/"motorsWs": false/"motorsWs": true/' \
-		$(TARGET_DIR)/var/www/a/plugins/motors.webui.json
-	grep -q '"motorsWs": true' $(TARGET_DIR)/var/www/a/plugins/motors.webui.json
-endef
-endif
-
-ifeq ($(BR2_PACKAGE_THINGINO_MOTORS),y)
-define TIMPS_REAPPLY_MOTORS_UI
-	$(INSTALL) -D -m 0644 $(TIMPS_PKGDIR)/files/www/motors-ui/config-motors.html \
-		$(TARGET_DIR)/var/www/config-motors.html
-	$(INSTALL) -D -m 0644 $(TIMPS_PKGDIR)/files/www/motors-ui/preview-motors.js \
-		$(TARGET_DIR)/var/www/a/preview-motors.js
-	$(INSTALL) -D -m 0644 $(TIMPS_PKGDIR)/files/www/motors-ui/motors-version.js \
-		$(TARGET_DIR)/var/www/a/motors-version.js
-	$(INSTALL) -D -m 0644 $(TIMPS_PKGDIR)/files/www/motors-ui/preview-motors-settings.js \
-		$(TARGET_DIR)/var/www/a/preview-motors-settings.js
-	$(INSTALL) -D -m 0644 $(TIMPS_PKGDIR)/files/www/motors-ui/preview-motors.css \
-		$(TARGET_DIR)/var/www/a/preview-motors.css
-	$(INSTALL) -D -m 0644 $(TIMPS_PKGDIR)/files/www/motors-ui/config-motors.js \
-		$(TARGET_DIR)/var/www/a/config-motors.js
-	$(INSTALL) -D -m 0755 $(TIMPS_PKGDIR)/files/www/motors-ui/json-motor.cgi \
-		$(TARGET_DIR)/var/www/x/json-motor.cgi
-	$(INSTALL) -D -m 0755 $(TIMPS_PKGDIR)/files/www/motors-ui/json-motor-params.cgi \
-		$(TARGET_DIR)/var/www/x/json-motor-params.cgi
-	$(INSTALL) -D -m 0755 $(TIMPS_PKGDIR)/files/www/motors-ui/json-motors-config.cgi \
-		$(TARGET_DIR)/var/www/x/json-motors-config.cgi
-	$(INSTALL) -D -m 0644 $(TIMPS_PKGDIR)/files/www/motors-ui/motors.webui.json \
-		$(TARGET_DIR)/var/www/a/plugins/motors.webui.json
-	$(TIMPS_REAPPLY_MOTORS_WS_CMDS)
-endef
-TARGET_FINALIZE_HOOKS := TIMPS_REAPPLY_MOTORS_UI $(TARGET_FINALIZE_HOOKS)
-endif
+# NOTE (2026-09-04): timps used to carry thingino-motors' entire www bundle in
+# files/www/motors-ui/ and reapply it from a prepended target-finalize hook,
+# because a per-package-directories build let an alphabetically-later package
+# sharing the thingino-webui dependency clobber it at merge time. The bundle
+# now lives in package/thingino-motors/ and that package installs it itself at
+# normal install time, so neither the copy nor the hook exists any more.
 
 # libstdc++.so is 2130 KB and, once timps links the C++ runtime statically and
 # libaudioprocess-neo replaces the proprietary (C++) libaudioProcess.so, has no

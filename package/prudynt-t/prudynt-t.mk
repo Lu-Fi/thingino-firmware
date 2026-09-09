@@ -1,7 +1,7 @@
 PRUDYNT_T_SITE_METHOD = git
 PRUDYNT_T_SITE = https://github.com/themactep/prudynt-t
 PRUDYNT_T_SITE_BRANCH = stable
-PRUDYNT_T_VERSION = 862a73aef26f41ff00b7d80d909ff6d9526a77d0
+PRUDYNT_T_VERSION = cf2664a3ce87562c61e8cc4b276b11a88009a127
 
 PRUDYNT_T_OVERRIDE_FILE = $(BR2_EXTERNAL_THINGINO_PATH)/$(CAMERA_SUBDIR)/$(CAMERA)/prudynt.json
 
@@ -410,6 +410,8 @@ define PRUDYNT_T_INSTALL_TARGET_CMDS
 		$(TARGET_DIR)/var/www/a/plugins/prudynt.webui.json
 
 	# HTML pages
+	$(INSTALL) -D -m 0644 $(PRUDYNT_T_PKGDIR)/files/www/preview-fmp4.html \
+		$(TARGET_DIR)/var/www/preview-fmp4.html
 	$(INSTALL) -D -m 0644 $(PRUDYNT_T_PKGDIR)/files/www/config-audio.html \
 		$(TARGET_DIR)/var/www/config-audio.html
 	$(INSTALL) -D -m 0644 $(PRUDYNT_T_PKGDIR)/files/www/streamer-image.html \
@@ -430,6 +432,8 @@ define PRUDYNT_T_INSTALL_TARGET_CMDS
 		$(TARGET_DIR)/var/www/tool-timelapse.html
 
 	# JavaScript
+	$(INSTALL) -D -m 0644 $(PRUDYNT_T_PKGDIR)/files/www/a/preview-fmp4.js \
+		$(TARGET_DIR)/var/www/a/preview-fmp4.js
 	$(INSTALL) -D -m 0644 $(PRUDYNT_T_PKGDIR)/files/www/a/audio.js \
 		$(TARGET_DIR)/var/www/a/audio.js
 	$(INSTALL) -D -m 0644 $(PRUDYNT_T_PKGDIR)/files/www/a/sei-osd.js \

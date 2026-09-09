@@ -81,7 +81,9 @@ if [ "$CONTAINER_ENGINE" = "podman" ] && podman machine list >/dev/null 2>&1; th
     fi
 fi
 
-# Check for fresh container image
+# Check for fresh container image. The remote digest lookup is TTL-cached to
+# avoid a network round-trip on every invocation; set CONTAINER_SKIP_UPDATE_CHECK=1
+# to skip the check entirely (offline/CI).
 CONTAINER_IMAGE="ghcr.io/themactep/thingino-builder-image"
 CONTAINER_TAG="latest"
 case "$(uname -m)" in
@@ -90,34 +92,59 @@ case "$(uname -m)" in
     *)       ARCH="$(uname -m)" ;;
 esac
 
-print_info "Checking for container image updates..."
+IMAGE_CHECK_TTL="${CONTAINER_IMAGE_CHECK_TTL:-600}"
+IMAGE_CHECK_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/thingino/container-image-check"
 
-# Get local digest
-LOCAL_DIGEST=$($CONTAINER_ENGINE inspect "$CONTAINER_IMAGE:$CONTAINER_TAG" --format '{{index .RepoDigests 0}}' 2>/dev/null | sed 's/.*@//')
-
-# Get remote digest for current platform
-REMOTE_DIGEST=""
-if command -v skopeo >/dev/null 2>&1; then
-    REMOTE_DIGEST=$(skopeo inspect "docker://$CONTAINER_IMAGE:$CONTAINER_TAG" 2>/dev/null \
-        | python3 -c "import sys,json; print(json.load(sys.stdin).get('Digest',''))" 2>/dev/null)
-elif [ "$CONTAINER_ENGINE" = "podman" ]; then
-    REMOTE_DIGEST=$(podman manifest inspect "$CONTAINER_IMAGE:$CONTAINER_TAG" 2>/dev/null \
-        | python3 -c "import sys,json; m=json.load(sys.stdin); print(next((x['digest'] for x in m.get('manifests',[]) if x.get('platform',{}).get('architecture')=='$ARCH'),''))" 2>/dev/null)
-fi
-
-if [ -z "$LOCAL_DIGEST" ]; then
-    print_info "Pulling container image..."
-    $CONTAINER_ENGINE pull "$CONTAINER_IMAGE:$CONTAINER_TAG"
-    print_success "Pulled new container image"
-elif [ -n "$REMOTE_DIGEST" ] && [ "$LOCAL_DIGEST" = "$REMOTE_DIGEST" ]; then
-    print_info "Container image is current"
+if [ "${CONTAINER_SKIP_UPDATE_CHECK:-0}" = "1" ]; then
+    print_info "Skipping container image update check (CONTAINER_SKIP_UPDATE_CHECK=1)"
 else
-    print_info "Updating container image..."
-    $CONTAINER_ENGINE pull "$CONTAINER_IMAGE:$CONTAINER_TAG"
-    print_success "Updated container image"
+    print_info "Checking for container image updates..."
+
+    # Get local digest (cheap, always do)
+    LOCAL_DIGEST=$($CONTAINER_ENGINE inspect "$CONTAINER_IMAGE:$CONTAINER_TAG" --format '{{index .RepoDigests 0}}' 2>/dev/null | sed 's/.*@//')
+
+    if [ -z "$LOCAL_DIGEST" ]; then
+        print_info "Pulling container image..."
+        $CONTAINER_ENGINE pull "$CONTAINER_IMAGE:$CONTAINER_TAG"
+        print_success "Pulled new container image"
+    else
+        last_check=0
+        if [ -f "$IMAGE_CHECK_CACHE" ]; then
+            last_check=$(cat "$IMAGE_CHECK_CACHE" 2>/dev/null) || last_check=0
+        fi
+        case "$last_check" in
+            ''|*[!0-9]*) last_check=0 ;;
+        esac
+        now=$(date +%s)
+
+        if [ "$((now - last_check))" -lt "$IMAGE_CHECK_TTL" ]; then
+            print_info "Container image update check cached ($((now - last_check))s ago)"
+        else
+            # Get remote digest for current platform
+            REMOTE_DIGEST=""
+            if command -v skopeo >/dev/null 2>&1; then
+                REMOTE_DIGEST=$(skopeo inspect "docker://$CONTAINER_IMAGE:$CONTAINER_TAG" 2>/dev/null \
+                    | python3 -c "import sys,json; print(json.load(sys.stdin).get('Digest',''))" 2>/dev/null)
+            elif [ "$CONTAINER_ENGINE" = "podman" ]; then
+                REMOTE_DIGEST=$(podman manifest inspect "$CONTAINER_IMAGE:$CONTAINER_TAG" 2>/dev/null \
+                    | python3 -c "import sys,json; m=json.load(sys.stdin); print(next((x['digest'] for x in m.get('manifests',[]) if x.get('platform',{}).get('architecture')=='$ARCH'),''))" 2>/dev/null)
+            fi
+
+            if [ -n "$REMOTE_DIGEST" ] && [ "$LOCAL_DIGEST" = "$REMOTE_DIGEST" ]; then
+                print_info "Container image is current"
+            else
+                print_info "Updating container image..."
+                $CONTAINER_ENGINE pull "$CONTAINER_IMAGE:$CONTAINER_TAG"
+                print_success "Updated container image"
+            fi
+
+            mkdir -p "$(dirname "$IMAGE_CHECK_CACHE")"
+            echo "$now" > "$IMAGE_CHECK_CACHE"
+        fi
+    fi
 fi
 
-# Function to select camera
+# Select a camera, delegating the interactive UI to scripts/select_camera.sh.
 select_camera() {
     local cameras_dir="configs/cameras${GROUP:+-$GROUP}"
     local memo_file=".selected_camera${GROUP:+-$GROUP}"
@@ -127,142 +154,30 @@ select_camera() {
         exit 1
     fi
 
-    # Check if CAMERA is already provided
+    # Short-circuit when CAMERA is already provided
     if [ -n "$CAMERA" ]; then
         if [ -d "$cameras_dir/$CAMERA" ]; then
             echo "$CAMERA"
             return 0
-        else
-            print_error "Provided CAMERA='$CAMERA' not found in $cameras_dir" >&2
-            exit 1
         fi
-    fi
-
-    # If IP is provided but CAMERA is not, try auto-detection from the device
-    if [ -z "$CAMERA" ] && [ -n "$IP" ]; then
-        print_info "Probing device at $IP for camera identity..." >&2
-        detected=$(scripts/detect_camera_from_ip.sh "$IP" 2>/dev/null) || true
-        if [ -n "$detected" ] && [ -d "$cameras_dir/$detected" ]; then
-            echo "" >&2
-            echo "Detected from device at $IP: $detected" >&2
-            read -p "Use this camera? [Y/n]: " use_detected >&2
-            if [ -z "$use_detected" ] || [ "$use_detected" = "y" ] || [ "$use_detected" = "Y" ]; then
-                echo "$detected" > "$memo_file"
-                echo "$detected"
-                return 0
-            fi
-        else
-            print_info "Could not identify device at $IP (not a Thingino device, or unreachable)" >&2
-        fi
-    fi
-
-    # Get list of cameras
-    local cameras=($(ls "$cameras_dir" | sort))
-
-    if [ ${#cameras[@]} -eq 0 ]; then
-        print_error "No camera configs found in $cameras_dir"
+        print_error "Provided CAMERA='$CAMERA' not found in $cameras_dir" >&2
         exit 1
     fi
 
-    local selected_camera=""
-
-    # Check if there's a previous selection
-    if [ -f "$memo_file" ]; then
-        local prev_camera=$(cat "$memo_file")
-        if [ -n "$prev_camera" ] && [ -d "$cameras_dir/$prev_camera" ]; then
-            echo "" >&2
-            echo "Previously selected: $prev_camera" >&2
-            read -p "Use this camera? [Y/n]: " use_prev >&2
-            if [ -z "$use_prev" ] || [ "$use_prev" = "y" ] || [ "$use_prev" = "Y" ]; then
-                selected_camera="$prev_camera"
-                echo "$selected_camera"
-                return 0
-            fi
+    # Auto-detect a candidate from the device and offer it as the first suggestion
+    local suggested_camera=""
+    if [ -n "$IP" ]; then
+        print_info "Probing device at $IP for camera identity..." >&2
+        suggested_camera=$(scripts/detect_camera_from_ip.sh "$IP" 2>/dev/null) || true
+        if [ -z "$suggested_camera" ] || [ ! -d "$cameras_dir/$suggested_camera" ]; then
+            print_info "Could not identify device at $IP (not a Thingino device, or unreachable)" >&2
+            suggested_camera=""
         fi
     fi
 
-    # Try fzf first (best UX) - can be disabled with USE_FZF=0
-    if [ "${USE_FZF:-1}" = "1" ] && command -v fzf >/dev/null 2>&1; then
-        print_info "Select camera (type to filter in order, e.g., 't20' shows t20* cameras):" >&2
-        selected_camera=$(printf '%s\n' "${cameras[@]}" | fzf \
-            --height=~100% \
-            --layout=reverse \
-            --exact \
-            --prompt="Camera: " \
-            --header="Select camera configuration (${#cameras[@]} available) - type to filter" \
-            --preview-window=hidden | sed 's/\x1b[^a-zA-Z]*[a-zA-Z]//g')
-
-        # Reset and clear terminal after fzf
-        tput sgr0 2>/dev/null || true
-        clear
-        echo "" >&2
-
-    # Try whiptail (used by main Makefile)
-    elif command -v whiptail >/dev/null 2>&1; then
-        # Build menu items for whiptail
-        local menu_items=()
-        for camera in "${cameras[@]}"; do
-            menu_items+=("$camera" "")
-        done
-
-        selected_camera=$(whiptail --title "Camera Selection" \
-            --menu "Select a camera config (${#cameras[@]} available):" \
-            20 76 12 \
-            "${menu_items[@]}" \
-            3>&1 1>&2 2>&3)
-
-    # Try dialog as fallback
-    elif command -v dialog >/dev/null 2>&1; then
-        # Build menu items for dialog
-        local menu_items=()
-        for camera in "${cameras[@]}"; do
-            menu_items+=("$camera" "")
-        done
-
-        selected_camera=$(dialog --stdout --title "Camera Selection" \
-            --menu "Select a camera config (${#cameras[@]} available):" \
-            20 76 12 \
-            "${menu_items[@]}")
-
-    # Fallback to numbered list
-    else
-        echo "" >&2
-        echo "Available cameras (${#cameras[@]} total):" >&2
-        echo "==========================================" >&2
-
-        local i=1
-        for camera in "${cameras[@]}"; do
-            printf "%3d) %s\n" $i "$camera" >&2
-            ((i++))
-        done
-
-        echo "" >&2
-        read -p "Select camera number (1-${#cameras[@]}), or press Enter to cancel: " selection >&2
-
-        if [ -z "$selection" ]; then
-            print_info "Cancelled"
-            exit 0
-        fi
-
-        if ! [[ "$selection" =~ ^[0-9]+$ ]] || [ "$selection" -lt 1 ] || [ "$selection" -gt ${#cameras[@]} ]; then
-            print_error "Invalid selection: $selection"
-            exit 1
-        fi
-
-        selected_camera="${cameras[$((selection-1))]}"
-    fi
-
-    if [ -z "$selected_camera" ]; then
-        exit 0
-    fi
-
-    # Strip any ANSI color codes that might have been captured
-    selected_camera=$(echo "$selected_camera" | sed 's/\x1b[^a-zA-Z]*[a-zA-Z]//g')
-
-    # Save selection for next time
-    echo "$selected_camera" > "$memo_file"
-
-    echo "$selected_camera"
+    local result
+    result=$(scripts/select_camera.sh "$cameras_dir" "$memo_file" 0 "$suggested_camera") || true
+    echo "$result"
 }
 
 # Parse command

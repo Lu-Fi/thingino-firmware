@@ -183,8 +183,19 @@ $(KERNEL_BIN):
 	$(call thingino_run_build,$(BR2_MAKE) $(BR2_MAKE_JOBS) linux-rebuild)
 #	mv -vf $(OUTPUT_DIR)/images/uImage $@
 
+# Rootfs inputs that must trigger a rebuild when they change: per-package
+# install trees (what target-finalize merges) plus every overlay directory.
+# Evaluated once at parse time; a non-empty result forces the rootfs recipe.
+ROOTFS_OVERLAY_INPUTS := $(BR2_EXTERNAL)/overlay \
+	$(wildcard $(BR2_EXTERNAL)/$(CAMERA_SUBDIR)/$(CAMERA)/overlay) \
+	$(THINGINO_USER_OVERLAY_DIRS)
+
+ROOTFS_DIRTY_INPUTS := $(shell \
+	find $(OUTPUT_DIR)/per-package -path '*/target/*' -newer $(ROOTFS_BIN) -print -quit 2>/dev/null; \
+	find $(ROOTFS_OVERLAY_INPUTS) -newer $(ROOTFS_BIN) -print -quit 2>/dev/null)
+
 # rebuild rootfs (depends on kernel to ensure proper build order)
-$(ROOTFS_BIN): $(KERNEL_BIN)
+$(ROOTFS_BIN): $(KERNEL_BIN) $(ROOTFS_DIRTY_INPUTS) $(BR2_EXTERNAL)/scripts/rootfs_script.sh
 	@$(TEAL) "$@"
 	rm -f $(U_BOOT_ENV_TXT)
 	$(call thingino_run_build,$(BR2_MAKE) $(BR2_MAKE_JOBS) host-libyaml host-uboot-tools)
@@ -251,36 +262,21 @@ $(UB_ENV_BIN): $(U_BOOT_ENV_TXT)
 	@$(TEAL) "$@"
 	$(HOST_DIR)/bin/mkenvimage -s $(UB_ENV_SIZE) -o $@ $(U_BOOT_ENV_TXT)
 
+BUILD_ALL_JOBS ?= 4
+
 build-all:
 	@$(TEAL) "$@"
-	@echo "Building all cameras from $(CAMERA_SUBDIR)"
+	@echo "Building all cameras from $(CAMERA_SUBDIR) (parallel: $(BUILD_ALL_JOBS))"
 	@log_dir="$(HOME)/output-$(GIT_BRANCH)/build-all-logs-$$(date +%Y%m%d-%H%M%S)"; \
 	mkdir -p "$$log_dir"; \
 	echo "Logs will be saved to: $$log_dir"; \
-	failed_cameras=""; \
-	total=0; \
-	success=0; \
-	failed=0; \
-	for camera_dir in $(CAMERA_SUBDIR)/*; do \
-		if [ -d "$$camera_dir" ]; then \
-			camera=$$(basename $$camera_dir); \
-			total=$$((total + 1)); \
-			log_file="$$log_dir/$$camera.log"; \
-			echo ""; \
-			echo "========================================"; \
-			echo "Building camera $$total: $$camera"; \
-			echo "Log: $$log_file"; \
-			echo "========================================"; \
-			if env -u OUTPUT_DIR $(MAKE) CAMERA=$$camera distclean defconfig build_fast pack 2>&1 | tee "$$log_file"; then \
-				echo "[OK] SUCCESS: $$camera" | tee -a "$$log_file"; \
-				success=$$((success + 1)); \
-			else \
-				echo "[FAIL] FAILED: $$camera" | tee -a "$$log_file"; \
-				failed=$$((failed + 1)); \
-				failed_cameras="$$failed_cameras$$camera\n"; \
-			fi; \
-		fi; \
-	done; \
+	find $(CAMERA_SUBDIR) -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort > "$$log_dir/cameras.list"; \
+	total=$$(wc -l < "$$log_dir/cameras.list"); \
+	echo "Total cameras: $$total"; \
+	xargs -P$(BUILD_ALL_JOBS) -a "$$log_dir/cameras.list" -I{} \
+		sh $(SCRIPTS_DIR)/build_all_camera.sh {} "$$log_dir" "$(MAKE)"; \
+	success=$$(find "$$log_dir" -name '.ok.*' | wc -l); \
+	failed=$$(find "$$log_dir" -name '.fail.*' | wc -l); \
 	echo ""; \
 	echo "========================================" | tee "$$log_dir/summary.log"; \
 	echo "BUILD SUMMARY" | tee -a "$$log_dir/summary.log"; \
@@ -289,10 +285,12 @@ build-all:
 	echo "Successful: $$success" | tee -a "$$log_dir/summary.log"; \
 	echo "Failed: $$failed" | tee -a "$$log_dir/summary.log"; \
 	echo "Logs saved to: $$log_dir" | tee -a "$$log_dir/summary.log"; \
-	if [ $$failed -gt 0 ]; then \
+	if [ "$$failed" -gt 0 ]; then \
 		echo "" | tee -a "$$log_dir/summary.log"; \
 		echo "Failed cameras:" | tee -a "$$log_dir/summary.log"; \
-		echo -e "$$failed_cameras" | tee -a "$$log_dir/summary.log"; \
+		for f in "$$log_dir"/.fail.*; do \
+			[ -e "$$f" ] && basename "$$f" | sed 's/^\.fail\.//' | tee -a "$$log_dir/summary.log"; \
+		done; \
 		exit 1; \
 	fi
 
@@ -454,6 +452,6 @@ scriba:
 #   1. It would break non-buildroot targets (like when this rule incorrectly matched 'update')
 #   2. Buildroot targets will fail gracefully if config is missing
 #   3. Users should use 'make br-<target>' for buildroot targets, which includes check-config
-.DEFAULT: check-config
+.DEFAULT:
 	@$(TEAL) "$@"
 	$(BR2_MAKE) $@

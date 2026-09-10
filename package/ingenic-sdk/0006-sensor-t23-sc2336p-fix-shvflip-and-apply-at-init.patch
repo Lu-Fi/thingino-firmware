@@ -1,4 +1,4 @@
-From dae7b394ed0f1526ed81c0d134353b336232d99d Mon Sep 17 00:00:00 2001
+From 55f795f9b2294955977306b6d7f61307e3ab7dd2 Mon Sep 17 00:00:00 2001
 From: Lu-Fi <lutz@fiebach.de>
 Date: Thu, 10 Sep 2026 13:40:52 +0200
 Subject: [PATCH] sensor: t23 sc2336p, fix shvflip register bugs and apply at
@@ -17,14 +17,29 @@ a given streamer calls. Verified safe on a real C500 unit (T23,
 sc2336p) via a flat-field A/B test: no measurable LSC/shading
 mismatch (<0.3%) and no Bayer-phase break between this and the
 existing ISP-side flip.
+
+Changed the module's own default from 1 to 0 (matching every other
+sensor driver in this SDK, e.g. sc500ai.c, imx307.c): with shvflip
+now doing something real at init, any board that never explicitly
+set this param would have silently started flipping. Boards that
+already set shvflip=1 in BR2_SENSOR_1_PARAMS are unaffected.
 ---
- 3.10.14/sensor-src/t23/sc2336p.c | 24 ++++++++++++++++++++++--
- 1 file changed, 22 insertions(+), 2 deletions(-)
+ 3.10.14/sensor-src/t23/sc2336p.c | 26 +++++++++++++++++++++++---
+ 1 file changed, 23 insertions(+), 3 deletions(-)
 
 diff --git a/3.10.14/sensor-src/t23/sc2336p.c b/3.10.14/sensor-src/t23/sc2336p.c
-index ee9f15e6..06a78f3e 100644
+index ee9f15e6..1866c1aa 100644
 --- a/3.10.14/sensor-src/t23/sc2336p.c
 +++ b/3.10.14/sensor-src/t23/sc2336p.c
+@@ -70,7 +70,7 @@ static int data_interface = TX_SENSOR_DATA_INTERFACE_MIPI;
+ module_param(data_interface, int, S_IRUGO);
+ MODULE_PARM_DESC(data_interface, "Sensor Date interface");
+ 
+-static int shvflip = 1;
++static int shvflip = 0;
+ module_param(shvflip, int, S_IRUGO);
+ MODULE_PARM_DESC(shvflip, "Sensor HV Flip Enable interface");
+ 
 @@ -1118,6 +1118,8 @@ static int sensor_get_black_pedestal(struct tx_isp_subdev *sd, int value)
  	return 0;
  }

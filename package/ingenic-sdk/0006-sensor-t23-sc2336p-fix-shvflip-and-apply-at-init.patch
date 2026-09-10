@@ -1,0 +1,82 @@
+From dae7b394ed0f1526ed81c0d134353b336232d99d Mon Sep 17 00:00:00 2001
+From: Lu-Fi <lutz@fiebach.de>
+Date: Thu, 10 Sep 2026 13:40:52 +0200
+Subject: [PATCH] sensor: t23 sc2336p, fix shvflip register bugs and apply at
+ init
+
+sensor_set_vflip() had two bugs: the register read clobbered the read
+value with sensor_read's own return code, and case 3 (combined H+V)
+used &= instead of |=, so it always wrote 0x00 regardless of intent.
+Fixed both (matching the correct t40 copy of this driver).
+
+Also call sensor_set_vflip(sd, 3) from sensor_init() when shvflip=1
+(module param, e.g. BR2_SENSOR_1_PARAMS), so a sensor mounted 180deg
+rotated relative to its housing self-corrects at the register level
+for every IMP client, independent of which ISP tuning API (if any)
+a given streamer calls. Verified safe on a real C500 unit (T23,
+sc2336p) via a flat-field A/B test: no measurable LSC/shading
+mismatch (<0.3%) and no Bayer-phase break between this and the
+existing ISP-side flip.
+---
+ 3.10.14/sensor-src/t23/sc2336p.c | 24 ++++++++++++++++++++++--
+ 1 file changed, 22 insertions(+), 2 deletions(-)
+
+diff --git a/3.10.14/sensor-src/t23/sc2336p.c b/3.10.14/sensor-src/t23/sc2336p.c
+index ee9f15e6..06a78f3e 100644
+--- a/3.10.14/sensor-src/t23/sc2336p.c
++++ b/3.10.14/sensor-src/t23/sc2336p.c
+@@ -1118,6 +1118,8 @@ static int sensor_get_black_pedestal(struct tx_isp_subdev *sd, int value)
+ 	return 0;
+ }
+ 
++static int sensor_set_vflip(struct tx_isp_subdev *sd, int enable);
++
+ static int sensor_init(struct tx_isp_subdev *sd, int enable)
+ {
+ 	struct tx_isp_sensor *sensor = sd_to_sensor_device(sd);
+@@ -1139,6 +1141,22 @@ static int sensor_init(struct tx_isp_subdev *sd, int enable)
+ 	if (ret)
+ 		return ret;
+ 
++	/* Board-level mount compensation: shvflip=1 (module param, e.g. from
++	 * BR2_SENSOR_1_PARAMS) means this sensor is physically mounted
++	 * rotated 180 deg relative to its housing. Apply the full H+V flip
++	 * directly here so every IMP client gets an already-corrected image
++	 * from the first frame, independent of which ISP tuning API (if
++	 * any) a given streamer calls. Must run after the mode table above
++	 * (register 0x0103 in that table resets the sensor and would wipe
++	 * this) and is safe to fail softly - a write error here shouldn't
++	 * block streaming, just leave the image un-mirrored.
++	 */
++	if (shvflip) {
++		ret = sensor_set_vflip(sd, 3);
++		if (ret)
++			ISP_ERROR("%s: failed to apply shvflip (%d)\n", __func__, ret);
++	}
++
+ 	ret = tx_isp_call_subdev_notify(sd, TX_ISP_EVENT_SYNC_SENSOR_ATTR, &sensor->video);
+ 	sensor->priv = wsize;
+ 
+@@ -1259,7 +1277,9 @@ static int sensor_set_vflip(struct tx_isp_subdev *sd, int enable)
+ 	int ret = 0;
+ 	uint8_t val;
+ 
+-	val = sensor_read(sd, 0x3221, &val);
++	ret = sensor_read(sd, 0x3221, &val);
++	if (ret < 0)
++		return ret;
+ 	switch(enable) {
+ 	case 0:
+ 		val &= 0x99;
+@@ -1271,7 +1291,7 @@ static int sensor_set_vflip(struct tx_isp_subdev *sd, int enable)
+ 		val = ((val & 0xF9) | 0x60);
+ 		break;
+ 	case 3:
+-		val &= 0x66;
++		val |= 0x66;
+ 		break;
+ 	}
+ 	ret += sensor_write(sd, 0x3221, val);
+-- 
+2.53.0
+

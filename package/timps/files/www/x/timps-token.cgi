@@ -36,11 +36,20 @@ port=$(sed -n 's/^[[:space:]]*http\.port[[:space:]]*=[[:space:]]*\([0-9]\{1,\}\)
 #
 # "tls" is kept for JS that predates "scheme" (a cached page, a partial
 # upgrade): true for either on-value, i.e. the old "use https://" meaning.
-https=$(sed -n 's/^[[:space:]]*http\.https[[:space:]]*=[[:space:]]*\([0-9A-Za-z]*\).*/\1/p' "$CONF" 2>/dev/null | head -n1 | tr 'A-Z' 'a-z')
+https=$(sed -n 's/^[[:space:]]*http\.https[[:space:]]*=[[:space:]]*\([0-9A-Za-z]*\).*/\1/p' "$CONF" 2>/dev/null | head -n1 | tr '[:upper:]' '[:lower:]')
 case "$https" in
-1 | true | yes | on) scheme=both; tls=true ;;
-2) scheme=https; tls=true ;;
-*) scheme=http; tls=false ;;
+	1 | true | yes | on)
+		scheme=both
+		tls=true
+		;;
+	2)
+		scheme=https
+		tls=true
+		;;
+	*)
+		scheme=http
+		tls=false
+		;;
 esac
 
 echo "Content-Type: application/json"

@@ -269,16 +269,20 @@ define TIMPS_INSTALL_TARGET_CMDS
 	# leaving it commented meant every TLS+WebUI image needed a manual
 	# post-flash edit before HTTPS actually worked.
 	#
-	# Also require BR2_PACKAGE_THINGINO_UHTTPD_HTTP_REDIRECT=y: that's what
-	# makes uhttpd actually redirect port 80 to 443 (see S60uhttpd's -q
-	# flag). Without it, http.https=1 makes timps's one preview port
-	# TLS-only while the WebUI keeps serving plain HTTP on :80 with no
-	# redirect - a page loaded over http:// then tries to fetch the stream
-	# over https:// with a self-signed cert and fails outright (no
-	# interstitial is possible for a subresource fetch). Gating on the
-	# redirect being wired up keeps page and stream on the same scheme.
+	# The value shipped is 1, which since timps v1.9.11 means BOTH schemes on
+	# the one port (per-connection, by a first-byte peek), not TLS-only - that
+	# is now 2. So an http:// WebUI page and an https:// one both reach the
+	# preview port with their own scheme, and the old mixed-content failure
+	# (http:// page, https:// subresource fetch, self-signed cert, no possible
+	# interstitial) cannot happen from this default any more.
+	#
+	# BR2_PACKAGE_THINGINO_UHTTPD_HTTP_REDIRECT=y is still required here: it
+	# is what makes uhttpd redirect :80 to :443 (see S60uhttpd's -q flag), so
+	# the WebUI itself lands on https and the preview follows it there. Keeping
+	# the gate means this default only appears on images that are coherently
+	# TLS end to end.
 	if [ "$(BR2_PACKAGE_TIMPS_TLS)" = "y" ] && [ "$(BR2_PACKAGE_THINGINO_UHTTPD_TLS)" = "y" ] && [ "$(BR2_PACKAGE_THINGINO_UHTTPD_HTTP_REDIRECT)" = "y" ]; then \
-		$(SED) 's|^# http.https .*|http.https    = 1                       # serve the HTTP port over TLS|' \
+		$(SED) 's|^# http.https .*|http.https    = 1                       # 0 plain, 1 http+https on one port, 2 TLS only|' \
 			$(TARGET_DIR)/etc/timps.conf; \
 	fi
 

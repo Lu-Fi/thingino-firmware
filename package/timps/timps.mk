@@ -276,12 +276,22 @@ define TIMPS_INSTALL_TARGET_CMDS
 	# (http:// page, https:// subresource fetch, self-signed cert, no possible
 	# interstitial) cannot happen from this default any more.
 	#
-	# BR2_PACKAGE_THINGINO_UHTTPD_HTTP_REDIRECT=y is still required here: it
-	# is what makes uhttpd redirect :80 to :443 (see S60uhttpd's -q flag), so
-	# the WebUI itself lands on https and the preview follows it there. Keeping
-	# the gate means this default only appears on images that are coherently
-	# TLS end to end.
-	if [ "$(BR2_PACKAGE_TIMPS_TLS)" = "y" ] && [ "$(BR2_PACKAGE_THINGINO_UHTTPD_TLS)" = "y" ] && [ "$(BR2_PACKAGE_THINGINO_UHTTPD_HTTP_REDIRECT)" = "y" ]; then \
+	# This used to ALSO require BR2_PACKAGE_THINGINO_UHTTPD_HTTP_REDIRECT=y,
+	# back when 1 meant TLS-only and the preview therefore had to be kept on
+	# whatever single scheme uhttpd ended up serving. Dropped, for three
+	# reasons: the tri-state removed the mismatch it guarded against; the
+	# symbol is force-selected alongside UHTTPD_TLS by
+	# BR2_PACKAGE_THINGINO_WEBSERVER_UHTTPD, so the condition could never be
+	# false when the one above it was true; and it had the failure backwards -
+	# redirect=n means :80 is not redirected, NOT that :443 is gone, so
+	# suppressing http.https=1 there is what left an https:// page facing a
+	# plaintext-only preview port (and no cert generated, since S95timps keys
+	# ensure_tls_certs() off this same value).
+	#
+	# Writing 1 is purely additive on any TLS-capable build - plaintext keeps
+	# working - so there is no image on which not writing it is the safer
+	# choice.
+	if [ "$(BR2_PACKAGE_TIMPS_TLS)" = "y" ] && [ "$(BR2_PACKAGE_THINGINO_UHTTPD_TLS)" = "y" ]; then \
 		$(SED) 's|^# http.https .*|http.https    = 1                       # 0 plain, 1 http+https on one port, 2 TLS only|' \
 			$(TARGET_DIR)/etc/timps.conf; \
 	fi

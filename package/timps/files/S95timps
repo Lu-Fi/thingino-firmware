@@ -45,9 +45,14 @@ ensure_tls_certs() {
 	# Both need a cert, and a missing one fails CLOSED (httpd.c): the listener
 	# is not bound at all, so http.https=2 without this would kill the HTTP
 	# port outright. rtsp.tls is still a plain boolean.
+	# webrtc.enabled is the third consumer: its DTLS identity is the same
+	# cert/key pair, and without one timpsd disables /webrtc/whep outright.
 	case "$(conf_get http.https | tr 'A-Z' 'a-z')" in
 		1 | 2 | true | yes | on) ;;
-		*) [ "$(conf_get rtsp.tls)" = "1" ] || return 0 ;;
+		*)
+			[ "$(conf_get rtsp.tls)" = "1" ] ||
+				[ "$(conf_get webrtc.enabled)" = "1" ] || return 0
+			;;
 	esac
 	crt=$(conf_get http.tls_cert)
 	key=$(conf_get http.tls_key)

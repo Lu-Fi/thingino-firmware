@@ -339,14 +339,18 @@
     const defaultStream = params.get("stream") || sessionStorage.getItem("ms.stream") || "0";
 
     // Player mode + jitter margin, both driven by the one #ms-latency select
-    // and persisted under the same sessionStorage key as before:
+    // and persisted in localStorage under "ms.latency" - unlike sessionStorage
+    // this survives closing the tab/browser, and since each camera is its own
+    // origin the choice is naturally per-camera with no extra keying needed:
     //   "0.5" / "1.5" / "3"  -> MSE/<video>, that many seconds behind live
     //   "rt"                 -> WebCodecs/canvas real-time player (no buffer)
     //   "whep"               -> RTCPeerConnection fed by POST /webrtc/whep
     // The numeric values keep their old meaning, so an "ms.latency" written by
     // an older build still restores the same margin here (and parseFloat("rt")
     // is NaN, so an older build reading a "rt" value falls back to 1.5s; the
-    // same is true of "whep").
+    // same is true of "whep"). If the restored mode turns out unavailable,
+    // refreshRtOption()/refreshWhepOption() below fall back to MSE and
+    // overwrite this key, so a stale "rt"/"whep" preference self-heals.
     const RT_VALUE = "rt";
     const WHEP_VALUE = "whep";
     const DEFAULT_MARGIN_S = 1.5;    // unchanged default: the <option selected> above
@@ -364,7 +368,7 @@
     let mode = "mse";                                    // "mse" | "rt" | "whep"
     let lastBufferedValue = String(DEFAULT_MARGIN_S);    // margin to return to from rt/whep
     (function readLatencyPref() {
-      const saved = sessionStorage.getItem("ms.latency");
+      const saved = localStorage.getItem("ms.latency");
       if (saved === RT_VALUE) { mode = "rt"; return; }
       if (saved === WHEP_VALUE) { mode = "whep"; return; }
       const n = parseMargin(saved);
@@ -380,7 +384,7 @@
                            typeof window.EncodedVideoChunk === "function";
     if (!HAVE_WEBCODECS) {
       if (rtOption) rtOption.remove();
-      if (mode === "rt") { mode = "mse"; sessionStorage.setItem("ms.latency", lastBufferedValue); }
+      if (mode === "rt") { mode = "mse"; localStorage.setItem("ms.latency", lastBufferedValue); }
     }
 
     // WebRTC availability, gate 1 of 2: the browser. Everything since ~2018 has
@@ -391,7 +395,7 @@
     const HAVE_WEBRTC = typeof window.RTCPeerConnection === "function";
     if (!HAVE_WEBRTC) {
       if (whepOption) whepOption.remove();
-      if (mode === "whep") { mode = "mse"; sessionStorage.setItem("ms.latency", lastBufferedValue); }
+      if (mode === "whep") { mode = "mse"; localStorage.setItem("ms.latency", lastBufferedValue); }
     }
 
     function syncLatencySelect() {
@@ -436,7 +440,7 @@
       syncLatencySelect();
       latencySelect.addEventListener("change", () => {
         const v = latencySelect.value;
-        sessionStorage.setItem("ms.latency", v);
+        localStorage.setItem("ms.latency", v);
         const newMode = v === RT_VALUE ? "rt" : v === WHEP_VALUE ? "whep" : "mse";
         if (newMode === "mse") {
           const n = parseMargin(v);
@@ -818,11 +822,20 @@
       if (!ok && mode === "rt") {
         mode = "mse";
         targetBehindS = parseMargin(lastBufferedValue) === null ? DEFAULT_MARGIN_S : parseMargin(lastBufferedValue);
-        sessionStorage.setItem("ms.latency", lastBufferedValue);
+        localStorage.setItem("ms.latency", lastBufferedValue);
         applyModeUi();
         applyModeAudio();
         setStatus("Real-time mode is H.264-only - this stream is " +
                   String(vcfg.codec).toUpperCase() + "; using buffered playback.");
+        // setStatus() alone gets overwritten by the buffered player's own
+        // "Connecting…"/"Connected" line within a second or two - same reason
+        // whepFallbackToMse() also raises a toast, so a restored "rt"
+        // preference that turns out unavailable is explained, not just silently
+        // dropped.
+        if (typeof window.showAlert === "function")
+          window.showAlert("warning", "Real-time mode needs H.264; this stream is " +
+                            String(vcfg.codec).toUpperCase() +
+                            ". Falling back to buffered playback.", 12000);
         if (running) stopStream("Switching player…").then(() => startStream());
       }
     }
@@ -1008,10 +1021,13 @@
     function rtFallbackToMse(why) {
       mode = "mse";
       targetBehindS = parseMargin(lastBufferedValue) === null ? DEFAULT_MARGIN_S : parseMargin(lastBufferedValue);
-      sessionStorage.setItem("ms.latency", lastBufferedValue);
+      localStorage.setItem("ms.latency", lastBufferedValue);
       if (rtOption) { rtOption.disabled = true; rtOption.title = why; }
       applyModeUi();
       applyModeAudio();
+      // See whepFallbackToMse() for why this needs a toast, not just setStatus().
+      if (typeof window.showAlert === "function")
+        window.showAlert("warning", "Real-time mode: " + why + " Falling back to buffered playback.", 12000);
       stopStream(why + " - switched to buffered playback.").then(() => startStream());
     }
 
@@ -1346,7 +1362,7 @@
       mode = "mse";
       const n = parseMargin(lastBufferedValue);
       targetBehindS = n === null ? DEFAULT_MARGIN_S : n;
-      sessionStorage.setItem("ms.latency", lastBufferedValue);
+      localStorage.setItem("ms.latency", lastBufferedValue);
       if (whepOption && permanent) { whepOption.disabled = true; whepOption.title = why; }
       applyModeUi();
       applyModeAudio();

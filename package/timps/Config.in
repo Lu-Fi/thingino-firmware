@@ -113,12 +113,16 @@ config BR2_PACKAGE_TIMPS_WEBRTC
 	depends on BR2_PACKAGE_TIMPS_TLS
 	depends on BR2_PACKAGE_TIMPS_CONTROL
 	select BR2_PACKAGE_MBEDTLS_DTLS_SRTP
-	default n
+	default y
 	help
 	  Serve a WHEP-shaped signalling endpoint at POST /webrtc/whep on the
 	  http port: the browser posts its SDP offer, the camera answers as an
 	  ICE-lite peer with a single host candidate and completes the DTLS
 	  handshake as the passive side.
+
+	  timps's own runtime default for webrtc.enabled is 1 (on, TLS
+	  required for signalling wherever the http port has it) whenever
+	  this is compiled in - see the Configuration Reference wiki page.
 
 	  Media is H264 video over SRTP (SRTP_AES128_CM_HMAC_SHA1_80), plus
 	  G.711 audio when audio.codec is pcmu/pcma (an audio m-section is

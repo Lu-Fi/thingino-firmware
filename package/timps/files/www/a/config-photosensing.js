@@ -48,33 +48,47 @@
 
   /* ---- timps part: enabled + gain thresholds + override mode ---------- */
 
-  var NUM_FIELDS = [
+  var INT_FIELDS = [
     "total_gain_night_threshold", "total_gain_day_threshold",
-    "sun_latitude", "sun_longitude",
-    "sun_sunrise_offset_min", "sun_sunset_offset_min",
+    "day_confirm_s", "probe_confirm_s", "probe_min_gap_s",
+    "heartbeat_s", "heartbeat_max_s", "interval_ms",
   ];
   var STR_FIELDS = ["time_night_start", "time_day_start"];
+  // constants since the 2026-08-22 consolidation (see the DN_* block in
+  // daynight.h) - reported by timps, shown, not settable
+  var FIXED_FIELDS = ["probe_jump_pct", "ref_delay_s", "boot_settle_s"];
+
+  // timps stores only auto/schedule; which calendar applies is derived from
+  // whether a time window is set (config.h). This selector stays three-way
+  // because the two calendars need different sub-fields.
+  function uiMode(dnMode, night, day) {
+    if (dnMode !== "schedule") return "sensor";
+    return (night && day) ? "time" : "sun";
+  }
 
   function fillTimps(dn) {
     dn = dn || {};
     var en = $("daynight_enabled");
     if (en) en.checked = (dn.enabled === true || dn.enabled === 1);
+    var bp = $("daynight_boot_probe");
+    if (bp) bp.checked = (dn.boot_probe === true || dn.boot_probe === 1);
 
     var mode = $("daynight_mode");
-    if (mode && typeof dn.dn_mode === "string") mode.value = dn.dn_mode;
+    if (mode && typeof dn.dn_mode === "string")
+      mode.value = uiMode(dn.dn_mode, dn.time_night_start, dn.time_day_start);
 
-    // gain thresholds + adaptive/boot tunables are rounded ints; the rest
-    // keep their given value
-    ["total_gain_night_threshold", "total_gain_day_threshold",
-     "day_gain_pct", "baseline_delay_s", "night_reconfirm_s",
-     "boot_settle_s", "boot_settle_max_s", "boot_stable_pct"].forEach(function (k) {
+    INT_FIELDS.forEach(function (k) {
       var el = $("daynight_" + k);
       if (!el) return;
       var v = dn[k];
       el.value = (v === null || typeof v === "undefined") ? "" : Math.round(v);
     });
+    FIXED_FIELDS.forEach(function (k) {
+      var el = $("daynight_" + k);
+      if (el) el.textContent = (typeof dn[k] === "number") ? Math.round(dn[k]) : "-";
+    });
 
-    // read-only adaptive-baseline feedback (only meaningful in night mode;
+    // read-only night-reference feedback (only meaningful in night mode;
     // timps reports -1 when none is in effect)
     var nb = $("daynight_night_baseline");
     var dt = $("daynight_day_trigger");
@@ -108,12 +122,13 @@
     var en = $("daynight_enabled");
     if (en) out.enabled = !!en.checked;
 
+    var bp = $("daynight_boot_probe");
+    if (bp) out.boot_probe = bp.checked ? 1 : 0;
+
     var mode = $("daynight_mode");
     if (mode) out.mode = mode.value;
 
-    ["total_gain_night_threshold", "total_gain_day_threshold",
-     "day_gain_pct", "baseline_delay_s", "night_reconfirm_s",
-     "boot_settle_s", "boot_settle_max_s", "boot_stable_pct"].forEach(function (k) {
+    INT_FIELDS.forEach(function (k) {
       var el = $("daynight_" + k);
       if (!el) return;
       var v = parseInt(el.value, 10);
@@ -231,48 +246,45 @@
 
   /* ---- live sync: another open tab/client changing a timps field ------- */
 
+  // config.c echoes SSE/GET under the canonical day_gain/night_gain name, not
+  // the pre-2026-08-17 alias this page's two threshold fields still use.
+  // Everything else follows the "daynight_<key>" id convention.
   var TIMPS_REVERSE = {
-    "daynight.enabled": "daynight_enabled",
-    "daynight.mode": "daynight_mode",
-    // config.c echoes SSE/GET under the canonical day_gain/night_gain name,
-    // not the pre-2026-08-17 alias this page's field ids still use.
     "daynight.night_gain": "daynight_total_gain_night_threshold",
     "daynight.day_gain": "daynight_total_gain_day_threshold",
-    "daynight.time_night_start": "daynight_time_night_start",
-    "daynight.time_day_start": "daynight_time_day_start",
-    "daynight.sun_latitude": "daynight_sun_latitude",
-    "daynight.sun_longitude": "daynight_sun_longitude",
-    "daynight.sun_sunrise_offset_min": "daynight_sun_sunrise_offset_min",
-    "daynight.sun_sunset_offset_min": "daynight_sun_sunset_offset_min",
   };
+
+  // the section guard matters: without it a key like "record.enabled" would
+  // fall back onto "daynight_enabled"
+  function fieldId(key) {
+    if (key.indexOf("daynight.") !== 0) return null;
+    return TIMPS_REVERSE[key] || "daynight_" + key.slice(9);
+  }
 
   // write one "daynight.<key>" value into its field - shared by the config-
   // sync push and the save-time "applied" corrections, so a clamped value
-  // renders exactly like a remote edit. Field ids follow the "daynight_<key>"
-  // convention, so the adaptive/boot tunables resolve without their own
-  // TIMPS_REVERSE entries. The section guard matters: without it a key like
-  // "record.enabled" would fall back onto "daynight_enabled".
+  // renders exactly like a remote edit.
   function applyTimpsKV(key, value) {
-    if (key.indexOf("daynight.") !== 0) return;
-    var id = TIMPS_REVERSE[key] || "daynight_" + key.split(".").pop();
-    var el = $(id);
+    var id = fieldId(key);
+    var el = id ? $(id) : null;
     if (!el) return;
-    if (id === "daynight_enabled") {
+    if (el.type === "checkbox") {
       el.checked = (value === "1" || value === "true");
     } else if (id === "daynight_mode") {
-      el.value = value;
+      var n = $("daynight_time_night_start"), d = $("daynight_time_day_start");
+      el.value = uiMode(value, n && n.value, d && d.value);
       syncModeUI();
-    } else if (key.indexOf("threshold") !== -1) {
+    } else if (id.indexOf("threshold") !== -1) {
       el.value = Math.round(Number(value));
     } else {
-      el.value = value;   // times ("HH:MM"), lat/long, offsets
+      el.value = value;   // times ("HH:MM"), lat/long, offsets, the s/ms ints
     }
   }
 
   function onConfigEvent(type, data) {
     if (!data) return;
     if (data.resync) { load(); return; }
-    var id = TIMPS_REVERSE[data.key];
+    var id = fieldId(data.key);
     var el = id ? $(id) : null;
     // don't fight the user mid-edit on this same field
     if (!el || document.activeElement === el) return;

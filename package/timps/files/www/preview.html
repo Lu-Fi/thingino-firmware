@@ -148,16 +148,33 @@
 
     <section>
       <div class="card mb-3">
-        <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
-          <div style="flex:1 1 0%; min-width:0;">
-            <h2 class="card-title mb-0">timps Live View</h2>
-            <small id="ms-format-desc">Native fMP4 player (no iframe), stream from port 8880</small>
+        <div class="card-header">
+          <h2 class="card-title mb-0">timps Live View</h2>
+          <small id="ms-format-desc">Native fMP4 player (no iframe), stream from port 8880</small>
+        </div>
+        <div class="card-body">
+          <div class="ms-video-wrap">
+            <video id="ms-video" autoplay muted controls playsinline disableremoteplayback></video>
+            <canvas id="ms-canvas" style="display:none" aria-hidden="true"></canvas>
+            <canvas id="motion-overlay" style="display:none" aria-hidden="true"></canvas>
+            <div class="position-absolute top-50 start-50 translate-middle text-center" id="ms-connecting-overlay" style="display:none;">
+              <div class="spinner-border text-light mb-2" role="status" style="width:3rem;height:3rem;">
+                <span class="visually-hidden">Connecting...</span>
+              </div>
+              <div class="text-light small">Connecting...</div>
+            </div>
+            <!-- THINGINO_PLUGIN_PREVIEW_BODY -->
           </div>
-          <!-- No flex-shrink-0: the caption's flex:1 1 0% above is what keeps
-               this row on the header's first line at desktop widths, and
-               locking the row at its max-content width instead overflowed the
-               whole document on a phone. -->
-          <div class="d-flex flex-wrap gap-2">
+          <div class="ms-hint mt-2" id="ms-status"></div>
+          <!-- talk-channel state, written only by /a/preview-talk.js. Its own
+               element rather than sharing #ms-status: the player writes that
+               one continuously and the two would clobber each other. -->
+          <div class="ms-hint mt-1" id="ms-talk-status" style="display:none"></div>
+        </div>
+        <!-- Control bar pinned to the bottom edge of the card, like a
+             conventional video player's control strip, rather than the
+             header where it used to sit. -->
+        <div class="card-footer d-flex flex-wrap justify-content-end align-items-center gap-2">
             <select class="form-select form-select-sm" id="ms-stream" title="Select stream" style="width:auto; min-width: 140px;">
               <option value="0">Main stream</option>
               <option value="1">Sub stream</option>
@@ -201,26 +218,6 @@
             <button type="button" class="btn btn-outline-secondary" id="ms-connect" title="Connect/Disconnect stream">
               <i class="bi bi-play-circle"></i> Connect
             </button>
-          </div>
-        </div>
-        <div class="card-body">
-          <div class="ms-video-wrap">
-            <video id="ms-video" autoplay muted controls playsinline disableremoteplayback></video>
-            <canvas id="ms-canvas" style="display:none" aria-hidden="true"></canvas>
-            <canvas id="motion-overlay" style="display:none" aria-hidden="true"></canvas>
-            <div class="position-absolute top-50 start-50 translate-middle text-center" id="ms-connecting-overlay" style="display:none;">
-              <div class="spinner-border text-light mb-2" role="status" style="width:3rem;height:3rem;">
-                <span class="visually-hidden">Connecting...</span>
-              </div>
-              <div class="text-light small">Connecting...</div>
-            </div>
-            <!-- THINGINO_PLUGIN_PREVIEW_BODY -->
-          </div>
-          <div class="ms-hint mt-2" id="ms-status"></div>
-          <!-- talk-channel state, written only by /a/preview-talk.js. Its own
-               element rather than sharing #ms-status: the player writes that
-               one continuously and the two would clobber each other. -->
-          <div class="ms-hint mt-1" id="ms-talk-status" style="display:none"></div>
         </div>
       </div>
     </section>

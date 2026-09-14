@@ -234,8 +234,10 @@
   var TIMPS_REVERSE = {
     "daynight.enabled": "daynight_enabled",
     "daynight.mode": "daynight_mode",
-    "daynight.total_gain_night_threshold": "daynight_total_gain_night_threshold",
-    "daynight.total_gain_day_threshold": "daynight_total_gain_day_threshold",
+    // config.c echoes SSE/GET under the canonical day_gain/night_gain name,
+    // not the pre-2026-08-17 alias this page's field ids still use.
+    "daynight.night_gain": "daynight_total_gain_night_threshold",
+    "daynight.day_gain": "daynight_total_gain_day_threshold",
     "daynight.time_night_start": "daynight_time_night_start",
     "daynight.time_day_start": "daynight_time_day_start",
     "daynight.sun_latitude": "daynight_sun_latitude",

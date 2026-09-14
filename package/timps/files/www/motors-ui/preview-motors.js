@@ -884,7 +884,6 @@ document.addEventListener("DOMContentLoaded", async function () {
       return;
     }
 
-    const hud = $("#motor-drag-hud");
     const motorEl = $("#motor");
     if (motorEl) motorEl.classList.add("drag-mode");
     surface.hidden = false;
@@ -960,32 +959,16 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
 
     function recompute() {
+      if (!armed) return;
       const dx = pointer.x - anchor.x;
       const dy = pointer.y - anchor.y;
-      let clamped = false;
-      if (armed) {
-        const lim = limits();
-        // Pan-a-photo: this camera's motor X grows the same way as the
-        // panned content does on screen (confirmed on hardware), so X
-        // tracks the drag directly. Motor Y is the opposite of screen Y.
-        const rawX = anchorPos.x + dx * stepsPerPx;
-        const rawY = anchorPos.y - dy * stepsPerPx;
-        target = { x: clamp(rawX, lim.x), y: clamp(rawY, lim.y) };
-        clamped =
-          target.x !== Math.round(rawX) || target.y !== Math.round(rawY);
-      }
-      if (!hud) return;
-      const box = surface.getBoundingClientRect();
-      hud.style.width = Math.hypot(dx, dy).toFixed(1) + "px";
-      hud.style.transform =
-        "translate(" +
-        (anchor.x - box.left) +
-        "px," +
-        (anchor.y - box.top) +
-        "px) rotate(" +
-        Math.atan2(dy, dx).toFixed(4) +
-        "rad)";
-      hud.classList.toggle("clamped", clamped);
+      const lim = limits();
+      // Pan-a-photo: this camera's motor X moves opposite the panned
+      // content on screen (confirmed on hardware). Motor Y is likewise
+      // opposite screen Y.
+      const rawX = anchorPos.x - dx * stepsPerPx;
+      const rawY = anchorPos.y + dy * stepsPerPx;
+      target = { x: clamp(rawX, lim.x), y: clamp(rawY, lim.y) };
     }
 
     function runCgi(args) {
@@ -1016,8 +999,8 @@ document.addEventListener("DOMContentLoaded", async function () {
       const span = (box ? box.w : 0) / 2 || 1;
       const deflect = (d) =>
         Math.max(-1000, Math.min(1000, Math.round((d / span) * 1000)));
-      const vx = deflect(pointer.x - anchor.x);
-      const vy = deflect(anchor.y - pointer.y);
+      const vx = deflect(anchor.x - pointer.x);
+      const vy = deflect(pointer.y - anchor.y);
       if (motorWs.trySend({ cmd: "vector", x: vx, y: vy })) return;
       const params = window.motorParams || {};
       const x = Math.round(((Number(params.steps_pan) / 100 || 0) * vx) / 1000);
@@ -1074,10 +1057,6 @@ document.addEventListener("DOMContentLoaded", async function () {
       if (!dragging) return;
       dragging = false;
       surface.classList.remove("dragging");
-      if (hud) {
-        hud.style.width = "0";
-        hud.classList.remove("clamped");
-      }
       if (fallbackTimer) {
         clearTimeout(fallbackTimer);
         fallbackTimer = null;

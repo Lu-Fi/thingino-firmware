@@ -114,50 +114,6 @@
   cursor: grabbing;
 }
 
-/* Anchor-to-pointer line. Sized by width and only rotated - never scaleX -
- * so the ring below stays round. */
-#motor-drag-hud {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 0;
-  height: 2px;
-  margin-top: -1px;
-  background: #ff8800;
-  transform-origin: 0 50%;
-  opacity: 0;
-  pointer-events: none;
-}
-
-#motor-drag.dragging #motor-drag-hud {
-  opacity: 1;
-}
-
-#motor-drag-hud::before {
-  content: ""; /* ring at the anchor point */
-  position: absolute;
-  left: -8px;
-  top: 50%;
-  width: 16px;
-  height: 16px;
-  margin-top: -8px;
-  box-sizing: border-box;
-  border-radius: 50%;
-  background: #ff8800cc;
-  border: 2px solid #fffffff2;
-  box-shadow: 0 2px 8px #000000a6;
-}
-
-/* Target pinned at a travel limit: dragging further changes nothing. */
-#motor-drag-hud.clamped {
-  background: #ffffff59;
-}
-
-#motor-drag-hud.clamped::before {
-  background: #ffffff59;
-  border-color: #ffffff8c;
-}
-
 /* Live position readout: pan (left/right) as a horizontal bar under the
  * ring, tilt (up/down) as a vertical one beside it - both positioned off
  * --motor-stick-size, hidden individually by sizeStick() when they don't

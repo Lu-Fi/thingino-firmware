@@ -355,7 +355,9 @@
 
   function initFavorites(row, anchorBtn) {
     const wrap = document.createElement("div");
-    wrap.className = "dropdown";
+    // plain "dropdown" doesn't stretch its button child to the row's
+    // height like the row's other direct-child buttons get by default
+    wrap.className = "dropdown d-flex";
 
     const btn = document.createElement("button");
     btn.type = "button";

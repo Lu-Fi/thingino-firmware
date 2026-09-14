@@ -6,6 +6,11 @@
  * nothing at all. This page just pages through that ring with a cursor -
  * backfill with ?last=N on load, then follow "next" - so a graph opened after
  * an hour of not looking still shows the hour.
+ *
+ * daynight.history_s defaults to 0, so a camera nobody watches carries no ring
+ * at all. Opening this page is what turns it on, and closing it hands it back -
+ * unless "collect in background" is on, which is the whole point of the daemon
+ * holding the series in the first place.
  */
 (function () {
   const chartCanvas = $("#dataChart");
@@ -13,6 +18,37 @@
 
   const POLL_MS = 10000;        // matches the daemon's sample period
   const POLL_HIDDEN_MS = 60000; // still collecting server-side; just look less
+  const RETAIN_S = 14400;       // 4 h, what opening the page turns collection on to
+
+  // Best-effort viewer set, so a second tab on this camera does not lose its
+  // series when the first one closes. localStorage is per-origin and the origin
+  // IS the camera, so nothing here needs to name a host. Entries are
+  // heartbeated and pruned, so a tab that crashed expires instead of pinning
+  // collection on forever. Other browsers and devices are invisible to this,
+  // and deliberately so: a LAN tuning page does not need a distributed viewer
+  // count, it needs to not break the two-tabs case.
+  const VIEWERS_KEY = "timps.dnhist.viewers";
+  const VIEWER_STALE_MS = 45000;
+
+  function viewerBeat(id, alive) {
+    let others = 0;
+    try {
+      const now = Date.now();
+      const m = JSON.parse(localStorage.getItem(VIEWERS_KEY) || "{}");
+      if (alive) m[id] = now; else delete m[id];
+      Object.keys(m).forEach((k) => {
+        if (now - m[k] > VIEWER_STALE_MS) delete m[k];
+        else if (k !== id) others += 1;
+      });
+      localStorage.setItem(VIEWERS_KEY, JSON.stringify(m));
+    } catch (e) { /* storage off: assume we are the only viewer */ }
+    return others;
+  }
+
+  function fmtDur(s) {
+    if (s >= 3600) return `${Math.round(s / 360) / 10} h`;
+    return s >= 60 ? `${Math.round(s / 60)} min` : `${s} s`;
+  }
 
   class SensorDataCollector {
     constructor() {
@@ -26,6 +62,13 @@
       this.nightThreshold = null;
       this.dayThreshold = null;
       this.timer = null;
+      this.retainS = null;   // the daemon's live daynight.history_s
+      this.sawRetain = false;
+      this.bgCollect = false;
+      this.weEnabled = false; // this tab owes the daemon a history_s = 0
+      this.acquiring = false;
+      this.viewerId = `${Date.now()}.${String(Math.random()).slice(2, 8)}`;
+      this.token = "";
 
       this.metrics = [
         { key: "exposure", label: "Exposure Index", color: "#FF6384" },
@@ -40,8 +83,25 @@
     init() {
       this.setupEventListeners();
       this.initChart();
+      this.othersAtLoad = viewerBeat(this.viewerId, true);
+      // cached ahead of time: the teardown runs during unload, where there is
+      // no room left for the token round trip
+      if (window.timpsApi) {
+        window.timpsApi.token().then((t) => { this.token = t || ""; });
+      }
       this.reload();
       document.addEventListener("visibilitychange", () => this.schedule());
+      // pagehide, not visibilitychange: a backgrounded tab must keep collecting
+      // (that is what the daemon-side ring is FOR), only a real close or
+      // navigation hands it back. No beforeunload listener - it would cost
+      // bfcache eligibility and covers nothing pagehide misses.
+      window.addEventListener("pagehide", () => this.release());
+      window.addEventListener("pageshow", (e) => {
+        if (!e.persisted) return;   // restored from bfcache: re-acquire
+        viewerBeat(this.viewerId, true);
+        this.sawRetain = false;
+        this.reload();
+      });
     }
 
     setupEventListeners() {
@@ -62,6 +122,10 @@
       }
       if (exportCsvBtn) {
         exportCsvBtn.addEventListener("click", () => this.exportCSV());
+      }
+      const bgBox = $("#bg-collect");
+      if (bgBox) {
+        bgBox.addEventListener("change", (e) => this.setBackground(e.target.checked));
       }
       pointButtons.forEach((btn) => {
         btn.addEventListener("click", (e) => {
@@ -148,9 +212,75 @@
     /* ---- data ---------------------------------------------------------- */
 
     schedule() {
+      viewerBeat(this.viewerId, true);
       clearTimeout(this.timer);
       this.timer = setTimeout(() => this.poll(),
                               document.hidden ? POLL_HIDDEN_MS : POLL_MS);
+    }
+
+    /* ---- collection on/off --------------------------------------------- */
+
+    // opening the page is the enable: the graph fills by itself, the way it did
+    // before the series moved into the daemon.
+    acquire() {
+      if (this.retainS || this.acquiring || !window.timpsApi) return;
+      this.acquiring = true;
+      window.timpsApi.set({ daynight: { history_s: RETAIN_S } }).then(
+        () => {
+          this.acquiring = false;
+          this.retainS = RETAIN_S;
+          this.weEnabled = true;
+          this.syncBgUi();
+          this.schedule();
+        },
+        () => { this.acquiring = false; },
+      );
+    }
+
+    // Runs during unload, so: no promises, no token fetch, and a text/plain
+    // body - a preflight is not guaranteed to be sent at all at this point, and
+    // text/plain keeps this a simple cross-origin request that needs none.
+    release() {
+      const others = viewerBeat(this.viewerId, false);
+      if (this.bgCollect || !this.weEnabled || others || !window.timpsApi) return;
+      this.weEnabled = false;
+      const url = window.timpsApi.base() + "/control"
+                + (this.token ? `?token=${encodeURIComponent(this.token)}` : "");
+      const body = JSON.stringify({ daynight: { history_s: 0 } });
+      try {
+        if (navigator.sendBeacon(url, new Blob([body], { type: "text/plain" })))
+          return;
+      } catch (e) { /* fall through */ }
+      try {
+        fetch(url, {
+          method: "POST", body, keepalive: true,
+          headers: { "Content-Type": "text/plain" },
+        }).catch(() => {});
+      } catch (e) { /* nothing left to try */ }
+    }
+
+    // The switch only decides what happens on CLOSE. Turning it off while the
+    // page is open must not stop the graph mid-session - it just makes the
+    // teardown ours, even if it was the config or another session that started
+    // collection.
+    setBackground(on) {
+      this.bgCollect = on;
+      if (on) this.acquire();
+      else this.weEnabled = true;
+      this.syncBgUi();
+    }
+
+    syncBgUi() {
+      const box = $("#bg-collect");
+      if (box) box.checked = this.bgCollect;
+      const note = $("#bg-collect-note");
+      if (!note) return;
+      if (!this.retainS) note.textContent = "— not recording";
+      else if (this.bgCollect)
+        note.textContent = `— keeps recording a ${fmtDur(this.retainS)} window after this page is`
+                         + " closed, until the camera restarts";
+      else
+        note.textContent = "— recording for this visit; closing this page stops it";
     }
 
     // full backfill: ask from the newest maxPoints samples and follow "next"
@@ -184,6 +314,21 @@
       this.head = Number(d.head);
       if (isFinite(Number(d.night_gain))) this.nightThreshold = Number(d.night_gain);
       if (isFinite(Number(d.day_gain))) this.dayThreshold = Number(d.day_gain);
+
+      // the switch tracks the daemon, never a remembered local state: already
+      // collecting when we arrived means someone asked for it to survive a
+      // closed page - the config, or another session's switch. Unless a sibling
+      // tab was already registered, in which case the collection is THAT tab's
+      // visit and claiming otherwise would strand it running forever once both
+      // are closed. We also never took ownership (weEnabled stays false), so a
+      // wrongly-off switch here still cannot tear down someone else's series.
+      this.retainS = Number(d.retain_s) || 0;
+      if (!this.sawRetain) {
+        this.sawRetain = true;
+        this.bgCollect = this.retainS > 0 && !this.othersAtLoad;
+      }
+      if (!this.retainS) this.acquire();
+      this.syncBgUi();
 
       // our cursor fell out of the ring's retained window: the series has a
       // hole, so refetch it whole rather than splicing across the gap
@@ -340,8 +485,8 @@
     async clearData() {
       const confirmed = await confirm("Clear all data?");
       if (!confirmed) return;
-      // only the local view: the daemon's ring keeps its series (set
-      // daynight.history_s = 0 to stop collecting altogether)
+      // only the local view: the daemon's ring keeps its series (the switch
+      // below is what decides whether it keeps collecting)
       this.samples = [];
       this.render();
     }

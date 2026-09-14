@@ -870,12 +870,12 @@ document.addEventListener("DOMContentLoaded", async function () {
       });
   }
 
-  // Drag-to-pan. The joystick is a rate control; this one moves the camera
-  // opposite the drag, so the image content itself tracks the finger like
-  // panning a photo, landing where it is released. Streaming absolute
-  // targets is safe by construction: motor_ctl_absolute() re-reads the live
-  // position and recomputes its own delta per command, so a superseded
-  // target costs nothing.
+  // Drag-to-pan. The joystick is a rate control; this one maps the drag
+  // straight onto an absolute motor target, so the image content tracks
+  // the finger like panning a photo, landing where it is released.
+  // Streaming absolute targets is safe by construction: motor_ctl_absolute()
+  // re-reads the live position and recomputes its own delta per command,
+  // so a superseded target costs nothing.
   function bindDragControls(signal) {
     const surface = $("#motor-drag");
     if (!surface) {
@@ -965,12 +965,11 @@ document.addEventListener("DOMContentLoaded", async function () {
       let clamped = false;
       if (armed) {
         const lim = limits();
-        // Pan-a-photo, not point-with-a-joystick: the content under the
-        // finger should track it, so the camera moves opposite the drag.
-        // Screen y grows downward, motor y grows upward - two flips, so y
-        // ends up with the same sign as the raw delta.
-        const rawX = anchorPos.x - dx * stepsPerPx;
-        const rawY = anchorPos.y + dy * stepsPerPx;
+        // Pan-a-photo: this camera's motor X grows the same way as the
+        // panned content does on screen (confirmed on hardware), so X
+        // tracks the drag directly. Motor Y is the opposite of screen Y.
+        const rawX = anchorPos.x + dx * stepsPerPx;
+        const rawY = anchorPos.y - dy * stepsPerPx;
         target = { x: clamp(rawX, lim.x), y: clamp(rawY, lim.y) };
         clamped =
           target.x !== Math.round(rawX) || target.y !== Math.round(rawY);
@@ -1017,8 +1016,8 @@ document.addEventListener("DOMContentLoaded", async function () {
       const span = (box ? box.w : 0) / 2 || 1;
       const deflect = (d) =>
         Math.max(-1000, Math.min(1000, Math.round((d / span) * 1000)));
-      const vx = deflect(anchor.x - pointer.x);
-      const vy = deflect(pointer.y - anchor.y);
+      const vx = deflect(pointer.x - anchor.x);
+      const vy = deflect(anchor.y - pointer.y);
       if (motorWs.trySend({ cmd: "vector", x: vx, y: vy })) return;
       const params = window.motorParams || {};
       const x = Math.round(((Number(params.steps_pan) / 100 || 0) * vx) / 1000);

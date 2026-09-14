@@ -56,6 +56,12 @@
                     <button type="button" class="btn btn-outline-secondary dropdown-toggle" aria-label="Open slider"></button>
                   </span>
                 </p>
+                <p class="form-switch">
+                  <input type="hidden" id="daynight_diagnose_thresholds-false" name="daynight_diagnose_thresholds" value="false">
+                  <input type="checkbox" id="daynight_diagnose_thresholds" name="daynight_diagnose_thresholds" value="true" role="switch" class="form-check-input">
+                  <label for="daynight_diagnose_thresholds" class="form-check-label">Warn when the day threshold looks unreachable</label>
+                </p>
+                <small class="text-secondary">When three probes in a row find night and the scene never came close to the day threshold, log once which value to raise &ldquo;switch to day mode below&rdquo; above.</small>
               </div>
               <div class="col">
                 <h4>Controls</h4>
@@ -87,18 +93,26 @@
                 </p>
               </div>
               <div class="col">
-                <h4>Override Mode</h4>
-                <small>Choose what drives the Day/Night decision</small>
+                <h4>Decision source</h4>
+                <small>What decides Day/Night, and which calendar it may use</small>
                 <p class="mt-3">
-                  <label for="daynight_mode" class="form-label">Decision source</label>
+                  <label for="daynight_mode" class="form-label">Decided by</label>
                   <select id="daynight_mode" name="daynight_mode" class="form-select">
-                    <option value="sensor">Sensor (light level)</option>
+                    <option value="auto">Light level (sensor and probes)</option>
+                    <option value="schedule">The calendar alone</option>
+                  </select>
+                </p>
+                <p>
+                  <label for="daynight_calendar" class="form-label">Calendar</label>
+                  <select id="daynight_calendar" name="daynight_calendar" class="form-select">
+                    <option value="none">None</option>
                     <option value="time">Fixed time window</option>
                     <option value="sun">Sunrise / sunset</option>
                   </select>
+                  <small class="text-secondary">The camera stores one calendar, not a choice between two, so picking one clears the other one's values on save. With &ldquo;Light level&rdquo; a calendar is optional - it only sharpens when a forced probe is due.</small>
                 </p>
 
-                <!-- Fixed time window (mode=time) -->
+                <!-- Fixed time window (calendar=time) -->
                 <div id="daynight_time_fields" hidden>
                   <p>
                     <label for="daynight_time_night_start">Switch to night at</label>
@@ -111,7 +125,7 @@
                   <small class="text-secondary">Local camera clock. The night window may wrap past midnight (e.g. night 20:00, day 06:30).</small>
                 </div>
 
-                <!-- Sunrise / sunset (mode=sun) -->
+                <!-- Sunrise / sunset (calendar=sun) -->
                 <div id="daynight_sun_fields" hidden>
                   <div class="row g-2">
                     <p class="col">

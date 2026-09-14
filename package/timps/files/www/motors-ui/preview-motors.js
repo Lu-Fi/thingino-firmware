@@ -892,8 +892,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     const SEND_INTERVAL_MS = 90; // matches the joystick's own cadence
     const MIN_DELTA_STEPS = 8; // below this the motor is already heading there
     const TAP_PX = 6;
-    // No position or limits by now: this camera cannot do absolute targets,
-    // so finish the gesture as a joystick-style rate control instead.
+    // no absolute-target data by now: fall back to rate control
     const FALLBACK_MS = 1500;
 
     let dragging = false;
@@ -963,9 +962,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       const dx = pointer.x - anchor.x;
       const dy = pointer.y - anchor.y;
       const lim = limits();
-      // Pan-a-photo: this camera's motor X moves opposite the panned
-      // content on screen (confirmed on hardware). Motor Y is likewise
-      // opposite screen Y.
+      // both axes move opposite the drag (confirmed on hardware)
       const rawX = anchorPos.x - dx * stepsPerPx;
       const rawY = anchorPos.y + dy * stepsPerPx;
       target = { x: clamp(rawX, lim.x), y: clamp(rawY, lim.y) };
@@ -1020,8 +1017,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       if (dragging && !motorWs.isOpen()) queueSend();
     }
 
-    // Trailing-edge throttle, same reasoning as the joystick's: the last
-    // sample of a gesture is the one that says where to land.
+    // trailing-edge throttle, like the joystick's
     function queueSend() {
       const wait = SEND_INTERVAL_MS - (performance.now() - lastSentAt);
       if (wait <= 0) {
@@ -1040,7 +1036,6 @@ document.addEventListener("DOMContentLoaded", async function () {
       }
     }
 
-    // Treat the tapped point as the new centre of frame.
     function aimAtTap() {
       const box = contentBox();
       if (!box) return;

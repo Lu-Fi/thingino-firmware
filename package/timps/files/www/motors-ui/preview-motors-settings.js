@@ -20,7 +20,9 @@
   const MOTOR_ENDPOINT = "/x/json-motor.cgi";
 
   function normalizeControlMode(value) {
-    return value === "continuous" || value === "joystick" ? value : "step";
+    return value === "continuous" || value === "joystick" || value === "drag"
+      ? value
+      : "step";
   }
 
   async function loadParams() {
@@ -93,6 +95,7 @@
     '                <option value="step">Step move (click / double-click)</option>' +
     '                <option value="continuous">Continuous move (press and hold)</option>' +
     '                <option value="joystick">Virtual joystick (drag)</option>' +
+    '                <option value="drag">Drag the image (camera follows the pointer)</option>' +
     "              </select>" +
     "            </p>" +
     '            <p class="row">' +

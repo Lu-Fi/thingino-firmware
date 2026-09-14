@@ -242,9 +242,11 @@
 
   // /events SSE: streams = "motion,daynight,stats" (or "" for all).
   // onEvent(type, data) gets each parsed event; onError(err) any failure.
+  // opts.raw asks timps to push daynight every daynight.interval_ms instead of
+  // only on a meaningful change (tuning graphs need the series, not the edges).
   // Auto-pauses while the tab is hidden and resumes on visibilitychange.
   // Returns {close()}.
-  function events(streams, onEvent, onError) {
+  function events(streams, onEvent, onError, opts) {
     var es = null, closed = false;
     var types = String(streams || "motion,daynight,stats")
       .split(",").map(function (s) { return s.trim(); })
@@ -254,6 +256,7 @@
       fetchInfo(false).then(function (i) {
         if (closed || document.hidden) return;
         var url = base() + "/events?stream=" + encodeURIComponent(types.join(","));
+        if (opts && opts.raw) url += "&raw=1";
         if (i.token) url += "&token=" + encodeURIComponent(i.token);
         try { es = new EventSource(url); } catch (e) {
           if (onError) onError(e);

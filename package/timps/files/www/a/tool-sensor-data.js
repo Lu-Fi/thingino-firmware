@@ -15,10 +15,10 @@
       this.stats = {};
 
       this.metrics = [
-        { key: "ev", label: "Exposure Time (EV)", color: "#FF6384" },
+        { key: "exposure", label: "Exposure Index", color: "#FF6384" },
         { key: "total_gain", label: "Total Gain", color: "#36A2EB" },
-        { key: "ae_luma", label: "AE Luma", color: "#FFCE56" },
-        { key: "daynight_brightness", label: "Brightness %", color: "#B8FF4D" },
+        { key: "ae_luma", label: "AE Luma", color: "#FFCE56", axis: "y2" },
+        { key: "daynight_brightness", label: "Brightness %", color: "#B8FF4D", axis: "y2" },
       ];
 
       this.init();
@@ -27,27 +27,7 @@
     init() {
       this.setupEventListeners();
       this.initChart();
-      this.fetchThresholds();
       this.startStream();
-    }
-
-    // day/night gain thresholds live in thingino.json (not timps); read them
-    // once from the thingino daynight config CGI for the chart reference lines.
-    async fetchThresholds() {
-      try {
-        const res = await fetch("/x/json-config-daynight.cgi", { cache: "no-store" });
-        if (!res.ok) return;
-        const cfg = await res.json();
-        const nt = parseInt(cfg.total_gain_night_threshold, 10);
-        const dt = parseInt(cfg.total_gain_day_threshold, 10);
-        if (!Number.isNaN(nt)) {
-          this.nightThreshold = nt;
-          this.chart.options.scales.y.max = nt + 200;
-        }
-        if (!Number.isNaN(dt)) this.dayThreshold = dt;
-      } catch (e) {
-        /* reference lines are optional */
-      }
     }
 
     setupEventListeners() {
@@ -99,7 +79,9 @@
           },
           plugins: {
             legend: {
-              display: false,
+              display: true,
+              position: "bottom",
+              labels: { boxWidth: 12, font: { size: 10 } },
             },
           },
           scales: {
@@ -112,11 +94,23 @@
             },
             y: {
               display: true,
-              min: 0,
-              max: 3200,
+              beginAtZero: true,
               title: {
                 display: true,
-                text: "Raw Value",
+                text: "Gain / exposure index",
+              },
+            },
+            // luma (0-255) and brightness (0-100 %) are three orders of
+            // magnitude below a railed gain and would be a flat line on y
+            y2: {
+              display: true,
+              position: "right",
+              beginAtZero: true,
+              suggestedMax: 255,
+              grid: { drawOnChartArea: false },
+              title: {
+                display: true,
+                text: "Luma / %",
               },
             },
             y1: {
@@ -138,23 +132,29 @@
         this.updateStreamStatus(false);
         return;
       }
-      // timps pushes "daynight" over its native SSE /events on every change
-      // (mode flip / brightness / gain move): {enabled,mode,brightness,
-      // total_gain}. No polling - it also sends the current state on connect
-      // and auto-reconnects (token refresh + tab visibility) internally.
+      // timps pushes "daynight" over its native SSE /events. raw:true asks it
+      // to tick at daynight.interval_ms instead of only on a meaningful change
+      // - without it a static scene yields exactly the one on-connect snapshot,
+      // which is not a series. Reconnects (token refresh + tab visibility) are
+      // handled inside timps-api.js.
       this.stream = window.timpsApi.events(
         "daynight",
         (type, d) => {
           if (this.isPaused || !d) return;
           this.updateStreamStatus(true);
+          this.nightThreshold = Number(d.night_gain);
+          this.dayThreshold = Number(d.day_gain);
           this.addDataPoint({
             time_now: Math.floor(Date.now() / 1000),
+            exposure: d.exposure,
             total_gain: d.total_gain,
+            ae_luma: d.ae_luma,
             daynight_brightness: d.brightness,
             daynight_mode: Number(d.mode) === 1 ? "night" : "day",
           });
         },
         () => this.updateStreamStatus(false),
+        { raw: true },
       );
       this.updateStreamStatus(true);
     }
@@ -165,27 +165,19 @@
 
       this.chart.data.labels.push(timeStr);
 
-      if (
-        jsonData.total_gain_night_threshold !== undefined &&
-        this.nightThreshold === null
-      ) {
-        this.nightThreshold = parseInt(jsonData.total_gain_night_threshold, 10);
-        this.dayThreshold = parseInt(jsonData.total_gain_day_threshold, 10);
-        if (!Number.isNaN(this.nightThreshold)) {
-          this.chart.options.scales.y.max = this.nightThreshold + 200;
-        }
-      }
-
       const currentMode = jsonData.daynight_mode === "night" ? 1 : 0;
       this.modeData.push(currentMode);
 
       this.metrics.forEach((metric) => {
-        if (!(metric.key in jsonData)) return;
         if (!this.data[metric.key]) {
           this.data[metric.key] = [];
         }
+        // every series stays index-aligned with labels; timps reports -1 for
+        // "not measurable", which Chart.js renders as a gap rather than a dip
         const value = parseFloat(jsonData[metric.key]);
-        if (!Number.isNaN(value)) {
+        if (Number.isNaN(value) || value < 0) {
+          this.data[metric.key].push(null);
+        } else {
           this.data[metric.key].push(value);
           this.updateStats(metric.key, value);
         }
@@ -256,6 +248,7 @@
           pointBackgroundColor: metric.color,
           pointBorderColor: metric.color,
           pointBorderWidth: 1,
+          yAxisID: metric.axis || "y",
         });
       });
 

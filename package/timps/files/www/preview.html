@@ -339,19 +339,10 @@
     const params = new URLSearchParams(window.location.search);
     const defaultStream = params.get("stream") || sessionStorage.getItem("ms.stream") || "0";
 
-    // Player mode + jitter margin, both driven by the one #ms-latency select
-    // and persisted in localStorage under "ms.latency" - unlike sessionStorage
-    // this survives closing the tab/browser, and since each camera is its own
-    // origin the choice is naturally per-camera with no extra keying needed:
-    //   "0.5" / "1.5" / "3"  -> MSE/<video>, that many seconds behind live
-    //   "rt"                 -> WebCodecs/canvas real-time player (no buffer)
-    //   "whep"               -> RTCPeerConnection fed by POST /webrtc/whep
-    // The numeric values keep their old meaning, so an "ms.latency" written by
-    // an older build still restores the same margin here (and parseFloat("rt")
-    // is NaN, so an older build reading a "rt" value falls back to 1.5s; the
-    // same is true of "whep"). If the restored mode turns out unavailable,
-    // refreshRtOption()/refreshWhepOption() below fall back to MSE and
-    // overwrite this key, so a stale "rt"/"whep" preference self-heals.
+    // Player mode + jitter margin, driven by #ms-latency, persisted in
+    // localStorage ("ms.latency" - per-camera since each camera is its own
+    // origin): "0.5"/"1.5"/"3" -> MSE margin, "rt" -> WebCodecs, "whep" -> WebRTC.
+    // An unavailable restored mode self-heals via refreshRtOption()/refreshWhepOption().
     const RT_VALUE = "rt";
     const WHEP_VALUE = "whep";
     const DEFAULT_MARGIN_S = 1.5;    // unchanged default: the <option selected> above
@@ -368,11 +359,7 @@
     let targetBehindS = DEFAULT_MARGIN_S;
     let mode = "mse";                                    // "mse" | "rt" | "whep"
     let lastBufferedValue = String(DEFAULT_MARGIN_S);    // margin to return to from rt/whep
-    // No stored choice at all (never picked anything, on this browser, for this
-    // camera) is the one case the startup sequence below is allowed to pick a
-    // smarter-than-"1.5s" default for - see the WHEP-preferred block near the
-    // bottom of this script. Any saved value, even the numeric ones, means a
-    // real choice was made and must not be second-guessed.
+    // True only on a genuinely first visit - gates the WHEP-preferred default below.
     const hadNoSavedLatencyPref = localStorage.getItem("ms.latency") === null;
     (function readLatencyPref() {
       const saved = localStorage.getItem("ms.latency");
@@ -400,13 +387,8 @@
     const whepOption = latencySelect
       ? latencySelect.querySelector('option[value="' + WHEP_VALUE + '"]') : null;
     const HAVE_WEBRTC = typeof window.RTCPeerConnection === "function";
-    // Chromium's H.264 decoder plays this daemon's High-profile stream from
-    // the in-band SPS regardless of what the SDP negotiated; Firefox's is
-    // genuinely Baseline-only and Safari has its own WebRTC quirks (see
-    // wiki: WebRTC.md#firefox-interop). Only Chromium-family browsers are
-    // trusted to pick WHEP as a DEFAULT with no explicit user choice -
-    // everyone else can still select it manually, this only gates the
-    // no-saved-preference auto-choice below.
+    // Firefox's H.264 decoder is baseline-only (see wiki: WebRTC.md#firefox-interop) -
+    // only Chromium browsers get WHEP as an unprompted default, below.
     const IS_WEBRTC_DEFAULT_BROWSER = /Chrome\/|Edg\//.test(navigator.userAgent) &&
                                       !/Firefox\//.test(navigator.userAgent);
     if (!HAVE_WEBRTC) {
@@ -421,11 +403,8 @@
                           : String(targetBehindS);
     }
 
-    // One line of "what is this format, and what does picking it cost you" -
-    // the tradeoff a user actually needs to choose between the five #ms-latency
-    // options, not just their names. Kept in sync with `mode`/`targetBehindS`
-    // everywhere either changes: applyModeUi() covers every path except the
-    // margin-only case below (same mode, no reconnect - see its own call site).
+    // Kept in sync with mode/targetBehindS by applyModeUi(), plus the
+    // margin-only change path below (same mode, no reconnect).
     function updateFormatDesc() {
       if (!formatDesc) return;
       formatDesc.textContent =
@@ -859,11 +838,7 @@
         applyModeAudio();
         setStatus("Real-time mode is H.264-only - this stream is " +
                   String(vcfg.codec).toUpperCase() + "; using buffered playback.");
-        // setStatus() alone gets overwritten by the buffered player's own
-        // "Connecting…"/"Connected" line within a second or two - same reason
-        // whepFallbackToMse() also raises a toast, so a restored "rt"
-        // preference that turns out unavailable is explained, not just silently
-        // dropped.
+        // setStatus() alone gets overwritten within seconds - toast survives.
         if (typeof window.showAlert === "function")
           window.showAlert("warning", "Real-time mode needs H.264; this stream is " +
                             String(vcfg.codec).toUpperCase() +
@@ -1349,9 +1324,7 @@
     //
     // Deliberately status-code-based: the response BODIES ("disabled" /
     // "not found") are not a contract and must not be parsed.
-    // Returns the probe's status code (or -1 if unreachable) so the
-    // no-saved-preference startup path below can tell "would actually work
-    // right now" (405) apart from every other case, without a second fetch.
+    // Returns the status code (-1 if unreachable) so callers can react to it.
     async function refreshWhepOption() {
       if (!HAVE_WEBRTC || !whepOption || !latencySelect) return -1;
       let code = 0;
@@ -2131,19 +2104,8 @@
     streamSelect.value = defaultStream === "1" ? "1" : "0";
     setConnectedUi(false);
 
-    // First-ever visit to this camera in this browser (nothing in
-    // localStorage yet): prefer WHEP over the compiled-in 1.5s-buffered
-    // default, but only on a browser where it is actually reliable
-    // (IS_WEBRTC_DEFAULT_BROWSER - see its own comment) and only once the
-    // probe confirms it would genuinely connect right now (HTTP 405 - built,
-    // enabled, not TLS-gated on this page's scheme). A 426/403/unreachable
-    // probe falls through to the ordinary buffered default instead of
-    // auto-selecting something that would immediately toast-fallback on
-    // first paint. This one-time await only costs a round trip on a
-    // brand-new browser/camera pairing; every later visit already has a
-    // stored preference and skips straight past it. The choice is persisted
-    // like any other selection, so it is a one-time decision, not a
-    // probe-every-load cost.
+    // First-ever visit: prefer WHEP over the 1.5s default, but only when the
+    // browser is Chromium and the probe confirms it would connect now (405).
     (async () => {
       if (hadNoSavedLatencyPref && HAVE_WEBRTC && IS_WEBRTC_DEFAULT_BROWSER) {
         const code = await refreshWhepOption();

@@ -1319,7 +1319,8 @@
     //   426  compiled and enabled, but plaintext signalling is refused here
     //        (webrtc.enabled=1 with TLS configured on the port) -> offer it,
     //        but label WHY it will not connect from an http:// page
-    //   404  USE_WEBRTC=0, or webrtc.enabled=0              -> remove it
+    //   503  compiled in, but webrtc.enabled=0              -> keep it, disabled
+    //   404  USE_WEBRTC=0 (or some other unavailability)    -> remove it
     //   403  nothing we sent authenticated                  -> leave it alone
     //
     // Deliberately status-code-based: the response BODIES ("disabled" /
@@ -1346,11 +1347,17 @@
       }
       console.info("[preview] whep probe: HTTP " + code);
       if (code === 404) {
-        whepOption.disabled = true;
-        whepOption.title = "This timps build serves no WebRTC/WHEP endpoint " +
-                           "(USE_WEBRTC=0, or webrtc.enabled=0)";
+        if (whepOption) whepOption.remove();
         if (mode === "whep")
           whepFallbackToMse("This camera has no WebRTC/WHEP endpoint", true);
+        return code;
+      }
+      if (code === 503) {
+        whepOption.disabled = true;
+        whepOption.title = "WebRTC is built into this camera but turned off " +
+                           "(webrtc.enabled=0)";
+        if (mode === "whep")
+          whepFallbackToMse("WebRTC is turned off on this camera (webrtc.enabled=0)", true);
         return code;
       }
       if (code === 403) return code;  // auth, not capability - say nothing

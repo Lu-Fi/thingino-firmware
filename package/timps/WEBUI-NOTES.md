@@ -335,17 +335,30 @@ instead.
 Full field map (all follow "daynight_\<key\>" -> "daynight.\<key\>", see
 `fillTimps()`/`collectTimps()`): `daynight_enabled`,
 `daynight_total_gain_night_threshold`, `daynight_total_gain_day_threshold`,
-`daynight_day_gain_pct`, `daynight_baseline_delay_s`,
-`daynight_night_reconfirm_s`, `daynight_boot_settle_s`/`_max_s`,
-`daynight_boot_stable_pct`, `daynight_mode` (sensor/time/sun),
+`daynight_day_confirm_s`, `daynight_probe_confirm_s`,
+`daynight_probe_min_gap_s`, `daynight_heartbeat_s`/`_max_s`,
+`daynight_interval_ms`, `daynight_boot_probe`,
+`daynight_diagnose_thresholds`, `daynight_mode` (auto/schedule),
 `daynight_time_night_start`/`day_start`, `daynight_sun_latitude`/
 `longitude`, `daynight_sun_sunrise`/`sunset_offset_min`. Read-only:
-`daynight_night_baseline`/`daynight_day_trigger` from the status fields of
-the same names (the adaptive trigger in effect).
+`daynight_night_baseline`/`daynight_day_trigger` (the adaptive trigger in
+effect), `daynight_sun_computed_sunrise`/`_sunset`, and the
+`probe_jump_pct`/`ref_delay_s`/`boot_settle_s` values that became fixed
+constants in the 2026-08-22 consolidation.
 
 The old "Time Schedule" column that also lived on
 `/x/json-config-daynight.cgi` was dead, orphaned config that nothing read -
-it has been replaced by the timps-native Override Mode selector.
+it has been replaced by the timps-native Decision source column.
+
+### `daynight_calendar` is a UI-only selector, derived from the values
+
+timps stores ONE calendar and picks it from the values themselves - a
+complete `time_night_start`+`time_day_start` window outranks `sun_latitude`/
+`longitude`, and 0/0 is "no location". There is no config key saying which was
+meant, so `calFromValues()` mirrors `dn_cal_kind()` in `daynight.c` to drive
+the selector, and `collectTimps()` always CLEARS the unselected calendar's
+values on save. Without that clear, a leftover time window keeps outranking a
+location the user just typed in and the save still reports success.
 
 ## a/preview-motion.js
 

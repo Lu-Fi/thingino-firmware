@@ -1342,10 +1342,9 @@
     //                  will not connect from an http:// page
     //   enabled: 2     serving over either scheme -> offer it
     //
-    // Until 1.9.17 there was no caps.webrtc, and this probed the endpoint
-    // itself: a bare GET against POST-only /webrtc/whep, reading the same four
-    // verdicts off its 404/503/426/405. Honest, but it logged a red line in
-    // every visitor's DevTools for a request that had succeeded.
+    // Don't go back to probing /webrtc/whep for this: a bare GET against the
+    // POST-only endpoint reads the same verdicts off its 404/503/426/405, but
+    // logs a red DevTools line on every page load for a request that worked.
     // Returns "absent" | "off" | "tls" | "ok", or "unknown" when /control did
     // not answer, so callers can react to the verdict.
     async function refreshWhepOption() {
@@ -2129,9 +2128,10 @@
 
     // First-ever visit: prefer WHEP over the 1.5s default whenever the browser
     // can do WebRTC at all and caps.webrtc says it would connect right now.
-    // Firefox's H.264 decoder is baseline-only (see wiki: WebRTC.md#firefox-interop),
-    // which can mean a worse picture, not a broken one - so this no longer
-    // singles out Chromium; a real capability check beats sniffing the UA.
+    // No longer singles out Chromium: a real capability check beats sniffing
+    // the UA. Firefox's H.264 decoder is baseline-only, and timps answers with
+    // the live SPS's profile-level-id (videoN.profile defaults to High) - see
+    // timps README "WebRTC / WHEP" before assuming this default is safe there.
     (async () => {
       if (hadNoSavedLatencyPref && HAVE_WEBRTC) {
         if (await refreshWhepOption() === "ok") {

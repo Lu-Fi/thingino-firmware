@@ -228,8 +228,8 @@
       </div>
     </section>
 
-    <!-- Statistics: fed by /events?stream=stats SSE (fast) plus a slow
-         GET /control poll for fields the SSE doesn't carry. See WEBUI-NOTES.md. -->
+    <!-- Statistics: fed by /events?stream=stats,daynight,motion SSE plus a slow
+         GET /control?stats=1 poll for fields no push carries. See WEBUI-NOTES.md. -->
     <section>
       <div class="card mb-3" id="stats-card" style="display:none">
         <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
@@ -482,11 +482,14 @@
       });
     }
 
-    // Statistics: /events?stream=stats SSE (fast path) plus a slow GET
-    // /control poll for the fields SSE doesn't carry. Independent of the
-    // player's connect/disconnect lifecycle - keeps ticking, and both loops
-    // only run while the card is visible. See WEBUI-NOTES.md for the field split.
+    // Statistics: /events?stream=stats SSE (fast path), a daynight+motion SSE
+    // subscription for the two summary fields, plus a slow GET
+    // /control?stats=1 poll for the handful of fields no push carries.
+    // Independent of the player's connect/disconnect lifecycle - keeps
+    // ticking, and all three only run while the card is visible.
+    // See WEBUI-NOTES.md for the field split.
     let statsEs = null;
+    let statsStateEs = null;
     let statsControlTimer = null;
     const MAX_HISTORY = 40; // ~80s of samples at the default 2s stats interval
     const streamRows = {};  // chn -> {cells:{...}, history:[kbps,...]}
@@ -593,12 +596,12 @@
       });
     }
 
-    // slow path: one GET /control every 5s while the card is visible - fills
-    // in the fields the stats SSE doesn't carry (config-level gop/profile/
-    // rc_mode, the encoder telemetry below, and day/night + motion status).
-    // Only updates rows the fast path already created; a stream absent from
-    // stats_json (disabled) never gets a control-only row.
-    function applyControlSnapshot(j) {
+    // slow path: one GET /control?stats=1 every 5s while the card is visible -
+    // fills in the fields no push carries (config-level gop/profile/rc_mode
+    // and the encoder telemetry below). Only updates rows the fast path
+    // already created; a stream absent from stats_json (disabled) never gets a
+    // control-only row.
+    function applyStatsExtra(j) {
       if (!j) return;
       const video = j.video || {}, enc = j.encoder || {};
       Object.keys(video).forEach((k) => {
@@ -627,20 +630,26 @@
           row.cells.avgBitrate.title = "";
         }
       });
-      const dn = j.daynight || {};
-      if (statsDaynight) {
-        const modeTxt = dn.mode === 1 ? "Night" : dn.mode === 0 ? "Day" : "Unknown";
-        const gain = (typeof dn.total_gain === "number" && dn.total_gain >= 0)
-          ? " · gain " + dn.total_gain.toFixed(0) : "";
-        statsDaynight.textContent = modeTxt + (dn.enabled ? " (auto)" : " (manual)") + gain;
-      }
-      const mo = j.motion || {};
-      if (statsMotion) {
-        statsMotion.textContent = !mo.available ? "Unavailable" : (mo.enabled ? "Enabled" : "Disabled");
-      }
     }
-    function fetchControlSnapshot() {
-      timpsApiReady().then((api) => api.get()).then(applyControlSnapshot)
+
+    // Day/Night + Motion summaries are PUSHED, never polled: timps emits the
+    // full daynight and motion state once on connect and again on every
+    // change, so opening the card mid-session shows current values without a
+    // priming fetch.
+    function renderDaynight(dn) {
+      if (!statsDaynight || !dn) return;
+      const modeTxt = dn.mode === 1 ? "Night" : dn.mode === 0 ? "Day" : "Unknown";
+      const gain = (typeof dn.total_gain === "number" && dn.total_gain >= 0)
+        ? " · gain " + dn.total_gain.toFixed(0) : "";
+      statsDaynight.textContent = modeTxt + (dn.enabled ? " (auto)" : " (manual)") + gain;
+    }
+    function renderMotion(mo) {
+      if (!statsMotion || !mo) return;
+      statsMotion.textContent = !mo.available ? "Unavailable" : (mo.enabled ? "Enabled" : "Disabled");
+    }
+
+    function fetchStatsExtra() {
+      timpsApiReady().then((api) => api.statsExtra()).then(applyStatsExtra)
         .catch(() => { /* offline poll tick - table just keeps its last values */ });
     }
 
@@ -655,11 +664,18 @@
         try { renderStats(JSON.parse(ev.data)); } catch (e) { /* ignore malformed frame */ }
       });
       statsEs.onerror = () => { /* EventSource auto-reconnects (server retry: 3000) */ };
-      fetchControlSnapshot();
-      if (!statsControlTimer) statsControlTimer = setInterval(fetchControlSnapshot, 5000);
+      if (!statsStateEs && window.timpsApi) {
+        statsStateEs = window.timpsApi.events("daynight,motion", (type, data) => {
+          if (type === "daynight") renderDaynight(data);
+          else if (type === "motion") renderMotion(data);
+        });
+      }
+      fetchStatsExtra();
+      if (!statsControlTimer) statsControlTimer = setInterval(fetchStatsExtra, 5000);
     }
     function stopStats() {
       if (statsEs) { statsEs.close(); statsEs = null; }
+      if (statsStateEs) { statsStateEs.close(); statsStateEs = null; }
       if (statsControlTimer) { clearInterval(statsControlTimer); statsControlTimer = null; }
       Object.keys(streamRows).forEach((k) => delete streamRows[k]);
       if (statsBody) statsBody.innerHTML = '<tr data-placeholder><td colspan="11" class="text-secondary">Waiting for stats…</td></tr>';

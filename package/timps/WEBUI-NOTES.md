@@ -278,7 +278,7 @@ hit-testable while still starting invisible, so hovering the circle still
 reveals them exactly as before - only the container layers around/behind
 them become click-through.
 
-### Statistics card: why two data sources (SSE + polled /control)
+### Statistics card: why two data sources (SSE + polled `/control?stats=1`)
 
 Fed by timps's `/events?stream=stats` SSE - same token + EventSource
 pattern as `/a/preview-motion.js`. Independent of the video player's own
@@ -288,15 +288,27 @@ it also shows other clients' activity on this channel.
 The SSE "stats" frame (`src/mp4/httpd.c` `stats_json`, ~every 2s by default)
 carries the fast-moving per-frame numbers: fps/kbps/subs/drop per enabled
 stream, plus uptime_s/clients. It does NOT carry the config-level encoder
-fields (gop/profile/rc_mode) or the ave_bitrate/day-night/motion status
-blocks - those only exist in GET /control, so a slow poll of /control (5s,
-the same cadence as the control-bar heartbeat elsewhere in this webui) fills
-in the rest via timps-api.js (loaded on demand by main.js's
-`timpsApiReady()`, already used by the control bar on every page). Both
-loops only run while the Statistics card is visible (toggled by
+fields (gop/profile/rc_mode) or the encoder-backlog block, so a slow 5s poll
+(the same cadence as the control-bar heartbeat elsewhere in this webui)
+fills in the rest via `timpsApi.statsExtra()`.
+
+That poll hits **`GET /control?stats=1`**, not plain `GET /control`: the
+scoped sub-endpoint (same own-small-buffer pattern as `?fields=1` /
+`?dn_history=1`, see `src/mp4/httpd.c`) returns only those fields - a few
+hundred bytes against the full snapshot's ~8 KB, every 5s for as long as the
+card is open.
+
+The Day/Night and Motion summary blocks are **pushed**, not polled: the card
+opens a second subscription via `timpsApi.events("daynight,motion", ...)`.
+timps emits the full state of both once on connect and again on every change
+(`src/mp4/httpd.c`, `events_stream()`), so a card opened mid-session renders
+current values immediately - no priming fetch, and no reason for them to
+live in the polled payload at all.
+
+All three loops only run while the Statistics card is visible (toggled by
 `#ms-stats-toggle`).
 
-### `applyControlSnapshot()`: the `ave_bitrate` / queue-backlog fallback
+### `applyStatsExtra()`: the `ave_bitrate` / queue-backlog fallback
 
 `ave_bitrate` (`IMP_Encoder_GetChnAveBitrate`) only exists on T31; every
 other platform - and a T31 stream before its first frame - reports -1 and

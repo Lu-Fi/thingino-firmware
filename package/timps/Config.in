@@ -108,6 +108,37 @@ config BR2_PACKAGE_TIMPS_TLS
 	  (self-signed trust is per host+PORT); otherwise it generates a
 	  self-signed pair.
 
+config BR2_PACKAGE_TIMPS_MULTI_SENSOR
+	bool "Multi-sensor (dual camera) support - T23 only, PROTOTYPE"
+	depends on BR2_SOC_FAMILY = "t23"
+	depends on BR2_THINGINO_IMAGE_SENSOR_QTY > 1
+	default n
+	help
+	  Run a second image sensor as a second pair of video streams
+	  (video2 = sensor 1 main, video3 = sensor 1 sub) alongside the
+	  existing video0/video1, with its own sensorN./imageN. config
+	  sections and its own ISP tuning via the T23 SDK's
+	  IMP_ISP_MultiCamera_Tuning_* entry points.
+
+	  PROTOTYPE. As of this writing no dual-sensor board has run this
+	  code. It builds, and with this option OFF the daemon is the same
+	  single-sensor daemon it has always been, but every flag-on path
+	  is unproven on hardware. Do not ship it.
+
+	  T23 only on purpose. T32/T40/T41 also have dual-sensor hardware
+	  but reach it through a different tuning ABI
+	  (IMP_ISP_Tuning_*(IMPVI_NUM, &val)), which is a separate port
+	  with no board to test it on.
+
+	  Expect 15 fps, not 30. The dual sc2336 drivers cap at 15 and
+	  refuse anything higher, so turning this on halves the framerate
+	  the same board reaches in single-sensor mode.
+
+	  The IR-cut filter and the illuminator are single pieces of
+	  hardware on these boards, so only one sensor's day/night
+	  automaton drives them (daynight.ir_master); the other measures
+	  its own scene and follows.
+
 config BR2_PACKAGE_TIMPS_WEBRTC
 	bool "WebRTC/WHEP endpoint (ICE-lite + DTLS-SRTP, H264 + G.711)"
 	depends on BR2_PACKAGE_TIMPS_TLS

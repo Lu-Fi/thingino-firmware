@@ -475,12 +475,20 @@ config BR2_ISP_CH1_DEQUEUE_DELAY_TIME_VALUE
 	  This setting is only active if the feature is enabled.
 	  (isp_ch1_dequeue_delay_time)
 
-config BR2_ISP_MIPI_SWITCH_GPIO
+menuconfig BR2_ISP_MIPI_SWITCH_GPIO
 	depends on BR2_SOC_FAMILY = "t23" && BR2_THINGINO_IMAGE_SENSOR_QTY > 1
-	int "mipi switch"
+	bool "MIPI switch GPIO"
+	help
+	  Override the GPIO driving the dual-sensor MIPI mux.
+
+config BR2_ISP_MIPI_SWITCH_GPIO_VALUE
+	depends on BR2_ISP_MIPI_SWITCH_GPIO
+	int "MIPI switch GPIO number"
 	default 7
 	help
-	  Specify the pre-dequeue delay time for channel 1 in milliseconds.
+	  GPIO number the MIPI switch is wired to, in the kernel's linear
+	  numbering (PA0 = 0, so GPIO_PA(7) = 7, which is the driver default).
+
 	  This setting is only active if the feature is enabled.
 	  (mipi_switch_gpio)
 
@@ -541,15 +549,6 @@ config BR2_ISP_IVDC_THRESHOLD_LINE_VALUE
 
 	  This setting is only active if the feature is enabled.
 	  (ivdc_threshold_line)
-
-config BR2_ISP_CONFIG_HZ
-	depends on BR2_SOC_FAMILY = "t23" && BR2_THINGINO_IMAGE_SENSOR_QTY > 1
-	int "ISP Config Hz"
-	default 0
-	help
-	  Specify the frequency for the ISP multi frame capture.
-	  This setting is only active if the feature is enabled.
-	  (isp_config_hz)
 
 menuconfig BR2_ISP_ISPW
 	depends on BR2_SOC_FAMILY = "t30"

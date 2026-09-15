@@ -417,7 +417,6 @@ endif
 
 ISP_IVDC_MEM_LINE       := $(call isp_param,ISP_IVDC_MEM_LINE,ivdc_mem_line)
 ISP_IVDC_THRESHOLD_LINE := $(call isp_param,ISP_IVDC_THRESHOLD_LINE,ivdc_threshold_line)
-ISP_CONFIG_HZ           := $(call isp_param,ISP_CONFIG_HZ,isp_config_hz)
 
 ISP_PRINT_LEVEL := $(call resolve_choice,ISP_PRINT_LEVEL,print_level,\
   0:0 1:1 2:2 3:3)
@@ -463,7 +462,6 @@ export ISP_MIPI_SWITCH_GPIO
 export ISP_DIRECT_MODE
 export ISP_IVDC_MEM_LINE
 export ISP_IVDC_THRESHOLD_LINE
-export ISP_CONFIG_HZ
 export ISP_PRINT_LEVEL
 export ISP_ISPW
 export ISP_ISPH

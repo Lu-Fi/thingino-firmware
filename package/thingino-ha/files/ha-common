@@ -61,7 +61,7 @@ _ha_mqtt_cfg() {
 
 # Entities the integration knows about. Their enable flags are memoized
 # into exported HA_EN_<entity> variables by the environment block below.
-HA_ENTITIES="motion motion_guard ircut daynight privacy color ir850 ir940 white_light gain rssi doorbell ota firmware_version firmware_timestamp live_view snapshot reboot"
+HA_ENTITIES="motion motion_guard ircut daynight privacy color ir850 ir940 white_light floodlight gain rssi doorbell ota firmware_version firmware_timestamp live_view snapshot reboot"
 
 ha_entity_enabled() {
 	local flag
@@ -72,6 +72,40 @@ ha_entity_enabled() {
 		return
 	fi
 	[ "1" = "$flag" ]
+}
+
+# ---------------------------------------------------------------------------
+# Wyze Floodlight v1
+#
+# Controlled by floodlight_ctl over the accessory board's internal USB serial
+# link. The controller cannot report physical lamp state, so floodlight_ctl
+# records the last requested on/off state and brightness under /var/run.
+# ---------------------------------------------------------------------------
+HA_FLOODLIGHT_CTL="${HA_FLOODLIGHT_CTL:-/usr/sbin/floodlight_ctl}"
+HA_FLOODLIGHT_STATE_FILE="${HA_FLOODLIGHT_STATE_FILE:-/var/run/floodlight.status}"
+HA_FLOODLIGHT_BRIGHTNESS_FILE="${HA_FLOODLIGHT_BRIGHTNESS_FILE:-/var/run/floodlight.brightness}"
+
+ha_floodlight_available() {
+	[ -x "$HA_FLOODLIGHT_CTL" ]
+}
+
+ha_floodlight_state() {
+	[ -f "$HA_FLOODLIGHT_STATE_FILE" ] || return 1
+	IFS= read -r _state <"$HA_FLOODLIGHT_STATE_FILE" || return 1
+	case "$_state" in
+		ON | OFF) printf '%s' "$_state" ;;
+		*) return 1 ;;
+	esac
+}
+
+ha_floodlight_brightness() {
+	[ -f "$HA_FLOODLIGHT_BRIGHTNESS_FILE" ] || return 1
+	IFS= read -r _brightness <"$HA_FLOODLIGHT_BRIGHTNESS_FILE" || return 1
+	case "$_brightness" in
+		'' | *[!0-9]*) return 1 ;;
+	esac
+	[ "$_brightness" -ge 1 ] && [ "$_brightness" -le 100 ] || return 1
+	printf '%s' "$_brightness"
 }
 
 # ---------------------------------------------------------------------------
@@ -242,16 +276,29 @@ ha_pub_begin() {
 
 _ha_pub_exec() {
 	local retain="$1" suffix="$2" topic="$3" tmpfile="$4"
+	local mpub rc
 	[ -f "$tmpfile" ] || return 1
+
 	# Feed the persistent publisher daemon instead of forking a fresh
 	# mosquitto_pub (and a new TCP connection) per message. The daemon
 	# unlinks tmpfile once the message is sent or the attempt fails.
-	if printf '%s\t%s\t%s\n' "$retain" "$topic" "$tmpfile" \
-		>> "$HA_MQTT_PUB_FIFO" 2>/dev/null; then
+	if [ -p "$HA_MQTT_PUB_FIFO" ] &&
+		printf '%s\t%s\t%s\n' "$retain" "$topic" "$tmpfile" \
+			>> "$HA_MQTT_PUB_FIFO" 2>/dev/null; then
 		return 0
 	fi
+
+	# FIFO not available (ha-daemon not running) — publish directly so
+	# standalone callers such as ha-event still work.
+	mpub=$(ha_mpub_cmd "$suffix")
+	if [ "$retain" = "1" ]; then
+		eval "$mpub -r -t $(_sq "$topic") -f $(_sq "$tmpfile")" 2>/dev/null
+	else
+		eval "$mpub -t $(_sq "$topic") -f $(_sq "$tmpfile")" 2>/dev/null
+	fi
+	rc=$?
 	rm -f "$tmpfile"
-	return 1
+	return $rc
 }
 
 _ha_queue_or_pub() {

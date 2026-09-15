@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 
 import hashlib
+import os
 import re
+import signal
 import sys
 import shutil
 import tempfile
@@ -67,10 +69,29 @@ def log_success(msg: str) -> None:
 
 def run_git(args: List[str], cwd: Optional[Path] = None, timeout: int = 60) -> Tuple[int, str, str]:
     try:
-        proc = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, timeout=timeout)
-        return proc.returncode, proc.stdout.strip(), proc.stderr.strip()
-    except subprocess.TimeoutExpired:
-        return 124, "", "timeout"
+        proc = subprocess.Popen(
+            ["git", *args],
+            cwd=cwd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            start_new_session=True,
+        )
+        try:
+            out, err = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            # git spawns helper processes (git remote-https, git-remote-https)
+            # that inherit our stdout/stderr pipes. Killing only the git
+            # parent would leave those helpers holding the write end open, so
+            # communicate() would never see EOF and the timeout would be
+            # ineffective. Kill the whole process group instead.
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            out, err = proc.communicate()
+            return 124, "", "timeout"
+        return proc.returncode, (out or "").strip(), (err or "").strip()
     except FileNotFoundError:
         return 127, "", "git not found"
 
@@ -688,9 +709,7 @@ def update_package_mk(mk_path: Path, package_name: str, old_hash: str, new_hash:
         log_error(f"Did not find a VERSION line with the old hash in {mk_path}")
         return False
 
-    backup = mk_path.with_suffix(mk_path.suffix + ".backup")
     try:
-        backup.write_text(text, encoding='utf-8')
         mk_path.write_text(new_text, encoding='utf-8')
         log_success(f"Updated {mk_path} with new hash: {new_hash}")
         return True
@@ -943,9 +962,7 @@ def update_package_mk_version(mk_path: Path, package_name: str, old_version: str
         log_error(f"Did not find a VERSION line with '{old_version}' in {mk_path}")
         return False
 
-    backup = mk_path.with_suffix(mk_path.suffix + ".backup")
     try:
-        backup.write_text(text, encoding='utf-8')
         mk_path.write_text(new_text, encoding='utf-8')
         log_success(f"Updated {mk_path}: {old_version} → {new_version}")
         return True

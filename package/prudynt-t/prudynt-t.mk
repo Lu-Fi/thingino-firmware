@@ -1,7 +1,7 @@
 PRUDYNT_T_SITE_METHOD = git
 PRUDYNT_T_SITE = https://github.com/themactep/prudynt-t
 PRUDYNT_T_SITE_BRANCH = stable
-PRUDYNT_T_VERSION = cf2664a3ce87562c61e8cc4b276b11a88009a127
+PRUDYNT_T_VERSION = 354b1b4bde4aa67860021531b85549d88ee1717c
 
 PRUDYNT_T_OVERRIDE_FILE = $(BR2_EXTERNAL_THINGINO_PATH)/$(CAMERA_SUBDIR)/$(CAMERA)/prudynt.json
 
@@ -119,7 +119,7 @@ endif
 PRUDYNT_CFLAGS += \
 	-I$(STAGING_DIR)/usr/include
 
-# OpenSSL support - link against OpenSSL if available and live555 uses it
+# OpenSSL support - link against OpenSSL if available
 ifeq ($(BR2_PACKAGE_OPENSSL),y)
 PRUDYNT_T_DEPENDENCIES += host-pkgconf openssl
 PRUDYNT_LDFLAGS += `$(PKG_CONFIG_HOST_BINARY) --libs openssl`
@@ -130,8 +130,6 @@ endif
 # Build mode selection
 ifeq ($(BR2_PACKAGE_PRUDYNT_T_STATIC),y)
 PRUDYNT_CFLAGS += -DBINARY_STATIC
-else ifeq ($(BR2_PACKAGE_PRUDYNT_T_HYBRID),y)
-PRUDYNT_CFLAGS += -DBINARY_HYBRID
 else
 PRUDYNT_CFLAGS += -DBINARY_DYNAMIC
 endif
@@ -410,8 +408,13 @@ define PRUDYNT_T_INSTALL_TARGET_CMDS
 		$(TARGET_DIR)/var/www/a/plugins/prudynt.webui.json
 
 	# HTML pages
-	$(INSTALL) -D -m 0644 $(PRUDYNT_T_PKGDIR)/files/www/preview-fmp4.html \
-		$(TARGET_DIR)/var/www/preview-fmp4.html
+	# The fMP4 preview is prudynt's default preview page, installed as
+	# /var/www/preview.html (same convention as raptor and timps). The MJPEG
+	# preview stays available at /var/www/preview-mjpeg.html.
+	$(INSTALL) -D -m 0644 $(PRUDYNT_T_PKGDIR)/files/www/preview.html \
+		$(TARGET_DIR)/var/www/preview.html
+	$(INSTALL) -D -m 0644 $(PRUDYNT_T_PKGDIR)/files/www/preview-mjpeg.html \
+		$(TARGET_DIR)/var/www/preview-mjpeg.html
 	$(INSTALL) -D -m 0644 $(PRUDYNT_T_PKGDIR)/files/www/config-audio.html \
 		$(TARGET_DIR)/var/www/config-audio.html
 	$(INSTALL) -D -m 0644 $(PRUDYNT_T_PKGDIR)/files/www/streamer-image.html \

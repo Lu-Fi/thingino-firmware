@@ -69,6 +69,10 @@ endif
 export THINGINO_USER_DIR
 THINGINO_USER_COMMON_DIR := $(THINGINO_USER_DIR)/common
 
+# Opt-in creation of the user config skeleton (empty local.fragment, etc.).
+# Set USER_DIRS=1 or run `make user-dirs`; plain builds leave user/ untouched.
+USER_DIRS ?=
+
 # Global backup directory for camera overlay archives
 THINGINO_BACKUP_DIR ?= $(HOME)/.thingino/backups
 
@@ -204,6 +208,16 @@ TOOLCHAIN_LIBC_RAW := $(if $(TOOLCHAIN_LIBC_RAW),$(TOOLCHAIN_LIBC_RAW),UCLIBC)
 TOOLCHAIN_TYPE_TAG := $(if $(filter BUILDROOT,$(TOOLCHAIN_TYPE_RAW)),br,$(if $(filter EXTERNAL,$(TOOLCHAIN_TYPE_RAW)),ext,$(if $(filter LOCAL,$(TOOLCHAIN_TYPE_RAW)),loc,ext)))
 TOOLCHAIN_LIBC_TAG := $(shell echo "$(TOOLCHAIN_LIBC_RAW)" | tr 'A-Z' 'a-z')
 TOOLCHAIN_FRAGMENT_FILE := configs/fragments/toolchain/$(TOOLCHAIN_TYPE_TAG)-gcc$(TOOLCHAIN_GCC_RAW)-$(TOOLCHAIN_LIBC_TAG).fragment
+
+# The from-source uClibc toolchain generates its locale data on the build
+# host: uClibc-ng's gen_locale calls setlocale(LC_ALL, "en_US.UTF-8") and
+# bakes the result into the toolchain. Fail early when the host cannot
+# provide that locale instead of a cryptic error deep inside the uClibc build.
+ifeq ($(TOOLCHAIN_TYPE_RAW)-$(TOOLCHAIN_LIBC_RAW),BUILDROOT-UCLIBC)
+ifneq ($(shell locale -a 2>/dev/null | grep -qiE '^en_US(\.utf-?8)?$$' && echo y),y)
+$(error Host locale en_US.UTF-8 is required to build the uClibc toolchain from source. Generate it with: sudo localedef -i en_US -f UTF-8 en_US.UTF-8)
+endif
+endif
 
 # Resolve U-Boot version fragment.
 # Last match wins (tail -1): EARLY_TOOLCHAIN_INPUT_FILES lists shared fragments

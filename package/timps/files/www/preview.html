@@ -394,10 +394,6 @@
     const whepOption = latencySelect
       ? latencySelect.querySelector('option[value="' + WHEP_VALUE + '"]') : null;
     const HAVE_WEBRTC = typeof window.RTCPeerConnection === "function";
-    // Firefox's H.264 decoder is baseline-only (see wiki: WebRTC.md#firefox-interop) -
-    // only Chromium browsers get WHEP as an unprompted default, below.
-    const IS_WEBRTC_DEFAULT_BROWSER = /Chrome\/|Edg\//.test(navigator.userAgent) &&
-                                      !/Firefox\//.test(navigator.userAgent);
     if (!HAVE_WEBRTC) {
       if (whepOption) whepOption.remove();
       if (mode === "whep") { mode = "mse"; localStorage.setItem("ms.latency", lastBufferedValue); }
@@ -2118,10 +2114,13 @@
     streamSelect.value = defaultStream === "1" ? "1" : "0";
     setConnectedUi(false);
 
-    // First-ever visit: prefer WHEP over the 1.5s default, but only when the
-    // browser is Chromium and the probe confirms it would connect now (405).
+    // First-ever visit: prefer WHEP over the 1.5s default whenever the browser
+    // can do WebRTC at all and the probe confirms it would connect now (405).
+    // Firefox's H.264 decoder is baseline-only (see wiki: WebRTC.md#firefox-interop),
+    // which can mean a worse picture, not a broken one - so this no longer
+    // singles out Chromium; a real capability probe beats sniffing the UA.
     (async () => {
-      if (hadNoSavedLatencyPref && HAVE_WEBRTC && IS_WEBRTC_DEFAULT_BROWSER) {
+      if (hadNoSavedLatencyPref && HAVE_WEBRTC) {
         const code = await refreshWhepOption();
         if (code === 405) {
           mode = "whep";

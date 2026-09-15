@@ -708,6 +708,10 @@
     // the one signal that cannot lie about a wedged reader.
     let wantStream = true;        // user intent; false only after a real Disconnect
     let reconnectPending = false; // a schedule*Reconnect() backoff timer is armed
+    // False once the boot IIFE's async mode resolution has run - guards
+    // resumeCheck against racing a pageshow into starting an "mse" stream
+    // before WHEP preference is decided.
+    let bootPending = true;
     let lastProgressAt = 0;       // performance.now() of the last byte off the wire
     function noteProgress() { lastProgressAt = performance.now(); }
 
@@ -1983,6 +1987,7 @@
       logState(tag);
       if (document.hidden && !evenIfHidden) return;
       if (!document.hidden) { wdWasHidden = false; wdVisibleSince = performance.now(); }
+      if (bootPending) { console.info("[preview] " + tag + ": boot still resolving, deferring"); return; }
       if (!wantStream) { console.info("[preview] " + tag + ": user disconnected, staying off"); return; }
       if (running || reconnectPending) {
         // Not necessarily healthy - just not obviously dead. The watchdog
@@ -2121,6 +2126,7 @@
         refreshWhepOption();   // async; may disable/remove "whep" once caps arrive
       }
       applyModeUi();
+      bootPending = false;
       refreshRtOption();       // async; may disable "rt" once /control answers
       startWatchdog();
       startStream().catch((err) => {

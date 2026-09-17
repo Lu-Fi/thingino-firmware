@@ -8,17 +8,32 @@ PORTAL_MODE_FLAG="/run/portal_mode"
 # Interval to check the stream
 INTERVAL=60
 
+# HTTP API endpoint used as the liveness probe.  Always enabled, answers on
+# loopback without the RTSP auth dance.
+HTTP_API_URL="http://127.0.0.1:8080/api/v1/config"
+
 # Number of retries before declaring the stream down
 RETRY_COUNT=3
 
 # Delay in seconds between retry attempts
 RETRY_DELAY=10
 
-# Maximum number of restarts before alerting
+# Consecutive restarts that fail to restore the stream before escalating.
+# S31prudynt already retries its own start three times, so each attempt here
+# is a full restart cycle; this many in a row means the streamer is not coming
+# back on its own.
 RESTART_LIMIT=3
 
 # Delay in seconds between restarts
 RESTART_DELAY=10
+
+# Once the limit is hit, wait this long before starting a new round.  Gives a
+# transient fault time to clear without hammering the restarts.
+COOLDOWN=600
+
+# Reboot the camera when the streamer has failed this many times in a row.
+# Set to 0 to disable rebooting and only log.
+REBOOT_AFTER=9
 
 # Seconds to wait for probe command
 CHECK_TIMEOUT=10
@@ -26,7 +41,6 @@ CHECK_TIMEOUT=10
 RTSP_HOST=""
 RTSP_PORT=""
 PID=""
-RESTART_COUNT=0
 
 is_streamer_disabled() {
 	[ "true" = "$disable_streamer" ] || [ -f "$PORTAL_MODE_FLAG" ]
@@ -49,19 +63,35 @@ parse_rtsp_endpoint() {
 	[ -n "$RTSP_HOST" ] && [ -n "$RTSP_PORT" ]
 }
 
-check_with_curl() {
-	curl -s --max-time "$CHECK_TIMEOUT" --fail -X OPTIONS "$RTSP_URL" >/dev/null 2>&1
-}
-
 check_with_nc() {
 	[ -n "$RTSP_HOST" ] || parse_rtsp_endpoint || return 1
 	local payload
 	payload=$(printf 'OPTIONS %s RTSP/1.0\r\nCSeq: 1\r\nUser-Agent: stream-watchdog\r\n\r\n' "$RTSP_URL")
-	printf '%s' "$payload" | timeout "$CHECK_TIMEOUT" nc -w "$CHECK_TIMEOUT" "$RTSP_HOST" "$RTSP_PORT" 2>/dev/null | grep -q "RTSP/1.0 200"
+	# 200 when the request is accepted, 401 when auth is required.  Both mean
+	# the server is answering, which is all we need.  Anything else (no reply,
+	# connection refused, 5xx) is a real failure.
+	printf '%s' "$payload" |
+		timeout "$CHECK_TIMEOUT" nc -w "$CHECK_TIMEOUT" "$RTSP_HOST" "$RTSP_PORT" 2>/dev/null |
+		grep -qE "RTSP/1\.0 (200|401)"
 }
 
-check_rtsp_stream() {
-	if check_with_curl; then
+# The HTTP API is always enabled and answers on loopback, so it is a cheaper
+# and more reliable liveness probe than RTSP.  Any HTTP status means the server
+# accepted the connection and replied.
+check_http_api() {
+	[ -n "$HTTP_API_URL" ] || return 1
+	code=$(curl -s -o /dev/null -w '%{http_code}' --max-time "$CHECK_TIMEOUT" \
+		-X GET "$HTTP_API_URL" 2>/dev/null)
+	case "$code" in
+		'' | 000 | 5??) return 1 ;;
+		*) return 0 ;;
+	esac
+}
+
+check_streamer_alive() {
+	# Prefer the API probe: it needs no RTSP client support in curl and does not
+	# depend on auth mode.
+	if check_http_api; then
 		return 0
 	fi
 
@@ -84,39 +114,62 @@ cleanup() {
 }
 
 watch() {
+	local failures=0 consecutive=0
+
 	while true; do
 		SUCCESS=false
 
 		for i in $(seq 1 $RETRY_COUNT); do
-			if check_rtsp_stream; then
+			if check_streamer_alive; then
 				SUCCESS=true
-				RESTART_COUNT=0 # Reset the restart count after a successful check
 				break
 			else
 				echo "Attempt $i failed. Retrying in $RETRY_DELAY seconds..."
-				sleep $RETRY_DELAY # Delay before retrying
+				sleep $RETRY_DELAY
 			fi
 		done
 
-		if ! $SUCCESS; then
-			echo "Stream stream is down, restarting server..."
-			service restart prudynt
-
-			RESTART_COUNT=$((RESTART_COUNT + 1))
-
-			# Delay before checking the stream again after a restart
-			echo "Waiting $RESTART_DELAY seconds before rechecking..."
-			sleep $RESTART_DELAY
-
-			if [ $RESTART_COUNT -ge $RESTART_LIMIT ]; then
-				echo "Restart limit reached, nothing to log..."
-				# ALERT!
-				RESTART_COUNT=0 # Reset the count after escalation
+		if $SUCCESS; then
+			if [ "$consecutive" -gt 0 ]; then
+				echo -c 240 -e "Stream Watchdog: stream recovered after $consecutive restart(s)"
 			fi
+			failures=0
+			consecutive=0
+			sleep $INTERVAL
+			continue
 		fi
 
-		# Sleep for a defined interval before the next full check cycle
-		sleep $INTERVAL
+		# Stream is down: restart and see whether that fixes it.
+		echo -c 160 -e "Stream Watchdog: stream is down, restarting prudynt"
+		service restart prudynt
+		consecutive=$((consecutive + 1))
+		failures=$((failures + 1))
+
+		sleep $RESTART_DELAY
+
+		if [ "$consecutive" -ge "$RESTART_LIMIT" ]; then
+			echo -c 196 -e "Stream Watchdog: $consecutive restarts without recovery"
+
+			if [ "$REBOOT_AFTER" -gt 0 ] 2>/dev/null && [ "$failures" -ge "$REBOOT_AFTER" ]; then
+				echo -c 196 -e "Stream Watchdog: $failures failed restarts, rebooting"
+				sync
+				# Hardware-watchdog fallback: stop feeding /dev/watchdog so its
+				# timer expires even if the normal reboot path is wedged.  Same
+				# guaranteed-recovery route rcK and S52netwatch use.
+				WD_PID=$(cat /var/run/watchdog.pid 2>/dev/null)
+				[ -n "$WD_PID" ] && kill -9 "$WD_PID" 2>/dev/null
+				killall -9 watchdog 2>/dev/null || true
+				reboot -f 2>/dev/null || echo b >/proc/sysrq-trigger 2>/dev/null
+				exit 0
+			fi
+
+			# Do not give up permanently, but stop restarting in a tight loop.
+			echo -c 240 -e "Stream Watchdog: backing off ${COOLDOWN}s"
+			sleep "$COOLDOWN"
+			consecutive=0
+		else
+			sleep $INTERVAL
+		fi
 	done
 }
 
@@ -126,6 +179,18 @@ start() {
 	if is_streamer_disabled; then
 		echo "Streamer disabled" >&2
 		exit 1
+	fi
+
+	# Adopt a watchdog that is already running rather than stacking a second
+	# one: the pidfile can go stale (the pidfile write happens after the fork
+	# and a restart races the previous instance's signal handling), and two
+	# watch loops would restart prudynt independently.
+	if [ -f "$PID_FILE" ]; then
+		PID=$(cat "$PID_FILE" 2>/dev/null)
+		if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then
+			echo -c 240 -e "Stream Watchdog already running (pid $PID)"
+			return 0
+		fi
 	fi
 
 	parse_rtsp_endpoint || true
@@ -138,18 +203,31 @@ start() {
 stop() {
 	echo -c 15 "Stopping Stream Watchdog"
 
-	if [ -f "$PID_FILE" ]; then
-		PID=$(cat "$PID_FILE")
-		if kill -0 "$PID" 2>/dev/null; then
-			kill "$PID"
-			echo "Watchdog process stopped."
-			rm -f "$PID_FILE" # Clean up the PID file
-		else
-			echo "No running watchdog process found."
-		fi
-	else
+	if [ ! -f "$PID_FILE" ]; then
 		echo "PID file not found."
+		return 0
 	fi
+
+	PID=$(cat "$PID_FILE" 2>/dev/null)
+	if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then
+		kill "$PID"
+		# Give the loop a moment to leave its sleep before checking again.
+		i=0
+		while [ $i -lt 20 ] && kill -0 "$PID" 2>/dev/null; do
+			usleep 100000
+			i=$((i + 1))
+		done
+		if kill -0 "$PID" 2>/dev/null; then
+			kill -9 "$PID" 2>/dev/null
+		fi
+		echo "Watchdog process stopped."
+	else
+		echo "No running watchdog process found."
+	fi
+
+	# Always clear the pidfile, including when it was stale, so the next start
+	# does not read a dead pid.
+	rm -f "$PID_FILE"
 }
 
 case "$1" in

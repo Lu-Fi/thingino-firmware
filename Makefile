@@ -17,7 +17,6 @@ endif
 BR2_EXTERNAL := $(CURDIR)
 SCRIPTS_DIR := $(BR2_EXTERNAL)/scripts
 BUILDROOT_DIR := $(BR2_EXTERNAL)/buildroot
-BUILDROOT_OVERRIDE_PATCH_DIR := $(BR2_EXTERNAL)/package/all-patches/buildroot
 
 # --- CI / automation fast-paths -------------------------------------
 #
@@ -244,6 +243,11 @@ ifeq ($(THINGINO_UBOOT_VERSION_TAG),2013-07)
 else
  UBOOT_BIN_NAME = $(if $(filter custom-fork,$(THINGINO_UBOOT_VERSION_TAG)),u-boot-lzo-with-spl.bin,u-boot-with-spl-lzma.bin)
 endif
+# loaduenv must run AFTER autoupdate: a full autoupdate erases the whole chip
+# (env partition included) and resets, so an env imported before flashing would
+# be lost. Running after means uenv.txt is applied on the first boot of the
+# freshly flashed firmware (autoupdate skips via its .done marker by then).
+AUTOUPDATE_PREFIX := $(if $(filter 2013-07,$(THINGINO_UBOOT_VERSION_TAG)),,run autoupdate;run loaduenv;)
 
 ifneq ($(CAMERA_CONFIG_REAL),)
 ifndef TOOLCHAIN_LIBC
@@ -369,8 +373,10 @@ BACKUP_SIZE_KB := 64
 # in the offset chain below (U_BOOT -> UB_ENV -> BACKUP -> KERNEL -> ROOTFS)
 ROOTFS_MTD_NUM := 4
 
-# U-Boot CONFIG_ENV_SIZE: 0x8000 for legacy 2013.07 (isvp_common.h), 0x10000
-# for the modern kconfig U-Boot (configs/uboot/layout/sfcnor.config).
+# U-Boot CONFIG_ENV_SIZE. mkenvimage must pad the env to exactly this size or
+# U-Boot rejects it with a bad CRC on every fresh flash. The 2013.07 tree
+# hardcodes 0x8000 in include/configs/isvp_common.h; the Kconfig-era trees take
+# 0x10000 from configs/uboot/layout/{sfcnor,sfcnand}.config.
 ifeq ($(THINGINO_UBOOT_VERSION_TAG),2013-07)
 UB_ENV_SIZE := 0x8000
 else

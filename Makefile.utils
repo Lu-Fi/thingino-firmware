@@ -219,7 +219,7 @@ $(U_BOOT_ENV_TXT): $(ROOTFS_BIN) $(BR2_EXTERNAL)/configs/common.uenv.txt $(CAMER
 	echo 'overlay_wipe=echo \"wiping overlay\"; sf probe && sf erase $${data_addr} $${data_size} && echo \"overlay wipe done\"' >> $@
 ifeq ($(BR2_PACKAGE_THINGINO_KOPT_MMC0_BOOT),y)
 	# MMC boot: set bootargs and load kernel from FAT partition
-	echo 'bootcmd=setenv bootargs mem=$${osmem} rmem=$${rmem} console=$${serialport},$${baudrate}n8 panic=$${panic_timeout} root=$${root} rootfstype=$${rootfstype} rootwait init=$${init};mmc rescan;fatload mmc 0:1 $${loadaddr} uImage;bootm $${loadaddr}' >> $@
+	echo 'bootcmd=$(AUTOUPDATE_PREFIX)setenv bootargs mem=$${osmem} rmem=$${rmem} console=$${serialport},$${baudrate}n8 panic=$${panic_timeout} root=$${root} rootfstype=$${rootfstype} rootwait init=$${init};mmc rescan;fatload mmc 0:1 $${loadaddr} uImage;bootm $${loadaddr}' >> $@
 else ifeq ($(BR2_THINGINO_FLASH_NAND),y)
 	# SFC-NAND boot: kernel + squashfs rootfs live in UBI volumes inside the
 	# "ubi" MTD partition (layout from the fork's t40-isvp-nand.dtsi).
@@ -251,6 +251,12 @@ else
 	echo "mtdparts=$(UBOOT_FLASH_CONTROLLER):$(U_BOOT_SIZE_KB)k(boot),$(UB_ENV_SIZE_KB)k(env),$(BACKUP_SIZE_KB)k(backup),$(KERNEL_SIZE_KB)k(kernel),$(ROOTFS_SIZE_KB)k(rootfs),$(DATA_SIZE_KB)k(data),$(FLASH_SIZE_KB)k@0(all)" >> $@
 	echo 'bootcmd=$(AUTOUPDATE_PREFIX)sf probe;setenv bootargs mem=$${osmem} rmem=$${rmem}$$(UBOOT_ISPMEM)$$(UBOOT_NMEM) console=$${serialport},$${baudrate}n8 panic=$${panic_timeout} root=$${root} rootfstype=$${rootfstype} init=$${init} mtdparts=$${mtdparts};sf read $${loadaddr} $${kern_addr} $${kern_size};bootm $${loadaddr}' >> $@
 endif
+	@if ! grep -q '^BR2_THINGINO_SDCARD=y' $(OUTPUT_DIR)/.config 2>/dev/null; then \
+		sed -i '/^autoupdate=/d; /^loaduenv=/d; s|run autoupdate;||; s|run loaduenv;||' $@; \
+	fi
+	@if ! grep -q '^BR2_THINGINO_BUTTON=y' $(OUTPUT_DIR)/.config 2>/dev/null; then \
+		sed -i '/^button_cmd_0_name=/d; /^button_cmd_0=/d; /^overlay_wipe=/d' $@; \
+	fi
 	exit
 
 # Rebuild U-Boot with actual partition sizes after rootfs is ready
@@ -300,7 +306,7 @@ help:
 	Usage:\n\
 	  make bootstrap      install system deps\n\
 	  make setup-hooks    configure local git hooks path (.githooks)\n\
-	  make update         update local repo and submodules (excludes buildroot)\n\
+	  make update         update local repo and submodules\n\
 	  make                build from scratch (clean + parallel) [DEFAULT]\n\
 	  make dev            serial build for debugging compilation errors\n\
 	  make fast           fast incremental build (no clean)\n\
@@ -310,7 +316,7 @@ help:
 	  make build-info     generate post-build graphs and package analysis\n\
 	  make clean          clean before reassembly\n\
 	  make distclean      start building from scratch\n\
-	  make rebuild-<pkg>  clean/rebuild/reinstall <pkg> and run target-finalize\n\
+	  make rebuild-<pkg>  clean/rebuild/reinstall <pkg> (run 'make pack' to finalize)\n\
 	  make bundle-<pkg>   create a .tgz bundle for <pkg> (requires CAMERA=)\n\
 	  make show-vars      print key build variables\n\
 	  make build-all      build all camera configs one by one\n\
@@ -454,6 +460,23 @@ scriba:
 #   1. It would break non-buildroot targets (like when this rule incorrectly matched 'update')
 #   2. Buildroot targets will fail gracefully if config is missing
 #   3. Users should use 'make br-<target>' for buildroot targets, which includes check-config
+#
+# Caution: GNU make also consults .DEFAULT for prerequisites it cannot remake,
+# not only for command-line goals.  A prerequisite that existed at parse time
+# but is missing by the time make tries to remake it (e.g. a user file listed
+# by $(wildcard) in THINGINO_USER_UENV_FILES that something deleted mid-build)
+# lands here with $@ set to that path, and gets forwarded verbatim to Buildroot:
+#
+#   make -C buildroot ... /home/paul/.thingino/user/common/local.uenv.txt
+#   make[1]: *** No rule to make target '.../local.uenv.txt'.  Stop.
+#
+# If that message reappears, check the user config files under
+# $(THINGINO_USER_DIR) first, then guard this rule with a MAKECMDGOALS check so
+# it only forwards real command-line goals.
 .DEFAULT:
 	@$(TEAL) "$@"
-	$(BR2_MAKE) $@
+	@if [ -n "$(MAKECMDGOALS)" ] && echo "$(MAKECMDGOALS)" | grep -qw "$@"; then \
+		$(BR2_MAKE) $@; \
+	else \
+		echo "WARNING: ignoring prerequisite $@ (not a command-line goal)"; \
+	fi

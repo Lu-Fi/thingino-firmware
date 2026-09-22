@@ -1,0 +1,11 @@
+.env
+
+# config/config.yml is rendered by add-camera.sh. Everything else under
+# config/ is Frigate runtime state: the SQLite databases and their backups,
+# the model cache, the JWT secret, and assorted locks. Only the directory
+# placeholder is tracked.
+/config/*
+!/config/.gitkeep
+
+# Recording segments, clips, and exports.
+/media/

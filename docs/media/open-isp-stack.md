@@ -10,34 +10,192 @@ default. Select the experimental implementation in `menuconfig` under
 BR2_PACKAGE_THINGINO_ISP_OPEN=y
 ```
 
-The open provider selects:
+The open provider selects `open-tx-isp` (the kernel driver) plus OpenIMP
+(`libimp.so`) where available, with `ingenic-system-libs-neo` and
+`libaudioProcess-neo` replacing the support libraries.
 
-| Component | T23 | T31 | T40 | T41 |
-| --- | --- | --- | --- | --- |
-| open-tx-isp kernel driver | yes | yes | yes | yes |
-| OpenIMP `libimp.so` | no | yes | yes | yes |
-| ingenic-system-libs-neo | yes | yes | yes | yes |
-| libaudioProcess-neo | yes | yes | yes | yes |
+## SoC coverage
 
-T23/T31 are limited to the vendor Linux 3.10.14 trees. T40/T41 are limited to
-the vendor Linux 4.4.94 trees. C100 is not included in the T31 support claim.
+Upstream (as cloned into `overrides/open-tx-isp/` and `overrides/openimp/`)
+has moved past the original four-SoC scope.
 
-OpenIMP currently has device builds for T31, T40, and T41. T23 therefore keeps
-the proprietary `libimp.so` while replacing the ISP kernel driver and the
-system/audio support libraries.
+| Component | Upstream driver/build scope |
+| --- | --- |
+| open-tx-isp driver | T10, T20, T21, T23, T30, T31, T40, T41 |
+| OpenIMP `libimp.so` | T20, T21, T23, T30, T31, T40, T41 |
 
-The T31 OpenIMP build is currently video-focused and intentionally omits IMP
-audio entry points; some optional OSD/IVS calls used by feature-rich streamers
-are also incomplete. Select `BR2_PACKAGE_THINGINO_ISP_PROPRIETARY=y` to return
-the entire camera profile to the Ingenic ISP driver and libimp provider.
+The Thingino Kconfig gates mirror that, minus the T10 odd case:
+
+- `OPEN_TX_ISP_SUPPORTED` (T10/T20/T21/T23/T30/T31 on 3.10.14, T40/T41 on
+  4.4.94).
+- `OPENIMP_SUPPORTED` (T20/T21/T23/T30/T31 on 3.10.14, T40/T41 on 4.4.94).
+
+**T10** has an open-tx-isp driver but no OpenIMP build target, so it stays
+out of the OpenIMP gate and keeps the Ingenic libimp provider.
+
+**T23** is a hybrid build: a partial `libimp.so` with no audio entry points
+plus an `openimp-t23-helixd` worker that links the OEM `libimp.so` for the
+proprietary Helix encoder, while RAD keeps using OEM `libimp.so` for audio.
+`openimp.mk` selects `BR2_PACKAGE_INGENIC_LIB_LIBIMP`, copies that OEM
+`libimp.so` to `/opt/openimp-t23/libimp.so` next to the helixd worker, and
+installs OpenIMP's `libimp.so` as `/usr/lib/libimp.so` for RAD.
+
+C100 is not covered by either component.
+
+Kernel focus:
+
+- Linux 3.10.14 vendor trees: T10, T20, T21, T23, T30, T31
+- Linux 4.4.94 vendor trees: T40, T41
+- T31 also builds on the mainline Linux 7.1 compatibility path upstream
+  (Thingino's Kconfig exposes the open stack only on the vendor trees)
+
+## Module completeness
+
+- **Audio**: `IMP_AI_*` implemented for T31 and T40; T20/T21 reuse the T31
+  audio implementation. T30 is video-only — its build deliberately refuses to
+  export the IMP audio entry points.
+- **OSD**: implemented for T31; T40 marks the `IMP_OSD_*` entry points
+  `P3_UNSUPPORTED` (returns `ENOTSUP`).
+- **ISP**: `isp_tseries.c` provides the `IMP_ISP_*` tuning surface
+  (brightness/contrast/sharpness and friends).
+- **IVS**: still incomplete — no `IMP_IVS_MoveDetect`, and T40 stubs the IVS
+  entry points.
+- **Encoder**: per-SoC encode paths exist — Helix for T21/T30, the shared
+  AVPU backend for T31/T40/T41, and for T23 the AVPU backend plus the
+  separate `openimp-t23-helixd` worker that links the OEM Helix encoder. The
+  upstream README reports decoder-clean H.264 on T30/T31/T40; T41 is still
+  in correctness bring-up.
+
+## Installation
 
 The open driver is installed as `tx-isp-<soc>.ko`, preserving the module name
-expected by the SDK sensor drivers and `/etc/modules.d/20-isp`. OpenIMP and the
-neo libraries are installed to staging before consumers link, and target
+expected by the SDK sensor drivers and `/etc/modules.d/20-isp`. OpenIMP and
+the neo libraries are installed to staging before consumers link, and target
 finalization preserves the selected replacements in the root filesystem.
-OpenIMP also installs `openimp-tuningd`; its init script activates only when
-Raptor is configured for the V4L2 backend.
 
-This profile is experimental. Upstream reports working streams on supported
-targets, but image tuning, sensor coverage, WDR, flip, exposure range, and
-OEM-equivalent image quality remain incomplete.
+OpenIMP also installs `openimp-tuningd`; its init script (`S30openimp-tuning`)
+starts it only when Raptor reports the V4L2 video backend
+(`raptorctl config get system video_backend`).
+
+## Sensor info registry (/proc/jz/sensor)
+
+`/proc/jz/sensor` is owned by the ISP, not by the sensor modules. The ISP
+publishes an indexed registry - `count`, `events`, and one `sensorN/`
+directory per registered sensor with `name`, `i2c_addr`, `status`, geometry,
+fps and the wiring fields - which is what Raptor's multi-sensor model reads
+(`rvd` scans `sensorN/status` to find the active sensor).
+
+The vendor ISP implements this in `tx-isp-sinfo.c`; the open driver ports it
+as `tx_isp_sinfo` (`driver/common/tx_isp_sinfo.c`, with a per-SoC ABI config
+in `driver/<soc>/tx_isp_<soc>_sinfo.c`). The SDK sensor modules must not
+create the same node: procfs resolves a duplicated name to the last
+registrant, so their flat tree shadowed the ISP's `sensorN/` and Raptor could
+not find the active sensor. ciao passes `-DSENSOR_PROC_OWNED_BY_ISP` to the
+sensor module build (`package/ingenic-sdk/ingenic-sdk.mk`) when the open
+stack is selected; `common/sensor/common/sensor-info.c` then only registers
+attributes and leaves the node to the ISP. Proprietary builds keep the sensor
+module's tree because their ISP has no such registry.
+
+Known gap closed: the bind path works (`sensor_bind` populates the slot once
+the sensor is active), and the pre-bind values come from
+`tx_isp_sinfo_driver_add()`. The one missing piece was the I2C address -
+`rvd` reads `i2c_addr` *before* it binds the sensor, so the sensor module has
+to publish the driver with the real address at load time. Every family's
+`common/isp/<arch>/include/sensor-common.h` now wraps
+`private_i2c_add_driver()` to call `tx_isp_sinfo_driver_add()` with the
+driver's own `SENSOR_I2C_ADDRESS` when `SENSOR_PROC_OWNED_BY_ISP` is set (the
+registry merges the repeat call, so t31's legacy-zero wrapper is fine too).
+The pre-bind registry then reports the address and Raptor autodetects
+without a per-camera pin. Verified on T31: `sensor0/{name,i2c_addr,status,
+width,height,fps}` populate and `rvd` brings the full stack up with
+`[sensor]` unset.
+
+The bind - the second half of the slot, which fills `width/height/fps/
+chip_id` and moves `status` to active - is wired per family, because the
+vendor wrappers differ:
+
+- **T31** - the ISP calls `tx_isp_sinfo_sensor_bind()` itself when it
+  registers the subdev, so the SDK needs nothing.
+- **T23** - the recovered ISP never calls it, so
+  `common/isp/t23/include/sensor-common.h` wraps the sensor's
+  `tx_isp_subdev_init()`/`deinit()` and binds there (the probe is where the
+  subdev and its attributes become valid).
+- **T20** - the sensor drivers use the apical `v4l2_i2c_subdev_init()`, not
+  the tx-isp subdev, so the call is added to `subdev_core_ops_register_sensor()`
+  in the driver (`package/open-tx-isp/0001-t20-publish-sensors-to-the-sinfo-registry.patch`).
+
+The remaining families' `sensor-common.h` share the T23 shape and would take
+the same hook, but only T31/T20/T23 have been built and run.
+
+## Video rings and refmode
+
+`rvd` publishes H.264 into `rss_ring_main` in zero-copy refmode by default,
+which assumes the encoder's output buffers live inside the ISP `rmem`
+reservation. OpenIMP's AVPU encoder allocates them elsewhere, so every frame
+falls back to an inline copy that the refmode-sized ring cannot hold - the
+H.264 ring stays empty and RTSP and the WebRTC preview stay black (the JPEG
+path is unaffected, which is why snapshots and MJPEG work). `thingino-raptor`'s
+`[ring] refmode` now defaults to false when `BR2_PACKAGE_OPENIMP` is selected;
+the proprietary libimp allocates from rmem and keeps zero-copy.
+
+## Status
+
+Per the upstream `open-tx-isp` README, the driver is device-tested on T20,
+T23, T30, T31, T40, and T41 (T10/T21 hardware validation pending), with
+near-OEM daylight parity demonstrated on T31/SC301IOT. OpenIMP streams on
+device on T20 and T31. H/V flip control now reaches the real MSCA output
+register.
+
+T23 + vendor libimp.so (fixed): `IMP_ISP_AddSensor()` used to return -1
+against the open driver, so the stock userspace never attached the sensor.
+The cause was prudynt's preemptive T23 cleanup calling
+`IMP_ISP_DisableSensor()` before the sensor had ever been enabled: the
+proprietary ISP fails that call, the open driver's stubbed
+`VIDIOC_G_INPUT` reported a sensor and let it through, and the libimp then
+decremented its enable count below zero (`1 - 2` = `0xffffffff`).
+`IMP_ISP_Close()` refuses while that count reads "enabled", so `gISPdev` was
+never freed and every later `AddSensor()` failed with "Sensor is runing".
+
+Two changes fix it: prudynt no longer calls `DisableSensor()` from that
+cleanup (`overrides/prudynt-t`, for upstream), and the driver reports `-1`
+from `VIDIOC_G_INPUT` until libimp registers a sensor, matching the vendor
+(`package/open-tx-isp/0002-...patch`). With both, T23 attaches the sensor,
+encodes H.264 1920x1080 @ 15 fps and serves RTSP plus AAC. Note that the T23
+adapter's delegated ioctl handler is a recovery stub - most vendor commands
+return 0 without side effects - so behaviour leans on the driver's own
+regtrace pipeline; `daynightd` still logs "Failed to read ISP data" because
+its tuning procfs layout differs.
+
+Known issue - T23 + Raptor: the OpenIMP userspace still hangs the device a
+minute or so into boot on T23 (userspace starves, SSH stops completing the
+banner exchange, ping still answers) and the watchdog resets it in a loop.
+The registry is populated and `tx-isp-t23`/`sensor_gc2083_t23` load, so the
+runaway is in the OpenIMP userspace (its T23 encoder goes through the
+`openimp-t23-helixd` bridge), not the kernel driver. T31
+(`wyze_cam3_t31x`) and T20 (`wyze_cam2_t20x`) stream fine under Raptor.
+
+Still experimental: night/IR, WDR, extreme exposure, additional sensors, and
+long-duration stability lack OEM-comparable validation, and some tuning tables
+remain synthetic or partially reconstructed.
+
+Select `BR2_PACKAGE_THINGINO_ISP_PROPRIETARY=y` to return to the Ingenic
+driver and libimp provider.
+
+## Open kernel driver with the Ingenic libimp.so
+
+`BR2_PACKAGE_THINGINO_ISP_OPEN_VENDOR_LIBIMP` keeps the stock libimp.so as
+the userspace on top of open-tx-isp instead of OpenIMP. The driver is built
+for both (upstream device-tests T20 and T31 with each), and the split
+matters: OpenIMP exports no `IMP_AENC_*`/`IMP_ADEC_*`, so prudynt cannot run
+under it, while the stock libimp keeps the audio codecs and, on T23, avoids
+the OpenIMP Helix encoder hybrid.
+
+The two userspaces also read the sensor through different procfs layouts, so
+the sensor module build is keyed accordingly (`package/ingenic-sdk`):
+`SENSOR_PROC_OWNED_BY_ISP` (the `sensor-common.h` hook that feeds the ISP's
+`sensorN/` registry) is set for every `ISP_OPEN` build, because both
+providers resolve a sensor through `IMP_ISP_AddSensor` -> `driver_add`/bind.
+`SENSOR_PROC_PUBLISH_FLAT_TREE` is set when the vendor libimp is the
+provider, so the sensor modules also publish the flat
+`/proc/jz/sensor/{width,height,max_fps,...}` tree prudynt reads (it carries
+`max_fps`, which the T23 open driver's registry does not).

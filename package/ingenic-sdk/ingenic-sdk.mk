@@ -1,7 +1,7 @@
 INGENIC_SDK_SITE_METHOD = git
 INGENIC_SDK_SITE = https://github.com/themactep/ingenic-sdk
 INGENIC_SDK_SITE_BRANCH = master
-INGENIC_SDK_VERSION = b39cf8fbbadf4ea03a67d7739f8fcc02960253e3
+INGENIC_SDK_VERSION = 1bda5c486b688d86a10e2f3c10223647106e09ff
 
 INGENIC_SDK_LICENSE = GPL-3.0
 INGENIC_SDK_LICENSE_FILES = LICENSE
@@ -39,6 +39,27 @@ INGENIC_SDK_EXTRA_CFLAGS += -DCONFIG_JZ_ISP_TRACE
 define INGENIC_SDK_LINUX_CONFIG_FIXUPS
 	$(call KCONFIG_ENABLE_OPT,CONFIG_JZ_ISP_TRACE)
 endef
+endif
+
+# open-tx-isp's tx_isp_sinfo owns /proc/jz/sensor and is the registry both
+# userspaces resolve a sensor through (IMP_ISP_AddSensor -> driver_add/bind),
+# so the sensor modules always feed it - that is the SENSOR_PROC_OWNED_BY_ISP
+# hook in common/isp/<arch>/include/sensor-common.h.
+#
+# OpenIMP's Raptor model reads the same registry as the indexed sensorN/ tree,
+# and the sensor modules must not create the procfs node in that case: procfs
+# resolves a duplicated name to the last registrant, so the vendor flat tree
+# would shadow sensorN/ and Raptor could not autodetect the active sensor.
+ifeq ($(BR2_PACKAGE_THINGINO_ISP_OPEN),y)
+INGENIC_SDK_EXTRA_CFLAGS += -DSENSOR_PROC_OWNED_BY_ISP
+# The stock libimp.so userspace (prudynt, and the open driver's libimp.so
+# compatibility goal) reads the vendor's flat /proc/jz/sensor/{width,height,
+# max_fps,...} tree - which also carries max_fps, a value the T23 open driver
+# does not expose. Publish it alongside the registry, as the proprietary ISP
+# build does; the registry stays the source of truth for AddSensor.
+ifeq ($(BR2_PACKAGE_THINGINO_ISP_OPEN_VENDOR_LIBIMP),y)
+INGENIC_SDK_EXTRA_CFLAGS += -DSENSOR_PROC_PUBLISH_FLAT_TREE
+endif
 endif
 
 INGENIC_SDK_MODULE_MAKE_OPTS += EXTRA_CFLAGS="$(INGENIC_SDK_EXTRA_CFLAGS)"

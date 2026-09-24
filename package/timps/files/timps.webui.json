@@ -36,20 +36,12 @@
           "href": "/streamer-image.html"
         },
         {
-          "label": "RTSP Main stream",
-          "href": "/streamer-main.html"
+          "label": "Video encoder",
+          "href": "/streamer-video.html"
         },
         {
-          "label": "Main stream OSD",
-          "href": "/streamer-osd0.html"
-        },
-        {
-          "label": "RTSP Substream",
-          "href": "/streamer-substream.html"
-        },
-        {
-          "label": "Substream OSD",
-          "href": "/streamer-osd1.html"
+          "label": "Overlays",
+          "href": "/streamer-overlays.html"
         },
         {
           "label": "Sensor IQ File",
@@ -142,11 +134,9 @@
   ],
   "pages": [
     "/preview.html",
-    "/streamer-main.html",
-    "/streamer-substream.html",
+    "/streamer-video.html",
     "/streamer-image.html",
-    "/streamer-osd0.html",
-    "/streamer-osd1.html",
+    "/streamer-overlays.html",
     "/streamer-sensor.html",
     "/streamer-config.html",
     "/config-audio.html",

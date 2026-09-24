@@ -4,9 +4,9 @@ const ImageColorMode = 0;
 const nativeImagePage =
   document.body && document.body.id === "page-streamer-image";
 const nativeOsdPage =
-  document.body && /^page-streamer-osd[01]$/.test(document.body.id);
+  document.body && document.body.id === "page-streamer-overlays";
 const nativeEncoderPage =
-  document.body && /^page-streamer-(main|substream)$/.test(document.body.id);
+  document.body && document.body.id === "page-streamer-video";
 
 let timpsMediaInfo = null; // {token, port} after the first fetch
 let timpsMediaPending = null; // in-flight fetch (dedup)
@@ -653,11 +653,12 @@ loadInitialData().then(async () => {
   // Get stream from data-stream attribute, default to ch0 if not specified;
   // "chN" maps to timps channel N (ch0 -> 0, ch1 -> 1)
   const preview = $("#preview");
-  const streamChannel = preview?.dataset?.stream || "ch0";
-  const streamChn = parseInt(streamChannel.replace(/^ch/, ""), 10) || 0;
+  // re-read per load: the video/overlay pages switch data-stream with their tabs
+  const streamChn = () =>
+    parseInt((preview?.dataset?.stream || "ch0").replace(/^ch/, ""), 10) || 0;
   // live MJPEG straight from timps; the cache-bust param forces the browser
   // to reopen the multipart stream instead of showing a stale cached frame
-  const liveStreamUrl = (chn = streamChn) =>
+  const liveStreamUrl = (chn = streamChn()) =>
     `${timpsMediaUrl("live", chn)}&_=${Date.now()}`;
 
   const timeout = 120000;

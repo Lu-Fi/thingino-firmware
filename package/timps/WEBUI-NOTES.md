@@ -378,6 +378,9 @@ redirect to `#privacy`). The stream comes from the page's stream tabs (the
 live `#preview` instead of a polled snapshot, and "both streams" is the
 page-wide `#osd-link` switch. Turning that switch on no longer mirrors all
 existing masks at once; like the overlays, only later edits are mirrored.
+Masks are listed like the overlays (only slots in use; a row opens the
+editor). Selected mask: arrows move 1 px, Shift 10 px, Ctrl/Cmd+arrows
+resize; Alt is avoided because Alt+Left is the browser's "back".
 
 ### `send()`: why mirrored OTHER-stream echoes are never folded back
 
@@ -405,6 +408,12 @@ controls dead, leaving a page that looks fine yet cannot add or switch
 masks until the user reloads by hand. `#pm-reload` had the same problem -
 it was not disabled, so it re-ran `load()`, appeared to work, and still
 left a dead editor.
+
+## a/streamer-image.js (streamer-image.html)
+
+Cards with sliders; every image key is live. Keys missing from `caps.image`
+are hidden and named under the preview. Red/blue gain are shown only in
+Manual or Custom white balance. Double-click resets a slider to its middle.
 
 ## Record and timelapse pages
 

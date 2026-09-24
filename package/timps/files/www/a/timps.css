@@ -15,12 +15,14 @@
 .tv-tabs .nav-link.active { color: #ff8800; }
 .tv-card { border: 1px solid var(--bs-border-color); border-radius: .5rem; padding: .9rem; background: var(--bs-tertiary-bg); }
 .tv-card > h6 { font-size: .78rem; letter-spacing: .06em; text-transform: uppercase; color: var(--bs-secondary-color); margin-bottom: .75rem; }
-.tv-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .75rem; }
+.tv-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: .75rem; }
 .tv-fields label { font-size: .82rem; color: var(--bs-secondary-color); display: flex; gap: .35rem; align-items: center; margin-bottom: .25rem; }
 .tv-badge { font-size: .62rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; border-radius: .25rem; padding: 0 .3rem; line-height: 1.5; }
 .tv-badge.live { color: #4cc38a; background: rgb(76 195 138 / .12); }
 .tv-badge.rst { color: #f0b429; background: rgb(240 180 41 / .12); }
 .tv-pair { display: grid; grid-template-columns: 1fr auto 1fr; gap: .35rem; align-items: center; }
+.tv-pair input { padding-inline: .45rem; min-width: 0; }
+#v-modes .btn.active { color: #ff8800; border-color: #ff8800; background: rgb(255 136 0 / .1); }
 .tv-pending { position: fixed; left: 1rem; right: 1rem; bottom: 1rem; max-width: 1100px; margin: 0 auto; z-index: 1050;
   display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center; background: #3a2f12; border: 1px solid #f0b429; border-radius: .6rem; padding: .6rem .9rem; }
 .tv-pending[hidden] { display: none; }
@@ -29,6 +31,7 @@
 .tv-frame { position: relative; }
 .tv-frame:focus-visible { outline: 2px solid #ff8800; outline-offset: 2px; }
 .tv-box { position: absolute; border: 1px dashed rgb(255 255 255 / .55); cursor: pointer; }
+.tv-box::after { content: ""; position: absolute; inset: -5px; }
 .tv-box.sel { border: 1px solid #ff8800; cursor: move; touch-action: none; background: rgb(255 136 0 / .08); }
 .tv-hint { font-size: .75rem; color: var(--bs-secondary-color); display: flex; flex-wrap: wrap; gap: .2rem .7rem; justify-content: flex-end; }
 .tv-hint kbd { font-size: .7rem; padding: 0 .3rem; }

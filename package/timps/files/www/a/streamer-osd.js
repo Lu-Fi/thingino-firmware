@@ -19,6 +19,7 @@
   var openItem = -1;
   var linked = false;
   var dragging = false;
+  var reloadLater = false;            // config changed while the user was typing
 
   function $id(id) { return document.getElementById(id); }
   function ui() { return window.timpsUi; }
@@ -420,14 +421,18 @@
     }, function () { offlineNotice(true); });
   }
 
+  function typing() {
+    var ae = document.activeElement;
+    return !!ae && /^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName) && ae.type !== "checkbox";
+  }
+
   function onEvent(type, data) {
     if (!data || dragging) return;
     if (!data.resync) {
       var key = data.key || "";
       if (key !== "osd.enabled" && !/^osd[01]\./.test(key)) return;
     }
-    var ae = document.activeElement;
-    if (ae && /^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName) && ae.type !== "checkbox") return;
+    if (typing()) { reloadLater = true; return; }
     load(false);
   }
 
@@ -461,6 +466,11 @@
       }
     });
     $id("frame").addEventListener("keydown", nudge);
+    document.addEventListener("focusout", function () {
+      setTimeout(function () {
+        if (reloadLater && !typing() && !dragging) { reloadLater = false; load(false); }
+      }, 0);
+    });
     window.addEventListener("resize", renderBoxes);
     load(true);
     if (window.timpsApi) window.timpsApi.events("config", onEvent);

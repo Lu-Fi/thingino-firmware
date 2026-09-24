@@ -180,73 +180,58 @@ with nothing to hide, whose refresh would race the gate). `wait.html`,
 `gphotos-auth-callback.html` and `login.html` do not load `main.js` at all;
 the injection is per-page-unconditional, hence the explicit list.
 
-## a/streamer-osd.js
+## Video pages: streamer-video.html + streamer-overlays.html
 
-### File header: full data-flow spec (Phase 1, data-driven OSD items)
+Two pages replace the four per-stream pages (streamer-main/-substream/
+-osd0/-osd1.html, now redirect stubs so bookmarks keep working). Each page
+shows both streams behind tabs; `a/timps-ui.js` holds what they share.
 
-Talks directly to the timps streamer over `window.timpsApi` (GET/POST
-/control on timps's own port, per-boot token) - no json-prudynt.cgi bridge
-for these pages (the OSD wiring in `a/timps-preview.js` is gated off here;
-that script keeps only the live preview `<img>`, which already loads
-straight from timps).
+### a/timps-ui.js
 
-Each video stream carries its own independent set of up to `MS_MAX_OSD`
-(=8) generic overlay items; every item is a text-or-logo slot with the same
-field set. Instead of four hard-coded named boxes (time/usertext/uptime/
-logo) this page renders one "card" per in-use item index and lets the user
-add/remove items (0..8), edit every field, and drive both streams' item N
-at once.
+- **Tabs**: `[data-stream-tab]` buttons. The stream comes from `?s=0|1`,
+  else the last choice (localStorage "timps-stream"), else 0; a switch
+  rewrites `?s=` and `#preview`'s `data-stream`, and `timps-preview.js`
+  re-reads that attribute on every stream (re)start.
+- **Restart bar**: `markPending(keys)` collects keys that wait for a
+  restart (from the POST reply's `deferred_keys`, or client-side knowledge
+  such as an OSD item without a boot-time region) into one fixed bar with
+  "Restart streamer" (`/x/restart-prudynt.cgi`), then polls `/control`
+  until the daemon is back and calls the page's reload hook.
+- **Badges**: `badge(live)` renders the live/restart tag used on field
+  labels.
 
-- **Stream**: detected from the page's body id (`page-streamer-osd0` ->
-  section "osd0", `page-streamer-osd1` -> "osd1"). Index IS the identity -
-  old configs (0=time, 1=user text, 2=uptime, 3=logo) load unchanged by
-  index, distinguished text-vs-logo by each item's "type".
-- **Load**: `timpsApi.get()` returns BOTH streams' item sets in one shot; we
-  populate this stream's cards and remember the other stream's items (for
-  the "apply to both" scope + its restart bookkeeping).
-- **Save**: per-item changed leaves apply LIVE via
-  `timpsApi.set({osdS:{N:{leaf:val}}})` and persist immediately. A card
-  scoped to "both streams" POSTs the same leaves to osd0.N AND osd1.N.
-- **Restart**: the global `osd.enabled` master switch is persist+restart,
-  and enabling an item that was OFF when the streamer started cannot be
-  applied live (its IMP region only exists when enabled at startup). Both
-  surface the "Restart streamer" hint; each card shows a per-item Live /
-  Needs-restart / Off status pill.
-- **Caps**: `caps.osd` lists the item leaf keys this build/SoC applies live
-  (text, x, y, font_size, color, transparency, outline, outline_color).
-  Each per-leaf control greys out when its key is absent. enabled, x/y
-  position and the structural controls are NOT caps-gated (enabled is
-  structural, never advertised in caps.osd).
-- **Type**: switching an item text<->logo (and logo upload) is Phase 2 - it
-  needs a persist-only "type"/"logo_path" leaf the streamer does not accept
-  over /control yet, so the type selector is disabled with a tooltip and
-  simply reflects the item's current type.
-- **Colors**: `<input type=color>` (#rrggbb) + its "-alpha" range make up
-  the timps "0xAARRGGBB" color and back. This is separate from
-  "transparency" (a 0..255 group alpha over the whole item).
-- **Offline**: if timps is unreachable the page shows a notice and no
-  cards; it never throws.
+### a/streamer-encoder.js (streamer-video.html)
 
-### `applyCorrections()`: why the OTHER stream's echo is never rendered here
+- One form (`v-*` ids) refilled per tab from `GET /control` `video[i]`.
+- Live vs restart per field from `caps.video_live`, plus `rtsp_path`
+  (always live, graded live by the daemon since timps v1.9.20).
+- Rate-control fields that do nothing for the SoC/mode/codec are hidden
+  and named under the card, instead of shown disabled.
+- Live chips (kbit/s, fps, subscribers, clients) from the `stats` SSE, the
+  same feed as the preview page's stats card.
+- "Compare streams" renders both streams side by side from the last GET.
 
-DELIBERATE (a decision, not a gap): a "both" scope POST also carries echoes
-for the OTHER stream ("osd\<OTHER\>.\*"). This page renders cards for ONE
-stream only, so no visible widget shows the other stream's value - there is
-nothing that could go stale, and writing such an echo into THIS stream's
-cards would be wrong: the two streams legitimately hold different values
-(that is what the scopes are for). The toast still reports those
-corrections.
+### a/streamer-osd.js (streamer-overlays.html)
 
-### `sendBody()`: what `r.rejected > 0` on an otherwise-200 response means
-
-The daemon applied some leaves and refused others, and a silent success
-would lie about the refused ones. NOT about cleared text any more - timps
-`7893a1a` ("control: let an empty string clear a text field") makes `""` a
-valid value for STRING fields, meaning "clear this", so a cleared
-`.osd-text` is now accepted and stored empty. What still gets refused here
-is null/`"undefined"` anywhere, and `""` on the NON-string leaves of a card
-(font_size, transparency, x/y) - where `pint("")` would silently zero the
-setting rather than clear it (timps `src/control.c`, `apply_one`).
+- One compact row per in-use slot; clicking a row opens its editor.
+- **Position**: timps x/y are px, >0 from left/top, <0 from right/bottom,
+  0 = exactly centred (so no offset on a centred axis, and 1 px is the
+  smallest edge distance). The editor shows this as a 3x3 anchor plus two
+  offsets and prints the resulting `osdS.N.x/y`.
+- **Preview**: dashed boxes over the live image mark each overlay; their
+  size is an estimate (canvas text metrics of an expanded template, logo
+  100x30). Selected box: drag, or arrow keys 1 px / Shift 10 px (POSTed
+  debounced). A move on a locked (centred) axis shows a hint instead.
+- **Both streams**: a page-level switch (localStorage "timps-osd-link")
+  writes every change to osd0 and osd1, scaling font_size/outline/y by the
+  height ratio and x by the width ratio.
+- **Restart**: `osd.enabled` and enabling a slot that had no region at
+  startup go to the restart bar; rows show Live / Needs restart / Off.
+- **Caps**: leaves missing from `caps.osd` are shown disabled.
+- **Colours**: `<input type=color>` + opacity range form "0xAARRGGBB";
+  "transparency" is the separate group alpha.
+- **Remote changes**: a config event reloads the page state, but not while
+  an input has focus; the reload runs when focus leaves it.
 
 ## preview.html
 

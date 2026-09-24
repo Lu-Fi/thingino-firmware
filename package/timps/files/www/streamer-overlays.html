@@ -33,7 +33,8 @@
       <div class="col-12 col-xl-5">
         <div class="tv-hint mb-1 tv-hint-text"><span>Click an overlay to select</span><span>Drag to move</span>
           <span><kbd>&larr;</kbd><kbd>&rarr;</kbd><kbd>&uarr;</kbd><kbd>&darr;</kbd> 1 px</span><span><kbd>Shift</kbd>+arrows 10 px</span></div>
-        <div class="tv-hint mb-1 tv-hint-privacy"><span>Drag a mask to move</span><span>Drag its corner to resize</span></div>
+        <div class="tv-hint mb-1 tv-hint-privacy"><span>Click a mask to select</span><span>Drag to move, corner to resize</span>
+          <span><kbd>&larr;</kbd><kbd>&rarr;</kbd><kbd>&uarr;</kbd><kbd>&darr;</kbd> 1 px</span><span><kbd>Shift</kbd>+arrows 10 px</span><span><kbd>Ctrl</kbd>+arrows resize</span></div>
         <div id="frame" class="tv-frame" tabindex="0" aria-label="Preview; arrow keys move the selected overlay">
           <img id="preview" src="/a/nostream.svg" class="img-fluid d-block w-100" alt="Image: Preview" tabindex="-1" data-stream="ch0">
           <div id="osd-boxes"></div>
@@ -67,6 +68,7 @@
             <i class="bi bi-exclamation-triangle me-1"></i>The streamer does not report privacy support (or is unreachable); the editor is disabled.
           </div>
           <div id="pm-list"></div>
+          <p id="pm-empty" class="text-body-secondary d-none">No masks on this stream. Use &ldquo;Add mask&rdquo; to create one.</p>
           <div class="d-flex flex-wrap align-items-center gap-3 mt-2">
             <button type="button" id="pm-add" class="btn btn-sm btn-outline-primary"><i class="bi bi-plus-lg me-1"></i>Add mask</button>
             <span class="small text-body-secondary">Up to <span id="privacy-max">4</span> per stream, applied live.</span>

@@ -1,4 +1,4 @@
-// streamer-image.js - NATIVE Image Quality page.
+// streamer-image.js - Image Quality page (cards with sliders).
 (function () {
   "use strict";
 
@@ -31,16 +31,41 @@
     else console.log("[streamer-image]", type + ":", message);
   }
 
-  // same disabled styling the page always used: input.disabled + a
-  // "disabled" class on the wrapping <p>/.select/.boolean block
+  var LABEL = {};
+  var unsupported = {};
+
+  // unsupported on this SoC: hidden and named under the preview
   function setEnabled(id, on) {
     var el = $id(id);
     if (!el) return;
     el.disabled = !on;
-    var wrap =
-      el.closest("p, .number-range, .select, .boolean, .col") ||
-      el.parentElement;
-    if (wrap) wrap.classList.toggle("disabled", !on);
+    var wrap = el.closest("[data-f]");
+    if (wrap) wrap.classList.toggle("d-none", !on);
+    if (on) delete unsupported[id]; else unsupported[id] = true;
+  }
+
+  function showValue(id) {
+    var o = $id(id + "-v"), el = $id(id);
+    if (o && el) o.textContent = el.value;
+  }
+
+  // RGB gains only act in manual/custom white balance
+  function wbGate() {
+    var mode = $id("image_core_wb_mode");
+    var manual = mode && (mode.value === "1" || mode.value === "9");
+    ["image_wb_rgain", "image_wb_bgain"].forEach(function (id) {
+      var w = $id(id) && $id(id).closest("[data-f]");
+      if (w && !unsupported[id]) w.classList.toggle("d-none", !manual);
+    });
+    var note = $id("img-wb-note");
+    if (note) note.textContent = manual || unsupported.image_wb_rgain ? "" :
+      "Red/blue gain apply in Manual or Custom mode.";
+  }
+
+  function renderUnsupported() {
+    var names = Object.keys(unsupported).map(function (id) { return LABEL[id] || id; });
+    var el = $id("img-unsupported");
+    if (el) el.textContent = names.length ? "Not supported on this camera: " + names.join(", ") + "." : "";
   }
 
   function populate(id, value) {
@@ -48,6 +73,8 @@
     if (!el || value === undefined || value === null) return;
     if (el.type === "checkbox") el.checked = !!Number(value);
     else el.value = value;
+    showValue(id);
+    if (id === "image_core_wb_mode") wbGate();
   }
 
   var REVERSE = {};
@@ -104,31 +131,25 @@
     Object.keys(FIELD_MAP).forEach(function (id) {
       var el = $id(id);
       if (!el) return;
-      setEnabled(id, false); // disabled until caps confirm support
-      el.addEventListener("change", function () { send(id); });
+      var lab = document.querySelector('label[for="' + id + '"]');
+      LABEL[id] = lab ? lab.textContent.replace(/\s+\d*\s*$/, "").trim() : id;
+      el.disabled = true; // until caps confirm support
+      el.addEventListener("input", function () { showValue(id); });
+      el.addEventListener("change", function () {
+        send(id);
+        if (id === "image_core_wb_mode") wbGate();
+      });
       // double-click resets a numeric field to the midpoint of its range
       if (el.type !== "checkbox" && el.tagName !== "SELECT") {
         el.addEventListener("dblclick", function () {
-          var min = Number(el.dataset.min || 0);
-          var max = Number(el.dataset.max || 255);
+          var min = Number(el.min || 0);
+          var max = Number(el.max || 255);
           el.value = Math.round((min + max) / 2);
+          showValue(id);
           send(id);
         });
       }
     });
-
-    // timps applies + persists every change immediately; the button is
-    // kept only to reassure users trained on the old save-to-file step.
-    var saveBtn = $id("save-prudynt-config");
-    if (saveBtn) {
-      saveBtn.addEventListener("click", function () {
-        toast(
-          "success",
-          "Nothing to do: image settings are applied live and already saved to the streamer configuration.",
-          4000,
-        );
-      });
-    }
   }
 
   function offlineNotice() {
@@ -161,6 +182,8 @@
           populate(id, image[key]);
           setEnabled(id, capsImage.indexOf(key) >= 0);
         });
+        renderUnsupported();
+        wbGate();
       })
       .catch(function (err) {
         console.warn("timps unreachable, image controls stay disabled:", err);

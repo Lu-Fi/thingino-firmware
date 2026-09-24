@@ -1,8 +1,8 @@
-// tool-record.js - timps Video Recorder settings.
+// tool-record.js - recorder settings tab of recordings.html.
 (function () {
   "use strict";
 
-  if (!document.body || document.body.id !== "page-tool-record-video") return;
+  if (!document.body || document.body.id !== "page-recordings") return;
   if (!window.timpsApi) {
     console.error("[tool-record] timps-api.js not loaded");
     return;
@@ -28,7 +28,7 @@
   FIELDS.forEach(function (f) { REVERSE["record." + f.key] = f.id; });
 
   var form = $("recForm");
-  var reloadBtn = $("rec-reload");
+  var reloadBtn = $("rec-cfg-reload");
   var saveBtn = $("rec-save");
   var statusEl = $("rec-status");
 

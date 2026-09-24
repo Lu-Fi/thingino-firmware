@@ -53,7 +53,7 @@
         },
         {
           "label": "Privacy masks",
-          "href": "/config-privacy.html"
+          "href": "/streamer-overlays.html#privacy"
         },
         {
           "label": "Recordings",
@@ -91,16 +91,12 @@
       "position": "prepend",
       "items": [
         {
-          "label": "Timelapse Recorder",
-          "href": "/tool-timelapse.html"
-        },
-        {
-          "label": "Timelapse Player",
+          "label": "Timelapse",
           "href": "/timelapse-player.html"
         },
         {
           "label": "Video Recorder",
-          "href": "/tool-record.html"
+          "href": "/recordings.html#settings"
         }
       ]
     }
@@ -142,8 +138,6 @@
     "/config-audio.html",
     "/config-motion.html",
     "/recordings.html",
-    "/tool-record.html",
-    "/tool-timelapse.html",
     "/timelapse-player.html",
     "/tool-sensor-data.html"
   ]

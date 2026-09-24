@@ -25,23 +25,18 @@
       <li class="nav-item"><button type="button" class="nav-link" role="tab" data-stream-tab="0"><span>Main stream</span><small></small></button></li>
       <li class="nav-item"><button type="button" class="nav-link" role="tab" data-stream-tab="1"><span>Substream</span><small></small></button></li>
     </ul>
+    <ul class="nav nav-pills nav-pills-sm mb-3 gap-1" role="tablist">
+      <li class="nav-item"><button type="button" class="nav-link py-1" role="tab" data-page-tab="text">Text &amp; logo</button></li>
+      <li class="nav-item"><button type="button" class="nav-link py-1" role="tab" data-page-tab="privacy">Privacy masks</button></li>
+    </ul>
     <div class="row g-3">
       <div class="col-12 col-xl-5">
-        <div class="tv-hint mb-1"><span>Click an overlay to select</span><span>Drag to move</span>
+        <div class="tv-hint mb-1 tv-hint-text"><span>Click an overlay to select</span><span>Drag to move</span>
           <span><kbd>&larr;</kbd><kbd>&rarr;</kbd><kbd>&uarr;</kbd><kbd>&darr;</kbd> 1 px</span><span><kbd>Shift</kbd>+arrows 10 px</span></div>
+        <div class="tv-hint mb-1 tv-hint-privacy"><span>Drag a mask to move</span><span>Drag its corner to resize</span></div>
         <div id="frame" class="tv-frame" tabindex="0" aria-label="Preview; arrow keys move the selected overlay">
           <img id="preview" src="/a/nostream.svg" class="img-fluid d-block w-100" alt="Image: Preview" tabindex="-1" data-stream="ch0">
           <div id="osd-boxes"></div>
-        </div>
-        <div class="tv-card mt-3">
-          <h6>All streams <span class="tv-badge rst">restart</span></h6>
-          <div class="d-flex flex-wrap align-items-center gap-3">
-            <div class="form-check form-switch mb-0">
-              <input type="checkbox" id="osd-master" role="switch" class="form-check-input">
-              <label for="osd-master" class="form-check-label">OSD enabled</label>
-            </div>
-            <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#mdFont">Font file&hellip;</button>
-          </div>
         </div>
       </div>
       <div class="col-12 col-xl-7">
@@ -49,11 +44,33 @@
           <div class="form-check form-switch mb-0"><input class="form-check-input" type="checkbox" role="switch" id="osd-link"></div>
           <span id="osd-link-txt"></span>
         </div>
-        <div id="osd-items" class="d-grid gap-2"></div>
-        <p id="osd-items-empty" class="text-body-secondary d-none">No overlays on this stream. Use &ldquo;Add overlay&rdquo; to create one.</p>
-        <div class="d-flex flex-wrap align-items-center gap-3 mt-2">
-          <button type="button" id="osd-add-item" class="btn btn-sm btn-outline-primary"><i class="bi bi-plus-lg me-1"></i>Add overlay</button>
-          <span id="osd-slot-count" class="small text-body-secondary"></span>
+        <div data-page-pane="text">
+          <div id="osd-items" class="d-grid gap-2"></div>
+          <p id="osd-items-empty" class="text-body-secondary d-none">No overlays on this stream. Use &ldquo;Add overlay&rdquo; to create one.</p>
+          <div class="d-flex flex-wrap align-items-center gap-3 mt-2">
+            <button type="button" id="osd-add-item" class="btn btn-sm btn-outline-primary"><i class="bi bi-plus-lg me-1"></i>Add overlay</button>
+            <span id="osd-slot-count" class="small text-body-secondary"></span>
+          </div>
+          <div class="tv-card mt-3">
+            <h6>All streams <span class="tv-badge rst">restart</span></h6>
+            <div class="d-flex flex-wrap align-items-center gap-3">
+              <div class="form-check form-switch mb-0">
+                <input type="checkbox" id="osd-master" role="switch" class="form-check-input">
+                <label for="osd-master" class="form-check-label">OSD enabled</label>
+              </div>
+              <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#mdFont">Font file&hellip;</button>
+            </div>
+          </div>
+        </div>
+        <div data-page-pane="privacy" hidden>
+          <div class="alert alert-warning d-none" id="privacy-unavailable" role="alert">
+            <i class="bi bi-exclamation-triangle me-1"></i>The streamer does not report privacy support (or is unreachable); the editor is disabled.
+          </div>
+          <div id="pm-list"></div>
+          <div class="d-flex flex-wrap align-items-center gap-3 mt-2">
+            <button type="button" id="pm-add" class="btn btn-sm btn-outline-primary"><i class="bi bi-plus-lg me-1"></i>Add mask</button>
+            <span class="small text-body-secondary">Up to <span id="privacy-max">4</span> per stream, applied live.</span>
+          </div>
         </div>
       </div>
     </div>
@@ -99,5 +116,6 @@
 <script src="/a/timps-version.js"></script>
 <script src="/a/timps-ui.js"></script>
 <script src="/a/streamer-osd.js"></script>
+<script src="/a/privacy.js"></script>
 </body>
 </html>

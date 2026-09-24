@@ -1,26 +1,23 @@
-// privacy.js - NATIVE privacy-mask VISUAL editor.
+// privacy.js - privacy-mask editor, "Privacy masks" tab of streamer-overlays.html.
 (function () {
   "use strict";
 
-  if (!document.body || document.body.id !== "page-config-privacy") return;
+  if (!document.body || document.body.id !== "page-streamer-overlays" || !window.timpsUi) return;
 
   var MIN = 8;                 // smallest mask edge, stream px
   var maxRegions = 4;
-  var streamIdx = 0;
+  var streamIdx = window.timpsUi.stream();
   var streamW = 1920, streamH = 1080;
-  var applyBoth = false;       // mirror every change onto the other stream
+  var linkEl = document.getElementById("osd-link"); // page-wide "both streams" switch
   var otherW = 0, otherH = 0;  // other stream's resolution (for scaling)
   var regions = [];            // [{enabled,x,y,w,h,color}] in STREAM coords
   var selected = -1;
   var dragging = false;        // true while a box move/resize drag is live
 
-  var stage = document.getElementById("pm-stage");
-  var img = document.getElementById("pm-img");
-  var noimg = document.getElementById("pm-noimg");
+  var stage = document.getElementById("frame");   // boxes sit over the live preview
+  var img = document.getElementById("preview");
   var list = document.getElementById("pm-list");
-  var streamSel = document.getElementById("pm-stream");
   var addBtn = document.getElementById("pm-add");
-  var reloadBtn = document.getElementById("pm-reload");
 
   function toast(type, msg, ms) {
     if (typeof window.showAlert === "function") window.showAlert(type, msg, ms);
@@ -64,7 +61,7 @@
     };
     // "apply to both": mirror the mask onto the other stream, scaled to its
     // resolution (streams differ, e.g. 1920x1080 main vs 640x360 sub).
-    if (applyBoth && otherW > 0 && otherH > 0) {
+    if (linkEl && linkEl.checked && otherW > 0 && otherH > 0) {
       var o = 1 - streamIdx;               // only two video streams
       var fx = otherW / streamW, fy = otherH / streamH;
       // scale, then clamp against the OTHER stream's bounds + MIN so the mirror
@@ -107,7 +104,7 @@
   /* ---- rendering ---- */
 
   function renderBoxes() {
-    // drop existing boxes (keep img + noimg)
+    // drop existing mask boxes
     Array.prototype.slice.call(stage.querySelectorAll(".pm-box")).forEach(function (b) { b.remove(); });
     var s = scale();
     regions.forEach(function (r, n) {
@@ -274,30 +271,6 @@
     send(n); render(); select(n);
   }
 
-  /* ---- snapshot ---- */
-
-  var SNAPSHOT_REFRESH_MS = 4000;
-  var isWindowVisible = document.visibilityState !== "hidden";
-
-  function setSnapshot() {
-    window.timpsApi.token().then(function (tok) {
-      var url = window.timpsApi.base() + "/snapshot.jpg?chn=" + streamIdx +
-        (tok ? "&token=" + encodeURIComponent(tok) : "") + "&_=" + Date.now();
-      img.onload = function () { if (noimg) noimg.classList.add("d-none"); renderBoxes(); };
-      img.onerror = function () { if (noimg) noimg.classList.remove("d-none"); };
-      img.src = url;
-    });
-  }
-
-  setInterval(function () {
-    if (!isWindowVisible || dragging || !window.timpsApi) return;
-    setSnapshot();
-  }, SNAPSHOT_REFRESH_MS);
-  document.addEventListener("visibilitychange", function () {
-    isWindowVisible = document.visibilityState !== "hidden";
-    if (isWindowVisible) setSnapshot();
-  });
-
   /* ---- load ---- */
 
   // Captured before any markUnavailable(msg) can overwrite it with textContent,
@@ -311,7 +284,6 @@
       if (msg) unavailEl.textContent = msg;
     }
     if (addBtn) addBtn.disabled = true;
-    if (streamSel) streamSel.disabled = true;
   }
 
   // Exact inverse of markUnavailable(), run on every successful load() -
@@ -323,7 +295,6 @@
       unavailEl.innerHTML = unavailHtml;
     }
     if (addBtn) addBtn.disabled = false;
-    if (streamSel) streamSel.disabled = false;
   }
 
   function load() {
@@ -337,7 +308,6 @@
 
       var v = (json.video && (json.video[streamIdx] || json.video[String(streamIdx)])) || {};
       if (v.width > 0 && v.height > 0) { streamW = v.width; streamH = v.height; }
-      stage.style.aspectRatio = streamW + " / " + streamH;
 
       // other stream's resolution, for the "apply to both" scaling
       var ovi = 1 - streamIdx;
@@ -358,7 +328,6 @@
       }
       selected = regions.findIndex(function (r) { return r.enabled; });
       markAvailable();
-      setSnapshot();
       render();
     }).catch(function (err) {
       console.warn("timps unreachable:", err);
@@ -387,21 +356,13 @@
     render();
   }
 
-  if (streamSel) streamSel.addEventListener("change", function () {
-    streamIdx = parseInt(streamSel.value, 10) || 0;
+  document.addEventListener("timps-stream", function (e) {
+    streamIdx = e.detail;
+    selected = -1;
     load();
   });
   if (addBtn) addBtn.addEventListener("click", addMask);
-  if (reloadBtn) reloadBtn.addEventListener("click", load);
-  var bothChk = document.getElementById("pm-both");
-  if (bothChk) bothChk.addEventListener("change", function () {
-    applyBoth = bothChk.checked;
-    if (applyBoth) {
-      var any = false;
-      regions.forEach(function (r, n) { if (r.enabled) { send(n); any = true; } });
-      if (any) toast("info", "Enabled masks mirrored onto the other stream.", 2500);
-    }
-  });
+  img.addEventListener("load", function () { if (!dragging) renderBoxes(); });
   window.addEventListener("resize", renderBoxes);
   if (window.timpsApi) window.timpsApi.events("config", onConfigEvent);
 

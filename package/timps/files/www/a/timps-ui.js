@@ -3,6 +3,7 @@
   "use strict";
 
   var pending = [];
+  var curStream = -1;
   var onRestarted = null;
 
   function toast(type, message, ms) {
@@ -24,6 +25,7 @@
   function initTabs(onChange) {
     var tabs = document.querySelectorAll("[data-stream-tab]");
     function set(i, fire) {
+      curStream = i;
       Array.prototype.forEach.call(tabs, function (t) {
         var on = +t.getAttribute("data-stream-tab") === i;
         t.classList.toggle("active", on);
@@ -40,7 +42,10 @@
         pv.setAttribute("data-stream", "ch" + i);
         if (fire && window.restartStreamPreview) window.restartStreamPreview();
       }
-      if (fire) onChange(i);
+      if (fire) {
+        onChange(i);
+        document.dispatchEvent(new CustomEvent("timps-stream", { detail: i }));
+      }
     }
     Array.prototype.forEach.call(tabs, function (t) {
       t.addEventListener("click", function () { set(+t.getAttribute("data-stream-tab"), true); });
@@ -111,8 +116,40 @@
       .then(function () { b.querySelector(".tv-restart").disabled = false; });
   }
 
+  // [data-page-tab=name] buttons switch [data-page-pane=name]; #name deep-links
+  function initPageTabs() {
+    var tabs = document.querySelectorAll("[data-page-tab]");
+    if (!tabs.length) return;
+    function show(name) {
+      var ok = document.querySelector('[data-page-pane="' + name + '"]');
+      if (!ok) name = tabs[0].getAttribute("data-page-tab");
+      Array.prototype.forEach.call(tabs, function (t) {
+        var on = t.getAttribute("data-page-tab") === name;
+        t.classList.toggle("active", on);
+        t.setAttribute("aria-selected", String(on));
+      });
+      Array.prototype.forEach.call(document.querySelectorAll("[data-page-pane]"), function (p) {
+        p.hidden = p.getAttribute("data-page-pane") !== name;
+      });
+      document.body.setAttribute("data-pane", name);
+    }
+    Array.prototype.forEach.call(tabs, function (t) {
+      t.addEventListener("click", function () {
+        var n = t.getAttribute("data-page-tab");
+        try { history.replaceState(null, "", "#" + n); } catch (e) {}
+        show(n);
+      });
+    });
+    window.addEventListener("hashchange", function () { show(location.hash.slice(1)); });
+    show(location.hash.slice(1));
+  }
+  if (document.readyState === "loading")
+    document.addEventListener("DOMContentLoaded", initPageTabs, { once: true });
+  else initPageTabs();
+
   window.timpsUi = {
     initTabs: initTabs,
+    stream: function () { return curStream >= 0 ? curStream : initialStream(); },
     setTabSummary: setTabSummary,
     badge: badge,
     markPending: markPending,

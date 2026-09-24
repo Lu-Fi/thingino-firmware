@@ -1,8 +1,8 @@
-// tool-timelapse.js - timps native Timelapse Recorder settings.
+// tool-timelapse.js - timelapse settings tab of timelapse-player.html.
 (function () {
   "use strict";
 
-  if (!document.body || document.body.id !== "page-tool-timelapse") return;
+  if (!document.body || document.body.id !== "page-timelapse-player") return;
   if (!window.timpsApi) {
     console.error("[tool-timelapse] timps-api.js not loaded");
     return;

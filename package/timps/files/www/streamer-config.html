@@ -57,10 +57,6 @@
 <script src="/a/timps-api.js"></script>
 <script src="/a/timps-version.js"></script>
 <script>
-/* Read-only viewer of /etc/timps.conf via the stock texteditor.cgi (auth'd by
- * the WebUI session; no timps token / port needed, so it works over http or
- * https alike). timps persists every /control change to this file, so this is
- * always the effective running config. */
 (function () {
   "use strict";
   var CONF = "/etc/timps.conf";

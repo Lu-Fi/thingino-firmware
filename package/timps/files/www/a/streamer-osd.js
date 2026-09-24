@@ -1,16 +1,4 @@
-/* streamer-osd.js - NATIVE per-stream OSD pages (streamer-osd0.html and
- * streamer-osd1.html share this script). Talks directly to the timps
- * streamer over window.timpsApi; no json-prudynt.cgi bridge for these pages.
- *
- * Phase 1 (this file): the UI is DATA-DRIVEN. Each stream carries its own
- * independent set of up to MAX_OSD generic overlay items (enabled/text/x/y/
- * font_size/color/transparency/outline/outline_color); this page renders one
- * "card" per in-use item index instead of four hard-coded named boxes.
- * Switching an item text<->logo is Phase 2 (needs a streamer-side leaf that
- * does not exist over /control yet), so the type selector stays disabled.
- * See WEBUI-NOTES.md for the full stream/load/save/restart/caps/color data-flow
- * spec this file implements.
- */
+// streamer-osd.js - NATIVE per-stream OSD pages (streamer-osd0.html and streamer-osd1.html share this script).
 (function () {
   "use strict";
 
@@ -62,9 +50,6 @@
       rgb[1].toUpperCase();
   }
 
-  // signed coordinate (negative = from the right/bottom edge) <-> the
-  // magnitude+anchor pair the position widget shows. 0 and positive => start
-  // edge (left/top); negative => end edge (right/bottom), magnitude = -v.
   function posToAnchor(v) {
     var n = parseInt(v, 10);
     if (isNaN(n)) n = 0;
@@ -78,39 +63,16 @@
 
   // ---- shared state ----------------------------------------------------
 
-  var capsOsd = []; // leaf keys this build applies live
-  // item enabled state at streamer boot, per stream: enabling an item that
-  // was off at boot has no IMP region, so the live enable is a no-op until a
-  // restart. Captured for BOTH streams (the single GET returns both) so the
-  // "both streams" scope can flag a restart on either side.
+  var capsOsd = [];
   var bootEnabled = { 0: {}, 1: {} };
   // last loaded item snapshot per stream (for the other stream in "both"
   // scope auto-detect and to remember a card's current type)
   var itemData = { 0: {}, 1: {} };
-  // per-item "Apply to" scope the USER explicitly picked on this page, keyed
-  // by item index. load() rebuilds every card from scratch (a fresh GET, or
-  // a re-render triggered by this page's own /events "config" echo - see
-  // onConfigEvent), and until this was tracked separately, buildCard() re-
-  // derived the scope every time from itemsIdentical() alone: any edit that
-  // did not (yet) make EVERY tracked leaf byte-identical on both streams -
-  // in practice nearly always, since x/y rarely match across two streams
-  // with different resolutions - silently reverted the dropdown to "This
-  // stream" on the very next reload, so only the field that happened to be
-  // in flight when "Both streams" was selected actually landed on both
-  // sides. An explicit choice now sticks until the user changes it again or
-  // removes the card.
   var scopeChoice = {};
 
   // ---- POST helpers ----------------------------------------------------
 
   // "osd<S>.<N>.<leaf>" from the "applied" echo -> the widgets inside card N.
-  // Single-input leaves come from this table; x/y decompose through
-  // posToAnchor() and colors through fromTimpsColor() - the exact inverses
-  // of the calls that built the POST, so a corrected value renders
-  // identically to a freshly loaded one.
-  //
-  // Deliberately does not render "osd<OTHER>.*" echoes from a "both" scope
-  // POST: this page only has widgets for ONE stream. See WEBUI-NOTES.md.
   var LEAF_INPUT = {
     text: ".osd-text",
     font_size: ".osd-fontsize",
@@ -158,9 +120,6 @@
       .set(body)
       .then(function (r) {
         applyCorrections(r);
-        // A 200 can still carry rejected>0 (some leaves refused, e.g. "" on a
-        // non-string leaf); a silent success would lie about those. See
-        // WEBUI-NOTES.md for why cleared text is NOT one of these cases.
         if (r && r.rejected > 0)
           toast("warning", "Applied, but the streamer refused " + r.rejected +
             " value(s) (empty or invalid).");
@@ -208,10 +167,6 @@
 
   // ---- status pill -----------------------------------------------------
 
-  // three states derived purely from data we already have:
-  //  off            - item not enabled
-  //  live           - enabled AND it was enabled at streamer boot (has region)
-  //  needs-restart  - enabled now but off at boot (no region until restart)
   function updatePill(card) {
     var item = parseInt(card.getAttribute("data-item"), 10);
     var pill = card.querySelector(".osd-status");
@@ -389,10 +344,7 @@
     card.querySelector(".osd-trans").value = tr;
     card.querySelector(".osd-trans-val").textContent = "(" + tr + ")";
 
-    // ---- scope: an explicit user choice for this item always wins (see
-    // scopeChoice above). Otherwise default "this"; auto-detect "both" only
-    // when this item is enabled and byte-identical on both streams (a nice-
-    // to-have, never for empty/default slots) ----
+    // ---- scope: an explicit user choice for this item always wins (see scopeChoice above).
     if (Object.prototype.hasOwnProperty.call(scopeChoice, item)) {
       card.querySelector(".osd-scope").value = scopeChoice[item];
     } else if (Number(data.enabled) && itemsIdentical(item)) {
@@ -428,9 +380,6 @@
       return sendItem(item, leaves, cardScope(card), busyEl);
     }
 
-    // enable toggle: applies live for a boot-enabled item; for an item that
-    // was off at boot (incl. every freshly added item) it persists but only
-    // renders after a restart
     var en = card.querySelector(".osd-enabled");
     en.addEventListener("change", function () {
       var restart = en.checked && enableNeedsRestart(item, cardScope(card));
@@ -439,10 +388,6 @@
       if (restart) p.then(restartHint);
     });
 
-    // scope change: no POST by itself; just records the choice (so it
-    // survives the next load()/rebuild, see scopeChoice above) and re-flags
-    // the "both" note. Existing values are re-pushed to the other stream on
-    // the next edit (nudge any field to copy immediately).
     card.querySelector(".osd-scope").addEventListener("change", function () {
       scopeChoice[item] = cardScope(card);
       syncBothNote(card);
@@ -510,11 +455,7 @@
       if (!isNaN(v)) push({ transparency: v }, trans);
     });
 
-    // remove: disable (live-hide + persist) and drop the card. A fixed slot
-    // is never destroyed server-side; disabling it frees it for reuse, so
-    // also forget any explicit scope choice for it - a future re-add should
-    // start from the auto-detect default, not a stale pick for a slot that
-    // may now hold unrelated content.
+    // remove: disable (live-hide + persist) and drop the card.
     card.querySelector(".osd-remove").addEventListener("click", function () {
       push({ enabled: 0 }, card);
       delete scopeChoice[item];
@@ -651,9 +592,6 @@
     }
   }
 
-  // remote change for this stream (osdS.N.* or the shared osd.enabled master)
-  // just re-runs the full load - cheap and always internally consistent. Don't
-  // fight the user mid-edit on this page.
   function onConfigEvent(type, data) {
     if (!data) return;
     if (!data.resync) {

@@ -1,16 +1,4 @@
-/* privacy.js - NATIVE privacy-mask VISUAL editor. Talks directly to the timps
- * streamer over window.timpsApi (GET/POST /control, per-boot token) - no bridge.
- *
- * Privacy masks are solid cover rectangles per video stream (timps "privacy"
- * section: privacy<S>.<N>.{enabled,x,y,w,h,color}, caps.privacy = {available,
- * max_regions}). This page shows a live snapshot of the selected stream and
- * lets you drag/resize the mask rectangles directly on it; every change is
- * applied LIVE via timpsApi.set({privacy:{<s>:{<n>:{...}}}}). A side list gives
- * per-mask enable / colour / alpha / exact coordinates / delete.
- *
- * Coordinates are the stream's own pixels; the editor scales them to the
- * displayed snapshot. Dependency-free, pointer events (mouse + touch).
- */
+// privacy.js - NATIVE privacy-mask VISUAL editor.
 (function () {
   "use strict";
 
@@ -91,10 +79,6 @@
       };
     }
     window.timpsApi.set({ privacy: payload }).then(function (r) {
-      // Fold "privacy<s>.<n>.<field>" echoes back into the region model so
-      // the box on screen is the box that actually masks (the daemon may
-      // clamp further than clampRegion() did). Mirrored OTHER-stream echoes
-      // are DELIBERATELY not folded back - see WEBUI-NOTES.md.
       var corr = r && r.corrections;
       if (corr) {
         var redraw = false;
@@ -305,9 +289,6 @@
     });
   }
 
-  // Periodic re-fetch so the reference image tracks the scene (snapshot.jpg
-  // is otherwise only fetched once, unlike /stream.mjpeg). Paused during a
-  // drag and while the tab is hidden (each fetch wakes the JPEG encoder).
   setInterval(function () {
     if (!isWindowVisible || dragging || !window.timpsApi) return;
     setSnapshot();
@@ -415,9 +396,6 @@
   var bothChk = document.getElementById("pm-both");
   if (bothChk) bothChk.addEventListener("change", function () {
     applyBoth = bothChk.checked;
-    // Enabling mirrors the current masks onto the other stream immediately, but
-    // ONLY the enabled ones: mirroring disabled slots would push enabled:0 onto
-    // the other stream and wipe masks that exist only there.
     if (applyBoth) {
       var any = false;
       regions.forEach(function (r, n) { if (r.enabled) { send(n); any = true; } });

@@ -1,19 +1,4 @@
-/* tool-sensor-data.js - day/night tuning graph, two data sources.
- *
- * Background collection OFF (daynight.history_s = 0, the default): the page
- * collects for itself, subscribing to timps' "daynight" SSE stream into a
- * local array. Nothing is recorded on the camera and nothing survives the tab.
- *
- * Background collection ON: the DAEMON keeps the series (a ring in events.c)
- * and the page pages through it with a cursor - ?last=N to backfill, then
- * follow "next". That is the only way the graph can show hours nobody was
- * looking at: the WebUI is plain HTTP on a LAN IP, so navigator.serviceWorker
- * is undefined and a hidden or closed tab collects nothing at all.
- *
- * Which source is live follows the daemon's retain_s, never a local flag, and
- * nothing here POSTs the key except the user flipping the switch. Opening or
- * closing the page changes no state on the camera.
- */
+// tool-sensor-data.js - day/night tuning graph, two data sources.
 (function () {
   const chartCanvas = $("#dataChart");
   if (!chartCanvas || typeof Chart === "undefined") return;
@@ -237,9 +222,7 @@
     startStream() {
       if (!window.timpsApi) { this.updateStreamStatus(false); return; }
       if (this.stream) return;
-      // timps pushes "daynight" over its native SSE /events - the full state on
-      // connect, then every meaningful change. "config" rides along so a
-      // history_s flipped elsewhere moves this page too.
+      // timps pushes "daynight" over its native SSE /events - the full state on connect, then every meaningful change.
       this.stream = window.timpsApi.events(
         "daynight,config",
         (type, d) => this.onEvent(type, d),
@@ -305,9 +288,6 @@
       if (isFinite(Number(d.night_gain))) this.nightThreshold = Number(d.night_gain);
       if (isFinite(Number(d.day_gain))) this.dayThreshold = Number(d.day_gain);
 
-      // the switch tracks the daemon's live retain_s, never a remembered local
-      // state - and it is that value, not this page being open, that decides
-      // which of the two sources draws the graph
       this.retainS = Number(d.retain_s) || 0;
       this.syncBgUi();
       if (!this.retainS) { this.enterLive(); return; }
@@ -346,10 +326,6 @@
         this.samples.splice(0, this.samples.length - this.maxPoints);
     }
 
-    // samples are stamped with the daemon's MONOTONIC clock; every response
-    // carries the (t_now, wall_now) pair to convert against. Deriving labels
-    // fresh on each render is what keeps the series intact across the NTP
-    // step this camera takes shortly after boot.
     wallOf(s) {
       if (s.wall !== undefined) return new Date(s.wall * 1000);  // live mode
       if (!this.clock) return new Date();

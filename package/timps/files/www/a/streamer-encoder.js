@@ -1,24 +1,4 @@
-/* streamer-encoder.js - NATIVE RTSP main/substream encoder page. Talks
- * directly to the timps streamer over window.timpsApi; no
- * /x/json-prudynt.cgi bridge. One file drives both pages; the stream index
- * is derived from the body id (page-streamer-main -> 0,
- * page-streamer-substream -> 1).
- *
- * Every change goes to timpsApi.set({video:{idx:{key:val}}}) (audio switch
- * -> {audio:{enabled}}). Since the live rate-control work, video keys are no
- * longer uniformly restart-required: the daemon advertises the keys THIS
- * camera can apply to the running encoder as caps.video_live, and every POST
- * reply lists what did NOT apply live in deferred_keys (timps >= v1.9.20
- * leaves rtsp_path out: it is live for new RTSP connections). The per-save toast
- * keys off the reply (runtime truth), the field styling keys off the caps
- * (platform truth). Rate-control fields that cannot do anything on this
- * SoC/mode/codec are disabled with the reason in their tooltip instead of
- * being silently accepted. The read-only "Encoder readback" line shows what
- * the encoder ACTUALLY holds (encoder.<n>.rc, GET /control) so a write can
- * be checked against reality - the T23 investigation found knobs that
- * persist fine and do nothing. Kept lean on purpose (embedded target): no
- * libraries, no polling, changes fire on 'change' only.
- */
+// streamer-encoder.js - NATIVE RTSP main/substream encoder page.
 (function () {
   "use strict";
 
@@ -55,11 +35,6 @@
     fluc_lvl: { key: "fluc_lvl", type: "int" },
   };
 
-  // rate-control field applicability: which rc_mode / codec the SDK consults
-  // the field in, and whether only the classic SoCs (T10..T30) have it at
-  // all. Mirrors the field docs in timps.conf.example; the daemon accepts
-  // and persists everything regardless - this is about not offering a knob
-  // that provably does nothing on this camera.
   var RC_FIELDS = {
     qp: { modes: ["FIXQP"] },
     min_qp: {},
@@ -120,10 +95,6 @@
     );
   }
 
-  // Per-save verdict from the POST reply (runtime truth, see control.h):
-  // deferred_keys lists the changed video/sensor keys that did NOT reach the
-  // running encoder. Absent field (older daemon) -> conservative restart
-  // hint, the pre-live behaviour.
   function saveVerdict(r, fullKey) {
     if (!r || !Array.isArray(r.deferred_keys)) { restartHint(); return; }
     if (r.deferred_keys.indexOf(fullKey) >= 0) { restartHint(); return; }
@@ -176,9 +147,6 @@
     return isNaN(n) ? undefined : n;
   }
 
-  // put server-corrected (clamped) values from the "applied" echo back into
-  // their fields - REVERSE and populate() are the same plumbing the config-
-  // sync push already uses, so a correction renders exactly like a remote edit
   function applyCorrections(r) {
     var corr = r && r.corrections;
     if (!corr) return;
@@ -241,10 +209,6 @@
     else el.value = v;
   }
 
-  // reverse of FIELD_MAP (timps "video<idx>.<key>" -> page field suffix), so
-  // another open tab/client changing a setting shows up here live instead of
-  // only on next reload. "Audio in stream" mirrors the global audio.enabled
-  // switch, which both stream pages share.
   var REVERSE = {};
   Object.keys(FIELD_MAP).forEach(function (suffix) {
     REVERSE["video" + idx + "." + FIELD_MAP[suffix].key] = suffix;
@@ -268,10 +232,6 @@
     if (suffix === "mode" || suffix === "format") rcGate();
   }
 
-  // Disable rc fields that provably cannot do anything with the current
-  // SoC/mode/codec, and say why in the tooltip; annotate the rest with
-  // whether they apply live (caps.video_live) or need a restart. Never
-  // guesses: an unknown SoC family stays fully enabled.
   function rcGate() {
     var fam = socFamily(
       (window.thinginoUIConfig && window.thinginoUIConfig.device &&
@@ -309,10 +269,7 @@
     });
   }
 
-  // Read-only line under the rc fields: what the encoder ACTUALLY holds
-  // (encoder.<idx>.rc from GET /control). Deliberately shown next to the
-  // editable (configured) values so written vs held can be compared - the
-  // whole point of the readback.
+  // Read-only line under the rc fields: what the encoder ACTUALLY holds (encoder.<idx>.rc from GET /control).
   var RC_HOLD_ORDER = ["rc_mode", "bitrate", "max_bitrate", "qp", "min_qp",
     "max_qp", "quality_lvl", "change_pos", "i_bias_lvl", "fluc_lvl",
     "static_time", "frm_qp_step", "gop_qp_step", "ip_delta", "pb_delta",

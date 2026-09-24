@@ -1,17 +1,4 @@
-/* streamer-image.js - NATIVE Image Quality page. Talks directly to the timps
- * streamer over window.timpsApi (GET/POST /control on timps's own port, per-
- * boot token) - no json-imaging.cgi / json-prudynt*.cgi bridge for this page.
- *
- * Load:  timpsApi.get() -> populate every control from the "image" object and
- *        enable ONLY the controls whose timps key is listed in caps.image
- *        (the SoC capability matrix); everything else stays greyed out.
- * Save:  every change goes straight to timpsApi.set({image:{key:val}}) -
- *        debounced, so a burst of quick changes coalesces into one POST.
- *        timps applies live AND persists to its config file immediately, so
- *        the "Save configuration" button is just a confirmation toast.
- * Offline: if timps is unreachable the controls stay disabled and a small
- *        notice appears; nothing throws.
- */
+// streamer-image.js - NATIVE Image Quality page.
 (function () {
   "use strict";
 
@@ -63,9 +50,6 @@
     else el.value = value;
   }
 
-  // reverse of FIELD_MAP ("image.<key>" -> page field id): the daemon echoes
-  // the EFFECTIVE value of everything it changed ("applied"), so an out-of-
-  // range slider can be put back to what really got stored - no follow-up GET
   var REVERSE = {};
   Object.keys(FIELD_MAP).forEach(function (id) {
     REVERSE["image." + FIELD_MAP[id]] = id;
@@ -184,10 +168,6 @@
       });
   }
 
-  // reverse of FIELD_MAP (timps "image.<key>" -> page field id), so another
-  // open tab/client changing a setting (e.g. brightness) via /control shows
-  // up here live instead of only on next reload. temper_strength mirrors
-  // send()'s noise_reduction special case (one slider, two backend keys).
   var REVERSE = {};
   Object.keys(FIELD_MAP).forEach(function (id) {
     REVERSE["image." + FIELD_MAP[id]] = id;

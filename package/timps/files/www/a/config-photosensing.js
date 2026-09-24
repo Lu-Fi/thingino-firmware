@@ -1,19 +1,4 @@
-/* config-photosensing.js - timps day/night (photosensing) settings.
- *
- * Overlay replacing the stock thingino page script, which POSTed the gain
- * thresholds to /x/json-config-daynight.cgi (thingino.json) - a file the
- * timps streamer never reads, so the thresholds did nothing. This version
- * talks DIRECTLY to timps via GET/POST /control (a/timps-api.js); fields
- * follow the "daynight_<key>" -> "daynight.<key>" convention (see
- * fillTimps()/collectTimps() below). The Decision source column mirrors the
- * daemon's two independent axes: daynight.mode (auto = light level, schedule
- * = the calendar decides outright) and WHICH calendar is stored, which timps
- * derives from the values rather than from a field of its own.
- *
- * The Controls (color/ircut/IR850/IR940/white) column is a SEPARATE feature:
- * it configures the BOARD daynight script (/sbin/daynight hardware toggles),
- * not timps, and legitimately stays on the stock /x/json-config-daynight.cgi
- * backend, loaded and saved best-effort. */
+// config-photosensing.js - timps day/night (photosensing) settings.
 (function () {
   "use strict";
 
@@ -43,10 +28,6 @@
     return el ? el.value : "none";
   }
 
-  // mirrors dn_cal_kind() in daynight.c: a COMPLETE time window outranks
-  // lat/long, and 0/0 is "no location". timps has no field saying which
-  // calendar was meant, so the page has to derive it the daemon's way -
-  // anything else lets the selector show a calendar that isn't running.
   function calFromValues(night, day, lat, lon) {
     if (night && day) return "time";
     if (Number(lat) || Number(lon)) return "sun";
@@ -61,9 +42,7 @@
     if (sunF) sunF.hidden = (cal !== "sun");
   }
 
-  // every way this column can be saved into a no-op. The daemon reads its
-  // calendar out of the values, so a half-filled one is simply no calendar
-  // (daynight.c: "mode=schedule but no usable calendar - forcing nothing").
+  // every way this column can be saved into a no-op.
   function calendarProblem() {
     var cal = calValue();
     var mode = $("daynight_mode");
@@ -167,10 +146,6 @@
       if (!isNaN(v) && v >= 0) out[k] = v;
     });
 
-    // The unselected calendar is always CLEARED, never just left alone: timps
-    // picks its calendar from the values (calFromValues above), so a time
-    // window left over from an earlier configuration would keep outranking a
-    // location the user just typed in, and the save would report success.
     var cal = calValue();
     var num = function (id) {
       var el = $(id);
@@ -265,18 +240,11 @@
           (e.message || e) + ").", 6000);
       }).then(function () { return r; });
     }).then(function (r) {
-      // corrected (clamped) values go straight back into their fields from
-      // the "applied" echo; load() still runs for the computed/adaptive
-      // read-only feedback and the legacy half, but the user need not wait
-      // for it to see what really got stored
       var corr = r && r.corrections;
       if (corr) Object.keys(corr).forEach(function (k) {
         applyTimpsKV(k, corr[k]);
       });
       corr = window.timpsApi.takeCorrections(r);
-      // a 200 can still carry rejected>0: the daemon refused SOME value
-      // (empty/invalid) while applying the rest - a plain "saved" would lie
-      // about those; the reload below shows what it actually kept
       if (r && r.rejected > 0)
         toast("warning", "Saved, but the streamer refused " + r.rejected +
           " value(s) (empty or invalid).", 6000);
@@ -294,9 +262,6 @@
 
   /* ---- live sync: another open tab/client changing a timps field ------- */
 
-  // config.c echoes SSE/GET under the canonical day_gain/night_gain name, not
-  // the pre-2026-08-17 alias this page's two threshold fields still use.
-  // Everything else follows the "daynight_<key>" id convention.
   var TIMPS_REVERSE = {
     "daynight.night_gain": "daynight_total_gain_night_threshold",
     "daynight.day_gain": "daynight_total_gain_day_threshold",
@@ -312,9 +277,6 @@
     return TIMPS_REVERSE[key] || "daynight_" + key.slice(9);
   }
 
-  // write one "daynight.<key>" value into its field - shared by the config-
-  // sync push and the save-time "applied" corrections, so a clamped value
-  // renders exactly like a remote edit.
   function applyTimpsKV(key, value) {
     var id = fieldId(key);
     var el = id ? $(id) : null;

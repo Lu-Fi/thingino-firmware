@@ -372,6 +372,13 @@ while the tab is hidden and reopened when it becomes visible.
 
 ## a/privacy.js
 
+The "Privacy masks" tab of streamer-overlays.html (config-privacy.html is a
+redirect to `#privacy`). The stream comes from the page's stream tabs (the
+"timps-stream" event from `a/timps-ui.js`), the masks are drawn over the
+live `#preview` instead of a polled snapshot, and "both streams" is the
+page-wide `#osd-link` switch. Turning that switch on no longer mirrors all
+existing masks at once; like the overlays, only later edits are mirrored.
+
 ### `send()`: why mirrored OTHER-stream echoes are never folded back
 
 DELIBERATE (a decision, not a gap): the "apply to both" branch scales the
@@ -386,7 +393,7 @@ reports every correction.
 ### `markAvailable()`: the bug it fixes
 
 The old success path only did `classList.add("d-none")` on the warning: it
-never re-enabled `#pm-add` / `#pm-stream` and never restored the original
+never re-enabled `#pm-add` (then also a stream select) and never restored the original
 message markup. So ONE transient failure disabled the editor PERMANENTLY.
 That failure is real, not theoretical: a streamer restart tears the OSD
 groups down while /control keeps serving, and `caps.privacy.available` is
@@ -398,6 +405,16 @@ controls dead, leaving a page that looks fine yet cannot add or switch
 masks until the user reloads by hand. `#pm-reload` had the same problem -
 it was not disabled, so it re-ran `load()`, appeared to work, and still
 left a dead editor.
+
+## Record and timelapse pages
+
+`recordings.html` has two tabs: Clips (`a/recordings.js`) and Settings
+(`a/tool-record.js`; its reload button is `#rec-cfg-reload`, because
+`#rec-reload` belongs to the clip list). `timelapse-player.html` has Player
+(`a/timelapse-player.js`) and Settings (`a/tool-timelapse.js`). The tabs come
+from `timps-ui.js` `initPageTabs()`, and `#settings` deep-links, which is
+what the redirects from tool-record.html / tool-timelapse.html and the
+"Video Recorder" menu entry use.
 
 ## a/config-audio.js
 

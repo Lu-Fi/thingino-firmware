@@ -52,7 +52,7 @@
   // RGB gains only act in manual/custom white balance
   function wbGate() {
     var mode = $id("image_core_wb_mode");
-    var manual = mode && (mode.value === "1" || mode.value === "9");
+    var manual = mode && isManual(mode.value);
     ["image_wb_rgain", "image_wb_bgain"].forEach(function (id) {
       var w = $id(id) && $id(id).closest("[data-f]");
       if (w && !unsupported[id]) w.classList.toggle("d-none", !manual);
@@ -127,7 +127,28 @@
       });
   }
 
+  function isManual(v) { return v === "1" || v === "9"; }
+
+  // entering manual/custom: start from the gains AWB applies now, so the picture doesn't jump
+  function wbEnterManual(el) {
+    el.classList.add("opacity-75");
+    window.timpsApi.get().then(function (json) {
+      var live = json.image && json.image.wb_live;
+      var image = { core_wb_mode: parseInt(el.value, 10) };
+      if (live) {
+        image.wb_rgain = live.rgain;
+        image.wb_bgain = live.bgain;
+        populate("image_wb_rgain", live.rgain);
+        populate("image_wb_bgain", live.bgain);
+      }
+      return window.timpsApi.set({ image: image });
+    }).then(applyCorrections, function (err) {
+      toast("danger", "Failed to apply setting: " + (err.message || err));
+    }).then(function () { el.classList.remove("opacity-75"); });
+  }
+
   function wireControls() {
+    var wbPrev = null;
     Object.keys(FIELD_MAP).forEach(function (id) {
       var el = $id(id);
       if (!el) return;
@@ -135,9 +156,16 @@
       LABEL[id] = lab ? lab.textContent.replace(/\s+\d*\s*$/, "").trim() : id;
       el.disabled = true; // until caps confirm support
       el.addEventListener("input", function () { showValue(id); });
+      if (id === "image_core_wb_mode")
+        el.addEventListener("focus", function () { wbPrev = el.value; });
       el.addEventListener("change", function () {
+        if (id === "image_core_wb_mode") {
+          var from = wbPrev;
+          wbPrev = el.value;
+          wbGate();
+          if (isManual(el.value) && !isManual(from)) return wbEnterManual(el);
+        }
         send(id);
-        if (id === "image_core_wb_mode") wbGate();
       });
       // double-click resets a numeric field to the midpoint of its range
       if (el.type !== "checkbox" && el.tagName !== "SELECT") {

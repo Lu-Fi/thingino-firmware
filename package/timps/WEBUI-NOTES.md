@@ -427,13 +427,15 @@ left a dead editor.
   compiled in); speaker sampling and stereo capture stay greyed out. A
   test-sound control (dropdown + Play/Stop) is shown when
   `caps.play.available` is set, driving the play queue via /control.
-- **Save**: LIVE keys (volume/gain/alc_gain/high_pass/agc/agc_target_dbfs/
-  agc_compression_db/ns) go straight to `timpsApi.set({audio:{...}})`,
-  debounced so slider drags coalesce into one POST; timps applies them live
-  AND persists immediately. PERSIST+RESTART keys (codec/samplerate/bitrate)
-  are saved the same way but only take effect after a streamer restart, so
-  those changes show the existing "Restart streamer" hint (the menu entry
-  calls /x/restart-prudynt.cgi).
+- **Save**: LIVE keys (volume/gain/alc_gain, speaker volume/gain) go
+  straight to `timpsApi.set({audio:{...}})`, debounced so slider drags
+  coalesce into one POST; timps applies them live AND persists immediately.
+  PERSIST+RESTART keys (codec/samplerate/bitrate, high_pass/agc/ns and the
+  AGC levels, backchannel) are saved the same way but only take effect after
+  a streamer restart. The "Restart streamer" hint (the menu entry calls
+  /x/restart-prudynt.cgi) follows the POST reply's `deferred_keys`, which
+  timps >= v1.9.20 fills for these keys; an older daemon without the field
+  gets the hint on every such save, as before.
 - **Offline**: if timps is unreachable the controls stay disabled and a
   small notice appears; nothing throws.
 

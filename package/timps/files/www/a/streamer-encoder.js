@@ -8,7 +8,8 @@
  * -> {audio:{enabled}}). Since the live rate-control work, video keys are no
  * longer uniformly restart-required: the daemon advertises the keys THIS
  * camera can apply to the running encoder as caps.video_live, and every POST
- * reply lists what did NOT apply live in deferred_keys. The per-save toast
+ * reply lists what did NOT apply live in deferred_keys (timps >= v1.9.20
+ * leaves rtsp_path out: it is live for new RTSP connections). The per-save toast
  * keys off the reply (runtime truth), the field styling keys off the caps
  * (platform truth). Rate-control fields that cannot do anything on this
  * SoC/mode/codec are disabled with the reason in their tooltip instead of
@@ -126,7 +127,9 @@
   function saveVerdict(r, fullKey) {
     if (!r || !Array.isArray(r.deferred_keys)) { restartHint(); return; }
     if (r.deferred_keys.indexOf(fullKey) >= 0) { restartHint(); return; }
-    if (r.changed > 0)
+    if (r.changed > 0 && /\.rtsp_path$/.test(fullKey))
+      toast("success", "Applied; new RTSP connections use the new path.", 4000);
+    else if (r.changed > 0)
       toast("success", "Applied to the running encoder; takes effect at the next keyframe.", 4000);
     // unchanged re-post: nothing to announce
   }

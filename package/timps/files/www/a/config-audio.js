@@ -89,6 +89,13 @@
     else console.log("[config-audio]", type + ":", message);
   }
 
+  // deferred_keys (timps >= v1.9.20) names the audio keys that wait for a
+  // restart; without it, fall back to the static FIELD_MAP classification.
+  function restartVerdict(r, fullKey) {
+    if (!r || !Array.isArray(r.deferred_keys) ||
+        r.deferred_keys.indexOf(fullKey) >= 0) restartHint();
+  }
+
   function restartHint() {
     toast(
       "warning",
@@ -205,7 +212,7 @@
     } else {
       window.timpsApi
         .set({ audio: audio })
-        .then(function (r) { applyCorrections(r); restartHint(); }, fail)
+        .then(function (r) { applyCorrections(r); restartVerdict(r, "audio." + map.key); }, fail)
         .then(done);
     }
   }

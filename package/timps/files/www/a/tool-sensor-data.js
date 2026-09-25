@@ -196,7 +196,7 @@
       if (!note) return;
       note.textContent = this.retainS
         ? `— the camera is recording a ${fmtDur(this.retainS)} window, whether or not this page is open`
-        : "— off: this page graphs only what arrives while it is open";
+        : "— off: graphs only while this page is open; timps sends changes, steady values are repeated";
     }
 
     /* ---- mode: local SSE vs the daemon's ring --------------------------- */
@@ -217,6 +217,24 @@
 
     stopStream() {
       if (this.stream) { this.stream.close(); this.stream = null; }
+      clearInterval(this.carryTimer);
+      this.carryTimer = null;
+    }
+
+    // live SSE only sends changes (mode, >=1 % brightness, >=5 % gain): repeat the
+    // last sample every daynight.interval_ms so a steady scene still draws
+    startCarry() {
+      clearInterval(this.carryTimer);
+      const every = this.intervalMs || 2000;
+      this.carryTimer = setInterval(() => {
+        const last = this.samples[this.samples.length - 1];
+        if (this.mode !== "live" || this.isPaused || !last) return;
+        const now = Date.now() / 1000;
+        if (now - last.wall < every / 1000 * 0.9) return;
+        this.samples.push(Object.assign({}, last, { wall: now, carried: true }));
+        this.trimData();
+        this.render();
+      }, every);
     }
 
     startStream() {
@@ -229,6 +247,21 @@
         () => this.updateStreamStatus(false),
       );
       this.updateStreamStatus(true);
+      window.timpsApi.get().then((j) => {
+        this.intervalMs = Number(j.daynight && j.daynight.interval_ms) || 2000;
+        this.updatePointHints();
+        if (this.mode === "live") this.startCarry();
+      }, () => { if (this.mode === "live") this.startCarry(); });
+    }
+
+    // what the window buttons mean in time, at the current sample cadence
+    updatePointHints() {
+      const step = this.mode === "ring" ? 10 : (this.intervalMs || 2000) / 1000;
+      document.querySelectorAll("#max-points [data-points]").forEach((b) => {
+        const s = b.dataset.points * step;
+        b.title = "Show the last " + b.dataset.points + " samples ≈ " +
+          (s >= 3600 ? (s / 3600).toFixed(1) + " h" : Math.round(s / 60) + " min");
+      });
     }
 
     onEvent(type, d) {
@@ -291,7 +324,7 @@
       this.retainS = Number(d.retain_s) || 0;
       this.syncBgUi();
       if (!this.retainS) { this.enterLive(); return; }
-      if (this.mode !== "ring") { this.stopStream(); this.mode = "ring"; }
+      if (this.mode !== "ring") { this.stopStream(); this.mode = "ring"; this.updatePointHints(); }
       this.updateStreamStatus(true);   // after the mode: it words the tooltip
 
       this.clock = { t_now: Number(d.t_now), wall_now: Number(d.wall_now) };
@@ -492,6 +525,7 @@
           time: this.wallOf(s).toISOString(),
           exposure: s.exposure, total_gain: s.gain,
           ae_luma: s.luma, brightness: s.bright, mode: s.mode,
+          carried: !!s.carried,
         })),
       };
       this.downloadFile(
@@ -510,9 +544,9 @@
             return v === null ? "" : v.toFixed(2);
           })
           .join(",");
-        return `"${this.wallOf(s).toISOString()}",${values}`;
+        return `"${this.wallOf(s).toISOString()}",${values},${s.carried ? 1 : 0}`;
       });
-      const csv = `Time,${headers}\n${rows.join("\n")}`;
+      const csv = `Time,${headers},Carried\n${rows.join("\n")}`;
       this.downloadFile(csv, "sensor-data.csv", "text/csv");
     }
 

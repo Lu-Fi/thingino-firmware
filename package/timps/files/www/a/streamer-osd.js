@@ -440,6 +440,7 @@
     if (!window.timpsUi) return;
     try { linked = localStorage.getItem("timps-osd-link") === "1"; } catch (e) {}
     S = ui().initTabs(function (s) { selectStream(s); });
+    ui().uploadCard($id("osd-font"), "font", "OSD font");
     ui().onRestarted(function () { load(true); });
     renderLink();
 

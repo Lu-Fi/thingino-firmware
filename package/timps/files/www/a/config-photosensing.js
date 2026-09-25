@@ -8,7 +8,7 @@
     return;
   }
 
-  var LEGACY = "/x/json-config-daynight.cgi"; // board script config (controls only)
+  var LEGACY = "/x/timps-dn-controls.cgi"; // daynight.controls for /usr/sbin/daynight
   var CONTROLS = ["color", "ircut", "ir850", "ir940", "white"];
 
   var $ = function (id) { return document.getElementById(id); };

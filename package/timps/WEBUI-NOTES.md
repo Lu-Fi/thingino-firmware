@@ -465,17 +465,28 @@ reflashed undetected (see the "2026-08 stale-build incident" note in
 compiled-in `MS_VERSION` at a glance from the WebUI catches that class of
 drift without a manual /control fetch.
 
-### Sensor IQ file card (`streamer-image.html#iq`, `x/timps-iq.cgi`)
+### File uploads: sensor IQ and OSD font (`x/timps-upload.cgi`)
 
-The old Sensor IQ page posted to `/x/preview.cgi`, which only prudynt-t
-ships, so upload never worked on timps builds. The card on the image page
-talks to `x/timps-iq.cgi`: GET = name/size/md5, `custom` (a copy in the
-overlay) and `stock` (one in `/rom`); POST a raw `.bin` (8 KB..2 MB, must
-start with the Ingenic version string like `2.10`) to install it as
-`/etc/sensor/<sensor>-<soc>.bin`; POST `?reset` deletes the overlay copy.
+The old IQ page and the overlay font dialog posted to `/x/preview.cgi`,
+which only prudynt-t ships, so neither upload worked on timps builds. Both
+now use `x/timps-upload.cgi?kind=iq|font` through `timpsUi.uploadCard()`:
+GET = file/size/md5, `custom` (copy in the overlay) and `stock` (one in
+`/rom`); POST the raw file to install it; POST `&reset` deletes the overlay
+copy. `iq` writes `/etc/sensor/<sensor>-<soc>.bin` (8 KB..2 MB, starts with
+the Ingenic version string like `2.10`); `font` writes
+`/usr/share/fonts/default.ttf` (TTF/OTF magic), the default `osd.font_path`.
 `/etc/sensor` is a symlink to `/usr/share/sensor`, so the overlay copy lives
-under `/overlay/usr/share/sensor/`. libimp reads the file at streamer start,
-so the card raises the restart bar. `streamer-sensor.html` is a redirect stub.
+under `/overlay/usr/share/sensor/`. Both are read at streamer start, so the
+cards raise the restart bar. `streamer-sensor.html` is a redirect stub.
+
+### Photosensing controls (`x/timps-dn-controls.cgi`)
+
+timps runs `/usr/sbin/daynight day|night` on a switch, and that board script
+reads `daynight.controls.{color,ircut,ir850,ir940,white}` from
+`thingino.json`. The CGI that edits them (`json-config-daynight.cgi`) ships
+with thingino-daynightd, which timps builds do not have, so the page uses
+`x/timps-dn-controls.cgi` (GET with the script's defaults, POST only that
+exact shape).
 
 Menu: every page has exactly one entry. Removed duplicates: "File:
 timps.conf" (= Streamer config), "Streamer log" (= core "Log: logcat"),

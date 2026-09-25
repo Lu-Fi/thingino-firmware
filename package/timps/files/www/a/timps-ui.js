@@ -147,7 +147,49 @@
     document.addEventListener("DOMContentLoaded", initPageTabs, { once: true });
   else initPageTabs();
 
+  // file card backed by /x/timps-upload.cgi?kind=K; markup uses data-up=kind|info|file|reset|hint
+  function uploadCard(root, kind, pendingKey) {
+    if (!root) return;
+    var q = function (n) { return root.querySelector('[data-up="' + n + '"]'); };
+    function show(j) {
+      var k = q("kind");
+      k.textContent = j.custom ? "custom" : "stock";
+      k.className = "tv-badge " + (j.custom ? "rst" : "live");
+      q("info").textContent = j.file.replace(/.*\//, "") + " · " + Math.round(j.size / 1024) + " KB · md5 " + j.md5.slice(0, 8);
+      q("info").title = j.file + "\nmd5 " + j.md5;
+      q("reset").hidden = !(j.custom && j.stock);
+    }
+    function call(method, extra, body) {
+      q("hint").textContent = method === "GET" ? "" : "working…";
+      return fetch("/x/timps-upload.cgi?kind=" + kind + (extra || ""), {
+        method: method, body: body, credentials: "same-origin", cache: "no-store",
+        headers: body ? { "Content-Type": "application/octet-stream" } : undefined,
+      }).then(function (r) {
+        return r.json().then(function (j) {
+          if (!r.ok) throw new Error(j.error || "HTTP " + r.status);
+          return j;
+        });
+      }).then(function (j) {
+        show(j);
+        q("hint").textContent = "";
+        if (method !== "GET") markPending([pendingKey]);
+      }, function (err) {
+        q("hint").textContent = "";
+        if (method === "GET") q("info").textContent = "unavailable: " + err.message;
+        else toast("danger", pendingKey + ": " + err.message);
+      });
+    }
+    call("GET");
+    q("file").addEventListener("change", function () {
+      var f = this.files[0];
+      this.value = "";
+      if (f) call("POST", "", f);
+    });
+    q("reset").addEventListener("click", function () { call("POST", "&reset", ""); });
+  }
+
   window.timpsUi = {
+    uploadCard: uploadCard,
     initTabs: initTabs,
     stream: function () { return curStream >= 0 ? curStream : initialStream(); },
     setTabSummary: setTabSummary,

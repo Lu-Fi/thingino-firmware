@@ -239,47 +239,11 @@
     populate(id, data.value);
   }
 
-  // sensor IQ file card, backed by /x/timps-iq.cgi
-  function iqShow(j) {
-    if (!j || j.error) { $id("iq-info").textContent = (j && j.error) || "unavailable"; return; }
-    var k = $id("iq-kind");
-    k.textContent = j.custom ? "custom" : "stock";
-    k.className = "tv-badge " + (j.custom ? "rst" : "live");
-    $id("iq-info").textContent = j.file.replace(/.*\//, "") + " · " + Math.round(j.size / 1024) + " KB · md5 " + j.md5.slice(0, 8);
-    $id("iq-info").title = j.file + "\nmd5 " + j.md5;
-    $id("iq-reset").hidden = !(j.custom && j.stock);
-  }
-  function iqCall(method, q, body) {
-    $id("iq-hint").textContent = method === "GET" ? "" : "working…";
-    return fetch("/x/timps-iq.cgi" + (q || ""), {
-      method: method, body: body, credentials: "same-origin", cache: "no-store",
-      headers: body ? { "Content-Type": "application/octet-stream" } : undefined,
-    }).then(function (r) {
-      return r.json().then(function (j) {
-        if (!r.ok) throw new Error(j.error || "HTTP " + r.status);
-        return j;
-      });
-    }).then(function (j) {
-      iqShow(j);
-      $id("iq-hint").textContent = "";
-      if (method !== "GET" && window.timpsUi) window.timpsUi.markPending(["sensor IQ file"]);
-      return j;
-    }, function (err) {
-      $id("iq-hint").textContent = "";
-      if (method === "GET") $id("iq-info").textContent = "unavailable: " + err.message;
-      else toast("danger", "Sensor IQ file: " + err.message);
-    });
-  }
   function initIq() {
-    if (!$id("iq")) return;
-    iqCall("GET");
-    $id("iq-file").addEventListener("change", function () {
-      var f = this.files[0];
-      this.value = "";
-      if (f) iqCall("POST", "", f);
-    });
-    $id("iq-reset").addEventListener("click", function () { iqCall("POST", "?reset", ""); });
-    if (location.hash === "#iq") $id("iq").scrollIntoView();
+    var c = $id("iq");
+    if (!c || !window.timpsUi) return;
+    window.timpsUi.uploadCard(c, "iq", "sensor IQ file");
+    if (location.hash === "#iq") c.scrollIntoView();
   }
 
   function init() {

@@ -96,11 +96,11 @@
         <div class="tv-card" id="iq">
           <h6>Sensor IQ file <span class="tv-badge rst">restart</span></h6>
           <p class="small text-body-secondary mb-2">The ISP tuning tables (exposure, white balance, colour, noise, night mode) loaded at streamer start. The sliders above adjust on top of it.</p>
-          <div class="d-flex flex-wrap align-items-center gap-2 mb-2"><span class="tv-badge" id="iq-kind"></span><span class="tv-cfg" id="iq-info">Loading…</span></div>
+          <div class="d-flex flex-wrap align-items-center gap-2 mb-2"><span class="tv-badge" data-up="kind"></span><span class="tv-cfg" data-up="info">Loading…</span></div>
           <div class="d-flex flex-wrap align-items-center gap-2">
-            <label class="btn btn-sm btn-outline-primary mb-0"><i class="bi bi-upload me-1"></i>Upload .bin<input type="file" id="iq-file" accept=".bin" hidden></label>
-            <button type="button" class="btn btn-sm btn-outline-secondary" id="iq-reset" hidden><i class="bi bi-arrow-counterclockwise me-1"></i>Restore stock file</button>
-            <span class="small text-body-secondary" id="iq-hint"></span>
+            <label class="btn btn-sm btn-outline-primary mb-0"><i class="bi bi-upload me-1"></i>Upload .bin<input type="file" data-up="file" accept=".bin" hidden></label>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-up="reset" hidden><i class="bi bi-arrow-counterclockwise me-1"></i>Restore stock file</button>
+            <span class="small text-body-secondary" data-up="hint"></span>
           </div>
         </div>
       </div>

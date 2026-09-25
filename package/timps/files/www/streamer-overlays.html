@@ -59,7 +59,12 @@
                 <input type="checkbox" id="osd-master" role="switch" class="form-check-input">
                 <label for="osd-master" class="form-check-label">OSD enabled</label>
               </div>
-              <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#mdFont">Font file&hellip;</button>
+            </div>
+            <div class="d-flex flex-wrap align-items-center gap-2 mt-3" id="osd-font">
+              <span class="small text-body-secondary">Font</span><span class="tv-badge" data-up="kind"></span><span class="tv-cfg" data-up="info">Loading…</span>
+              <label class="btn btn-sm btn-outline-primary mb-0 ms-auto"><i class="bi bi-upload me-1"></i>Upload .ttf<input type="file" data-up="file" accept=".ttf,.otf" hidden></label>
+              <button type="button" class="btn btn-sm btn-outline-secondary" data-up="reset" hidden><i class="bi bi-arrow-counterclockwise me-1"></i>Restore stock font</button>
+              <span class="small text-body-secondary" data-up="hint"></span>
             </div>
           </div>
         </div>
@@ -80,31 +85,6 @@
 </main>
 
 <footer data-app-footer></footer>
-
-<div class="modal fade" id="mdFont" tabindex="-1" aria-labelledby="mdlFont" aria-hidden="true">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title fs-4" id="mdlFont">Upload font file</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        <form id="fontUploadForm" class="mb-4" method="post" action="/x/preview.cgi" enctype="multipart/form-data">
-          <input type="hidden" name="form" value="font">
-          <div class="mb-3">
-            <label for="fontfile">Upload a TTF file</label>
-            <input type="file" class="form-control" id="fontfile" name="fontfile" accept=".ttf,.otf" required>
-          </div>
-          <button type="submit" class="btn btn-primary w-100">Upload font</button>
-        </form>
-        <form method="post" action="/x/preview.cgi" enctype="multipart/form-data">
-          <input type="hidden" name="form" value="font-reset">
-          <button type="submit" class="btn btn-outline-danger w-100">Restore firmware font</button>
-        </form>
-      </div>
-    </div>
-  </div>
-</div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"
   integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>

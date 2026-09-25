@@ -464,3 +464,20 @@ reflashed undetected (see the "2026-08 stale-build incident" note in
 `timps.mk`'s `TIMPS_BUILD_VERSION` section). Showing the running daemon's
 compiled-in `MS_VERSION` at a glance from the WebUI catches that class of
 drift without a manual /control fetch.
+
+### Sensor IQ file card (`streamer-image.html#iq`, `x/timps-iq.cgi`)
+
+The old Sensor IQ page posted to `/x/preview.cgi`, which only prudynt-t
+ships, so upload never worked on timps builds. The card on the image page
+talks to `x/timps-iq.cgi`: GET = name/size/md5, `custom` (a copy in the
+overlay) and `stock` (one in `/rom`); POST a raw `.bin` (8 KB..2 MB, must
+start with the Ingenic version string like `2.10`) to install it as
+`/etc/sensor/<sensor>-<soc>.bin`; POST `?reset` deletes the overlay copy.
+`/etc/sensor` is a symlink to `/usr/share/sensor`, so the overlay copy lives
+under `/overlay/usr/share/sensor/`. libimp reads the file at streamer start,
+so the card raises the restart bar. `streamer-sensor.html` is a redirect stub.
+
+Menu: every page has exactly one entry. Removed duplicates: "File:
+timps.conf" (= Streamer config), "Streamer log" (= core "Log: logcat"),
+"Video Recorder" (= Recordings, Settings tab), "Privacy masks" (tab of
+"Overlays & privacy masks"), "Sensor IQ File" (card on Image Quality).

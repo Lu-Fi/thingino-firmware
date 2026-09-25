@@ -876,47 +876,6 @@ const previewSliderIds = [
   }
 })();
 
-// Load sensor information on sensor page
-(function loadSensorInfo() {
-  if (!$("#sensor-info")) {
-    return; // Not on sensor page
-  }
-
-  const sensorLoading = $("#sensor-loading");
-  const sensorDetails = $("#sensor-details");
-  const sensorFilePath = $("#sensor-file-path");
-  const sensorMd5 = $("#sensor-md5");
-  const sensorSocFamily = $("#sensor-soc-family");
-  const sensorModel = $("#sensor-model");
-
-  async function fetchSensorInfo() {
-    try {
-      const response = await fetch("/x/json-sensor-info.cgi");
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      const data = await response.json();
-
-      if (data.error) {
-        throw new Error(data.error.message || "Unknown error");
-      }
-
-      sensorFilePath.textContent = data.file_path || "Unknown";
-      sensorMd5.textContent = data.md5 || "Unknown";
-      if (sensorSocFamily)
-        sensorSocFamily.textContent = data.soc_family || "Unknown";
-      if (sensorModel) sensorModel.textContent = data.sensor_model || "Unknown";
-
-      sensorLoading.classList.add("d-none");
-      sensorDetails.classList.remove("d-none");
-    } catch (err) {
-      sensorLoading.textContent = `Error loading sensor info: ${err.message}`;
-    }
-  }
-
-  fetchSensorInfo();
-})();
-
 // Disable all imaging controls initially. Prefer the field's own <p> wrapper
 // so a single unsupported control never greys out a whole column.
 imagingFields.forEach((field) => {

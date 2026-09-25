@@ -18,16 +18,6 @@
       ]
     },
     {
-      "section": "ddInfo",
-      "position": "after:File: onvif.json",
-      "items": [
-        {
-          "label": "File: timps.conf",
-          "href": "/streamer-config.html"
-        }
-      ]
-    },
-    {
       "section": "ddStreamer",
       "position": "append",
       "items": [
@@ -40,20 +30,12 @@
           "href": "/streamer-video.html"
         },
         {
-          "label": "Overlays",
+          "label": "Overlays & privacy masks",
           "href": "/streamer-overlays.html"
-        },
-        {
-          "label": "Sensor IQ File",
-          "href": "/streamer-sensor.html"
         },
         {
           "label": "Motion Detection",
           "href": "/config-motion.html"
-        },
-        {
-          "label": "Privacy masks",
-          "href": "/streamer-overlays.html#privacy"
         },
         {
           "label": "Recordings",
@@ -67,10 +49,6 @@
           "href": "/streamer-config.html"
         },
         {
-          "label": "Streamer log",
-          "href": "/info.html?logcat"
-        },
-        {
           "label": "Restart streamer",
           "href": "/x/restart-prudynt.cgi",
           "className": "text-danger confirm",
@@ -81,7 +59,7 @@
             "message": "Restart the timps streamer? The video stream will be interrupted for a few seconds.",
             "confirmLabel": "Restart"
           },
-          "actionPendingMessage": "Restarting streamer…",
+          "actionPendingMessage": "Restarting streamer\u2026",
           "actionMessage": "Streamer restart initiated"
         }
       ]
@@ -93,10 +71,6 @@
         {
           "label": "Timelapse",
           "href": "/timelapse-player.html"
-        },
-        {
-          "label": "Video Recorder",
-          "href": "/recordings.html#settings"
         }
       ]
     }
@@ -120,6 +94,7 @@
     "/x/timps-imp.cgi",
     "/x/json-recordings.cgi",
     "/x/json-timelapse.cgi",
+    "/x/timps-iq.cgi",
     "/x/restart-prudynt.cgi",
     "/x/json-heartbeat.cgi",
     "/x/json-heartbeat-slow.cgi",
@@ -133,7 +108,6 @@
     "/streamer-video.html",
     "/streamer-image.html",
     "/streamer-overlays.html",
-    "/streamer-sensor.html",
     "/streamer-config.html",
     "/config-audio.html",
     "/config-motion.html",

@@ -263,7 +263,7 @@ hit-testable while still starting invisible, so hovering the circle still
 reveals them exactly as before - only the container layers around/behind
 them become click-through.
 
-### Statistics card: why two data sources (SSE + polled `/control?stats=1`)
+### Statistics card: data sources (SSE + polled `/control?stats=1` + slow full GET)
 
 Fed by timps's `/events?stream=stats` SSE - same token + EventSource
 pattern as `/a/preview-motion.js`. Independent of the video player's own
@@ -290,7 +290,12 @@ timps emits the full state of both once on connect and again on every change
 current values immediately - no priming fetch, and no reason for them to
 live in the polled payload at all.
 
-All three loops only run while the Statistics card is visible (toggled by
+A third, slow loop fetches the full `GET /control` every 15s for what no
+push or `?stats=1` carries: the per-stream fps/bitrate targets (bars, dashed
+target line), the recorder state, `queue_drops`/`last_errors` (health tile)
+and `version`. ~8 KB per 15s; moving these into `?stats=1` would let it go.
+
+All loops only run while the Statistics card is visible (toggled by
 `#ms-stats-toggle`).
 
 ### `applyStatsExtra()`: the `ave_bitrate` / queue-backlog fallback

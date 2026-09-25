@@ -68,18 +68,34 @@
       font-size: 0.875rem;
       color: var(--bs-secondary-color);
     }
-    /* Statistics card: bitrate trend sparkline per stream + read-only
-       day/night/motion key/value blocks; see the inline script below. */
-    .stats-spark {
-      display: block;
-      width: 100%;
-      min-width: 100px;
-      max-width: 160px;
-      height: 32px;
-    }
-    .stats-kv-label {
-      color: var(--bs-secondary-color);
-    }
+    /* Statistics card */
+    .st-panel { border: 1px solid var(--bs-border-color-translucent); border-radius: var(--bs-border-radius); background: var(--bs-body-bg); }
+    .st-ph { display: flex; flex-wrap: wrap; gap: .3rem .6rem; align-items: center; padding: .5rem 1rem;
+      background: rgba(var(--bs-body-color-rgb), .03); border-bottom: 1px solid var(--bs-border-color-translucent); }
+    .st-ph b { color: darkorange; font-weight: 400; font-size: 1rem; }
+    .st-chip { font-family: var(--bs-font-monospace); font-size: .72rem; color: var(--bs-secondary-color);
+      border: 1px solid var(--bs-border-color); border-radius: .25rem; padding: 0 .3rem; }
+    .st-dot { display: inline-block; width: .55rem; height: .55rem; border-radius: 50%; background: #4cc38a; box-shadow: 0 0 0 3px rgb(76 195 138 / .18); }
+    .st-dot.warn { background: #f0b429; box-shadow: 0 0 0 3px rgb(240 180 41 / .18); }
+    .st-dot.off { background: var(--bs-secondary-color); box-shadow: none; }
+    .st-lbl { font-size: .72rem; letter-spacing: .04em; text-transform: uppercase; color: var(--bs-secondary-color); }
+    .st-big { font-size: 1.55rem; font-weight: 500; line-height: 1.1; font-variant-numeric: tabular-nums; }
+    .st-big small { font-size: .78rem; font-weight: 400; color: var(--bs-secondary-color); }
+    .st-bar { height: 4px; border-radius: 2px; background: var(--bs-secondary-bg); overflow: hidden; margin-top: .35rem; }
+    .st-bar > i { display: block; height: 100%; width: 0; background: #ff8800; transition: width .6s; }
+    .st-bar.ok > i { background: #4cc38a; }
+    .st-foot { font-size: .75rem; color: var(--bs-secondary-color); display: flex; flex-wrap: wrap; gap: .2rem 1rem; }
+    .st-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+    canvas.st-chart { display: block; width: 100%; height: 70px; }
+    .st-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; }
+    .st-tile { padding: .7rem .9rem; display: grid; grid-template-columns: auto 1fr; gap: .1rem .7rem; align-items: center; }
+    .st-tile > i { grid-row: span 2; font-size: 1.4rem; color: darkorange; }
+    .st-tile .v { font-weight: 500; }
+    .st-tile .s { grid-column: 2; font-size: .75rem; color: var(--bs-secondary-color); }
+    .st-gain { position: relative; grid-column: 1 / -1; height: 6px; border-radius: 3px; margin-top: .45rem; }
+    .st-gain .m { position: absolute; top: -3px; width: 2px; height: 12px; background: #fff; box-shadow: 0 0 0 1px #000; transition: left .6s; }
+    @media (max-width: 768px) { .st-tiles { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 500px) { .st-metrics { grid-template-columns: 1fr 1fr; } }
   </style>
 </head>
 
@@ -151,8 +167,8 @@
       </div>
     </section>
 
-    <!-- Statistics: fed by /events?stream=stats,daynight,motion SSE plus a slow
-         GET /control?stats=1 poll for fields no push carries. See WEBUI-NOTES.md. -->
+    <!-- Statistics: /events stats,daynight,motion SSE, GET /control?stats=1 every 5s,
+         full GET /control every 15s for targets/recorder/thresholds. See WEBUI-NOTES.md. -->
     <section>
       <div class="card mb-3" id="stats-card" style="display:none">
         <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
@@ -162,33 +178,15 @@
           </div>
         </div>
         <div class="card-body">
-          <div class="table-responsive">
-            <table class="table table-sm align-middle mb-3">
-              <thead>
-                <tr>
-                  <th scope="col">Stream</th>
-                  <th scope="col">Resolution</th>
-                  <th scope="col">Codec</th>
-                  <th scope="col" class="text-end">FPS</th>
-                  <th scope="col" class="text-end">Bitrate</th>
-                  <th scope="col" class="text-end" title="Measured average bitrate on T31; encoder queue backlog (frames not yet claimed) on every other platform">Avg / queue</th>
-                  <th scope="col" class="text-end">GOP</th>
-                  <th scope="col">Profile</th>
-                  <th scope="col">RC mode</th>
-                  <th scope="col" class="text-end">Subs</th>
-                  <th scope="col">Bitrate trend</th>
-                </tr>
-              </thead>
-              <tbody id="stats-table-body">
-                <tr data-placeholder><td colspan="11" class="text-secondary">Waiting for stats…</td></tr>
-              </tbody>
-            </table>
-          </div>
-          <div class="row row-cols-2 row-cols-md-4 g-2 small">
-            <div class="col"><span class="stats-kv-label">Day/Night</span><br><span id="stats-daynight">–</span></div>
-            <div class="col"><span class="stats-kv-label">Motion</span><br><span id="stats-motion">–</span></div>
-            <div class="col"><span class="stats-kv-label">Uptime</span><br><span id="stats-uptime">–</span></div>
-            <div class="col"><span class="stats-kv-label">Clients</span><br><span id="stats-clients">–</span></div>
+          <div class="row g-3 mb-3" id="st-streams"><div class="col text-secondary" data-placeholder>Waiting for stats…</div></div>
+          <div class="st-tiles">
+            <div class="st-panel st-tile"><i class="bi bi-moon-stars" id="st-dn-i"></i><span class="v" id="st-dn">–</span>
+              <span class="s" id="st-dn-s"></span><div class="st-gain" id="st-gain" hidden><span class="m"></span></div></div>
+            <div class="st-panel st-tile"><i class="bi bi-person-walking"></i><span class="v" id="st-mo">–</span><span class="s" id="st-mo-s"></span></div>
+            <div class="st-panel st-tile"><i class="bi bi-record-circle"></i><span class="v" id="st-rec">–</span><span class="s" id="st-rec-s"></span></div>
+            <div class="st-panel st-tile"><i class="bi bi-people"></i><span class="v" id="st-cl">–</span><span class="s">all protocols</span></div>
+            <div class="st-panel st-tile"><i class="bi bi-clock-history"></i><span class="v" id="st-up">–</span><span class="s" id="st-ver"></span></div>
+            <div class="st-panel st-tile"><i class="bi bi-heart-pulse"></i><span class="v"><span class="st-dot me-1" id="st-hd"></span><span id="st-h">–</span></span><span class="s" id="st-h-s"></span></div>
           </div>
         </div>
       </div>
@@ -220,11 +218,8 @@
     const overlay = document.getElementById("ms-connecting-overlay");
     const statsToggle = document.getElementById("ms-stats-toggle");
     const statsCard = document.getElementById("stats-card");
-    const statsBody = document.getElementById("stats-table-body");
-    const statsDaynight = document.getElementById("stats-daynight");
-    const statsMotion = document.getElementById("stats-motion");
-    const statsUptime = document.getElementById("stats-uptime");
-    const statsClients = document.getElementById("stats-clients");
+    const statsBox = document.getElementById("st-streams");
+    const $st = (id) => document.getElementById("st-" + id);
     if (!video || !connectButton || !streamSelect || !status) return;
 
     let host = location.hostname || "127.0.0.1";
@@ -361,8 +356,11 @@
     let statsEs = null;
     let statsStateEs = null;
     let statsControlTimer = null;
+    let statsFullTimer = null;
     const MAX_HISTORY = 40; // ~80s of samples at the default 2s stats interval
-    const streamRows = {};  // chn -> {cells:{...}, history:[kbps,...]}
+    const streamRows = {};  // chn -> {el:{...}, history:[kbps,...]}
+    const stCfg = {};       // slow GET /control: video targets, record, daynight thresholds, errors
+    const stLive = { drops: 0, dn: null };
 
     function formatBytes(n) {
       if (n < 1024) return n + " B";
@@ -372,135 +370,186 @@
     function formatKbps(kbps) {
       return kbps >= 1000 ? (kbps / 1000).toFixed(2) + " Mb/s" : kbps.toFixed(0) + " kb/s";
     }
-    function streamLabel(chn) {
-      return chn === 0 ? "Main (chn0)" : chn === 1 ? "Sub (chn1)" : "chn" + chn;
+    function bigKbps(kbps) {
+      return kbps >= 1000 ? (kbps / 1000).toFixed(2) + " <small>Mb/s</small>" : kbps.toFixed(0) + " <small>kb/s</small>";
     }
-    function profileLabel(p) {
-      // config.h: 0 baseline, 1 main, 2 high (encoder profile index, not a
-      // resolution/quality "profile" in the marketing sense)
-      return p === 0 ? "0 (baseline)" : p === 1 ? "1 (main)" : p === 2 ? "2 (high)" : String(p);
+    function formatUptime(s) {
+      const d = Math.floor(s / 86400), h = Math.floor(s / 3600) % 24, m = Math.floor(s / 60) % 60;
+      return d ? d + " d " + h + " h" : h ? h + " h " + m + " min" : m + " min";
     }
+    const PROFILES = ["Baseline", "Main", "High"];
 
-    function drawSparkline(canvas, values) {
+    function drawChart(canvas, values, target) {
       if (!canvas) return;
-      const w = canvas.clientWidth || 140, h = 32;
-      canvas.width = w; canvas.height = h;
+      const w = canvas.clientWidth || 300, h = canvas.clientHeight || 70, r = window.devicePixelRatio || 1;
+      canvas.width = w * r; canvas.height = h * r;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
-      ctx.clearRect(0, 0, w, h);
+      ctx.scale(r, r);
       if (values.length < 2) return;
-      const max = Math.max.apply(null, values), min = Math.min.apply(null, values);
-      const range = (max - min) || 1;
-      const color = getComputedStyle(document.documentElement).getPropertyValue("--bs-primary").trim() || "#0d6efd";
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 1.5;
+      const max = Math.max((target || 0) * 1.3, ...values) || 1;
+      const px = (i) => (i + MAX_HISTORY - values.length) / (MAX_HISTORY - 1) * w;
+      const py = (v) => h - 2 - v / max * (h - 6);
+      if (target) {
+        const muted = getComputedStyle(canvas).getPropertyValue("--bs-secondary-color").trim() || "#888";
+        ctx.strokeStyle = muted; ctx.globalAlpha = .6; ctx.setLineDash([4, 4]);
+        ctx.beginPath(); ctx.moveTo(0, py(target)); ctx.lineTo(w, py(target)); ctx.stroke(); ctx.setLineDash([]);
+        ctx.globalAlpha = 1; ctx.fillStyle = muted; ctx.font = "10px sans-serif";
+        ctx.fillText("target " + formatKbps(target), 4, py(target) - 3);
+      }
+      const g = ctx.createLinearGradient(0, 0, 0, h);
+      g.addColorStop(0, "rgba(255,136,0,.35)"); g.addColorStop(1, "rgba(255,136,0,0)");
+      ctx.beginPath(); ctx.moveTo(px(0), h);
+      values.forEach((v, i) => ctx.lineTo(px(i), py(v)));
+      ctx.lineTo(px(values.length - 1), h); ctx.closePath(); ctx.fillStyle = g; ctx.fill();
       ctx.beginPath();
-      values.forEach((v, i) => {
-        const x = (i / (values.length - 1)) * (w - 2) + 1;
-        const y = h - 1 - ((v - min) / range) * (h - 2);
-        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-      });
-      ctx.stroke();
+      values.forEach((v, i) => i ? ctx.lineTo(px(i), py(v)) : ctx.moveTo(px(i), py(v)));
+      ctx.strokeStyle = "#ff8800"; ctx.lineWidth = 1.5; ctx.stroke();
     }
 
     function ensureStatsRow(chn) {
       if (streamRows[chn]) return streamRows[chn];
-      if (!statsBody) return null;
-      const placeholder = statsBody.querySelector("tr[data-placeholder]");
-      if (placeholder) placeholder.remove();
-      const tr = document.createElement("tr");
-      const cells = {};
-      ["stream", "res", "codec", "fps", "bitrate", "avgBitrate", "gop", "profile", "rc", "subs", "trend"]
-        .forEach((c) => {
-          const td = document.createElement("td");
-          if (c === "fps" || c === "bitrate" || c === "avgBitrate" || c === "gop" || c === "subs") {
-            td.className = "text-end";
-          }
-          if (c === "trend") {
-            const canvas = document.createElement("canvas");
-            canvas.className = "stats-spark";
-            canvas.setAttribute("aria-label", "bitrate trend");
-            td.appendChild(canvas);
-            cells.canvas = canvas;
-          } else {
-            cells[c] = td;
-          }
-          tr.appendChild(td);
-        });
-      cells.stream.textContent = streamLabel(chn);
-      cells.gop.textContent = "—";
-      cells.profile.textContent = "—";
-      cells.rc.textContent = "—";
-      cells.avgBitrate.textContent = "";
-      statsBody.appendChild(tr);
-      const row = { cells, history: [] };
+      if (!statsBox) return null;
+      const ph = statsBox.querySelector("[data-placeholder]");
+      if (ph) ph.remove();
+      const col = document.createElement("div");
+      col.className = "col-lg-6";
+      col.innerHTML =
+        '<div class="st-panel"><div class="st-ph"><span class="st-dot" data-k="dot"></span>' +
+        '<b>' + (chn === 0 ? "Main stream" : chn === 1 ? "Substream" : "Stream " + chn) + '</b>' +
+        '<span class="st-chip" data-k="res"></span><span class="st-chip" data-k="codec"></span>' +
+        '<span class="st-chip" data-k="rc" hidden></span></div><div class="p-3">' +
+        '<div class="st-metrics mb-2">' +
+        '<div><div class="st-lbl">Frame rate</div><div class="st-big" data-k="fps"></div><div class="st-bar ok"><i data-k="fpsb"></i></div></div>' +
+        '<div><div class="st-lbl">Bitrate</div><div class="st-big" data-k="kbps"></div><div class="st-bar"><i data-k="kbpsb"></i></div></div>' +
+        '<div><div class="st-lbl">Viewers</div><div class="st-big" data-k="subs"></div><div class="st-foot mt-1">on this stream</div></div>' +
+        '</div><canvas class="st-chart" data-k="chart" aria-label="bitrate trend"></canvas>' +
+        '<div class="st-foot mt-2"><span data-k="avg"></span><span data-k="queue"></span><span data-k="drops"></span></div>' +
+        '</div></div>';
+      const el = {};
+      col.querySelectorAll("[data-k]").forEach((n) => { el[n.getAttribute("data-k")] = n; });
+      statsBox.appendChild(col);
+      const row = { el, history: [], chn };
       streamRows[chn] = row;
       return row;
     }
 
-    // fast path: fed by every "stats" SSE frame (~2s) - live fps/bitrate/subs
-    // and the bitrate trend sparkline
+    function renderHealth() {
+      const issues = [];
+      if (stLive.drops) issues.push(stLive.drops + " dropped frames");
+      const qd = (stCfg.queue_drops || []).reduce((a, b) => a + b, 0);
+      if (qd) issues.push(qd + " queue drops");
+      const errs = Object.keys(stCfg.last_errors || {});
+      if (errs.length) issues.push("errors: " + errs.join(", "));
+      $st("hd").classList.toggle("warn", issues.length > 0);
+      $st("h").textContent = issues.length ? "Check" : "Healthy";
+      $st("h-s").textContent = issues.length ? issues.join(" · ") : "no drops · no errors";
+    }
+
+    // fast path: every "stats" SSE frame (~2s)
     function renderStats(j) {
-      if (statsUptime) statsUptime.textContent = j.uptime_s + "s";
-      if (statsClients) statsClients.textContent = String(j.clients);
+      $st("up").textContent = formatUptime(j.uptime_s);
+      $st("cl").textContent = j.clients + (j.clients === 1 ? " client" : " clients");
+      stLive.drops = 0;
       (j.video || []).forEach((s) => {
         const row = ensureStatsRow(s.chn);
         if (!row) return;
-        row.cells.res.textContent = s.width + "x" + s.height;
-        row.cells.codec.textContent = s.codec.toUpperCase();
-        row.cells.fps.textContent = s.fps.toFixed(1);
-        row.cells.bitrate.textContent = formatKbps(s.kbps);
-        row.cells.subs.textContent = s.subs + (s.subs === 1 ? " sub" : " subs");
-        row.cells.subs.title = s.drop_frames
-          ? "dropped " + s.drop_frames + " frames / " + formatBytes(s.drop_bytes)
-          : "";
+        const cfg = (stCfg.video || {})[s.chn] || {};
+        const e = row.el;
+        e.res.textContent = s.width + "×" + s.height;
+        if (!e.codec.dataset.p) e.codec.textContent = s.codec.toUpperCase();
+        e.fps.innerHTML = s.fps.toFixed(1) + (cfg.fps ? " <small>/ " + cfg.fps + "</small>" : "");
+        e.fpsb.style.width = (cfg.fps ? Math.min(100, s.fps / cfg.fps * 100) : 0) + "%";
+        e.kbps.innerHTML = bigKbps(s.kbps);
+        e.kbpsb.style.width = (cfg.bitrate ? Math.min(100, s.kbps / (cfg.bitrate * 1.5) * 100) : 0) + "%";
+        e.subs.textContent = String(s.subs);
+        e.drops.textContent = s.drop_frames
+          ? s.drop_frames + " dropped frames (" + formatBytes(s.drop_bytes) + ")" : "0 dropped frames";
+        stLive.drops += s.drop_frames || 0;
+        e.dot.classList.toggle("warn", !!s.drop_frames || (cfg.fps && s.fps < cfg.fps * 0.8));
         row.history.push(s.kbps);
         if (row.history.length > MAX_HISTORY) row.history.shift();
-        drawSparkline(row.cells.canvas, row.history);
+        const avg = row.history.reduce((a, b) => a + b, 0) / row.history.length;
+        e.avg.textContent = "avg " + formatKbps(avg) + (cfg.bitrate ? " (target " + formatKbps(cfg.bitrate) + ")" : "");
+        drawChart(e.chart, row.history, cfg.bitrate);
       });
+      renderHealth();
     }
 
+    // ?stats=1 every 5s: rc mode/profile/gop + encoder backlog
     function applyStatsExtra(j) {
       if (!j) return;
       const video = j.video || {}, enc = j.encoder || {};
       Object.keys(video).forEach((k) => {
         const row = streamRows[parseInt(k, 10)];
         if (!row) return;
-        const vcfg = video[k];
-        row.cells.gop.textContent = String(vcfg.gop);
-        row.cells.profile.textContent = profileLabel(vcfg.profile);
-        row.cells.rc.textContent = String(vcfg.rc_mode || "").toUpperCase();
+        const v = video[k], e = row.el;
+        const codec = e.codec.textContent.split(" ")[0];
+        e.codec.textContent = codec + (PROFILES[v.profile] ? " " + PROFILES[v.profile] : "");
+        e.codec.dataset.p = "1";
+        e.rc.textContent = String(v.rc_mode || "").toUpperCase() + " · GOP " + v.gop;
+        e.rc.hidden = false;
         const es = enc[k];
-        if (es && typeof es.ave_bitrate === "number") {
-          row.cells.avgBitrate.textContent = formatKbps(es.ave_bitrate);
-          row.cells.avgBitrate.title = "";
-        } else if (es) {
-          row.cells.avgBitrate.textContent = es.left_pics + " q";
-          row.cells.avgBitrate.title = "encoder backlog: " + es.left_pics +
-            " frame(s) queued, " + formatBytes(es.left_stream_bytes) +
-            " / " + es.left_stream_frames + " stream frame(s) unclaimed";
-        } else {
-          row.cells.avgBitrate.textContent = "";
-          row.cells.avgBitrate.title = "";
-        }
+        if (es && es.ave_bitrate > 0) e.queue.textContent = "encoder avg " + formatKbps(es.ave_bitrate);
+        else if (es) {
+          e.queue.textContent = "encoder queue " + es.left_pics;
+          e.queue.title = formatBytes(es.left_stream_bytes) + " / " + es.left_stream_frames + " stream frame(s) unclaimed";
+        } else e.queue.textContent = "";
       });
     }
 
     function renderDaynight(dn) {
-      if (!statsDaynight || !dn) return;
-      const modeTxt = dn.mode === 1 ? "Night" : dn.mode === 0 ? "Day" : "Unknown";
-      const gain = (typeof dn.total_gain === "number" && dn.total_gain >= 0)
-        ? " · gain " + dn.total_gain.toFixed(0) : "";
-      statsDaynight.textContent = modeTxt + (dn.enabled ? " (auto)" : " (manual)") + gain;
+      if (dn) stLive.dn = Object.assign(stLive.dn || {}, dn);
+      dn = stLive.dn;
+      if (!dn) return;
+      const night = dn.mode === 1;
+      const mode = dn.dn_mode || (dn.enabled ? "auto" : "manual");
+      $st("dn").textContent = (night ? "Night" : dn.mode === 0 ? "Day" : "Unknown") + " · " + mode;
+      $st("dn-i").className = night ? "bi bi-moon-stars" : "bi bi-sun";
+      const g = dn.total_gain, lo = dn.total_gain_day_threshold, hi = dn.total_gain_night_threshold;
+      const bar = $st("gain");
+      if (typeof g === "number" && g >= 0 && lo > 0 && hi > lo && mode === "auto") {
+        $st("dn-s").textContent = "gain " + g.toFixed(0) + (night ? " · day below " + lo : " · night above " + hi);
+        const span = hi * 2;
+        bar.style.background = "linear-gradient(90deg,#f0c040 0 " + (lo / span * 100) + "%,#555 " +
+          (lo / span * 100) + "% " + (hi / span * 100) + "%,#3a5fcd " + (hi / span * 100) + "%)";
+        bar.firstChild.style.left = Math.min(100, g / span * 100) + "%";
+        bar.hidden = false;
+      } else {
+        $st("dn-s").textContent = typeof g === "number" && g >= 0 ? "gain " + g.toFixed(0) : "";
+        bar.hidden = true;
+      }
     }
     function renderMotion(mo) {
-      if (!statsMotion || !mo) return;
-      statsMotion.textContent = !mo.available ? "Unavailable" : (mo.enabled ? "Enabled" : "Disabled");
+      if (!mo) return;
+      const active = mo.active && mo.active.length;
+      $st("mo").textContent = !mo.available ? "Motion n/a" : !mo.enabled ? "Motion off" : active ? "Motion!" : "Motion on";
+      $st("mo-s").textContent = !mo.available ? "not in this build" : !mo.enabled ? "detection disabled" :
+        active ? active.length + " cell(s) active" : "watching, nothing moving";
+    }
+    function renderRecord(r) {
+      if (!r) return;
+      $st("rec").textContent = !r.available ? "Recorder n/a" : r.recording ? "Recording" : r.enabled ? "Recorder armed" : "Recorder off";
+      $st("rec-s").textContent = r.available ? (r.free_mb >= 0 ? r.free_mb + " MB free" : "no storage") : "not in this build";
+    }
+
+    // slow path: full GET /control every 15s (targets, recorder, thresholds, errors)
+    function fetchStatsFull() {
+      timpsApiReady().then((api) => api.get()).then((j) => {
+        stCfg.video = j.video || {};
+        stCfg.queue_drops = j.queue_drops;
+        stCfg.last_errors = j.last_errors;
+        $st("ver").textContent = j.version ? "timps " + j.version : "";
+        renderDaynight(j.daynight);
+        renderMotion(j.motion);
+        renderRecord(j.record);
+        renderHealth();
+      }).catch(() => {});
     }
 
     function fetchStatsExtra() {
       timpsApiReady().then((api) => api.statsExtra()).then(applyStatsExtra)
-        .catch(() => { /* offline poll tick - table just keeps its last values */ });
+        .catch(() => { /* offline poll tick - panels just keep their last values */ });
     }
 
     async function startStats() {
@@ -520,19 +569,22 @@
           else if (type === "motion") renderMotion(data);
         });
       }
+      fetchStatsFull();
       fetchStatsExtra();
+      if (!statsFullTimer) statsFullTimer = setInterval(fetchStatsFull, 15000);
       if (!statsControlTimer) statsControlTimer = setInterval(fetchStatsExtra, 5000);
     }
     function stopStats() {
       if (statsEs) { statsEs.close(); statsEs = null; }
       if (statsStateEs) { statsStateEs.close(); statsStateEs = null; }
       if (statsControlTimer) { clearInterval(statsControlTimer); statsControlTimer = null; }
+      if (statsFullTimer) { clearInterval(statsFullTimer); statsFullTimer = null; }
       Object.keys(streamRows).forEach((k) => delete streamRows[k]);
-      if (statsBody) statsBody.innerHTML = '<tr data-placeholder><td colspan="11" class="text-secondary">Waiting for stats…</td></tr>';
-      if (statsDaynight) statsDaynight.textContent = "–";
-      if (statsMotion) statsMotion.textContent = "–";
-      if (statsUptime) statsUptime.textContent = "–";
-      if (statsClients) statsClients.textContent = "–";
+      stLive.dn = null;
+      if (statsBox) statsBox.innerHTML = '<div class="col text-secondary" data-placeholder>Waiting for stats…</div>';
+      ["dn", "mo", "rec", "cl", "up", "h"].forEach((k) => { $st(k).textContent = "–"; });
+      ["dn-s", "mo-s", "rec-s", "ver", "h-s"].forEach((k) => { $st(k).textContent = ""; });
+      $st("gain").hidden = true;
     }
     if (statsToggle && statsCard) {
       const statsWanted = sessionStorage.getItem("ms.stats") === "1";

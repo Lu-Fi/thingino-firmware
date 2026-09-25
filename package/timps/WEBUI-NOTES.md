@@ -495,3 +495,18 @@ Menu: every page has exactly one entry. Removed duplicates: "File:
 timps.conf" (= Streamer config), "Streamer log" (= core "Log: logcat"),
 "Video Recorder" (= Recordings, Settings tab), "Privacy masks" (tab of
 "Overlays & privacy masks"), "Sensor IQ File" (card on Image Quality).
+
+### OSD frames and the preview after a restart
+
+The overlay frames mirror `msttf_render()`/`resolve_pos()`: the page loads the
+TTF timps rendered with (`osd.font_path`, via `timps-upload.cgi?kind=font&raw=`),
+measures advances without kerning at `font_size` px, adds the same pad
+(`font_size/4 + 1 + outline`), rounds the width up to even, places the region
+like timps (clamped to the frame) and draws the frame around the text, i.e.
+the region minus the pad. `{hostname}` uses the footer host, not the IP.
+
+A streamer restart ends the MJPEG connection and changes the per-boot token.
+`timps-api.js` fires `timps-back` when an event stream reconnects after an
+outage (the restart bar fires it too); the preview then re-fetches the token
+and reconnects, and the overlay page reloads its state. Failed preview loads
+retry with 2..30 s backoff instead of giving up after one attempt.

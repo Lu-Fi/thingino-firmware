@@ -51,7 +51,19 @@ info() {
 	reply "200 OK" "{\"file\":\"$FILE\",\"size\":${size:-0},\"md5\":\"$md5\",\"custom\":$custom,\"stock\":$stock,\"overlay_free_kb\":${free:-0}$list}"
 }
 
-[ "$REQUEST_METHOD" = "POST" ] || info
+if [ "$REQUEST_METHOD" != "POST" ]; then
+	case "$QUERY_STRING" in *kind=font*raw=*)
+		F=${QUERY_STRING##*raw=}
+		F=${F%%&*}
+		case "$F" in *[!A-Za-z0-9._-]* | .*) fail "400 Bad Request" "bad name" ;; esac
+		[ -f "$DIR/$F" ] || fail "404 Not Found" "no such font"
+		printf 'Content-Type: font/ttf\r\nCache-Control: max-age=300\r\n\r\n'
+		cat "$DIR/$F"
+		exit 0
+		;;
+	esac
+	info
+fi
 
 case "$QUERY_STRING" in
 	*reset*)

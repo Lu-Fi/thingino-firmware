@@ -669,7 +669,6 @@ loadInitialData().then(async () => {
   let focusTimeoutId = null;
   let nextRestartAt = 0;
   let restartBackoffMs = restartBackoffInitialMs;
-  let tokenRetried = false; // one re-fetch per failure (camera rebooted?)
 
   // the direct media URLs need the timps token/port first
   await fetchTimpsMediaInfo();
@@ -722,24 +721,30 @@ loadInitialData().then(async () => {
   // preview.src comes back absolutized by the browser, so compare by suffix
   const showsNoStream = () => (preview.src || "").endsWith(ImageNoStream);
 
+  // a restarted streamer has a new token: re-fetch it on every reconnect
+  let retryMs = 2000, retryTimer = null;
+  const reconnect = () => {
+    clearTimeout(retryTimer);
+    retryTimer = null;
+    fetchTimpsMediaInfo(true).then(() => {
+      if (isWindowVisible) preview.src = liveStreamUrl();
+    });
+  };
+
   preview.addEventListener("load", () => {
     lastLoadTime = Date.now();
     restartBackoffMs = restartBackoffInitialMs;
     nextRestartAt = 0;
-    if (!showsNoStream()) tokenRetried = false;
+    if (!showsNoStream()) retryMs = 2000;
   });
 
   preview.addEventListener("error", () => {
-    if (!isWindowVisible || showsNoStream() || !preview.src) return;
-    if (tokenRetried) {
-      preview.src = ImageNoStream;
-      return;
-    }
-    tokenRetried = true;
-    fetchTimpsMediaInfo(true).then(() => {
-      if (isWindowVisible) preview.src = liveStreamUrl();
-    });
+    if (!isWindowVisible || showsNoStream() || !preview.src || retryTimer) return;
+    retryTimer = setTimeout(reconnect, retryMs);
+    retryMs = Math.min(retryMs * 2, 30000);
   });
+
+  document.addEventListener("timps-back", () => { retryMs = 2000; reconnect(); });
 
   // Stream watchdog - restart if no frames received
   setInterval(() => {

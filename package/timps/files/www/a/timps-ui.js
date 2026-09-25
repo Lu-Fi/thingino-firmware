@@ -95,6 +95,7 @@
     if (!window.timpsApi) return;
     window.timpsApi.get().then(function () {
       toast("success", "Streamer is back.", 3000);
+      document.dispatchEvent(new Event("timps-back"));
       if (onRestarted) onRestarted();
     }, function () {
       if (tries > 0) setTimeout(function () { waitBack(tries - 1); }, 2000);

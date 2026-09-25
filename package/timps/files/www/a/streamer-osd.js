@@ -116,31 +116,54 @@
       F: d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()),
       T: p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds()),
       a: "Mon", b: "Jan", Z: "CET", z: "+0100", "%": "%" };
-    var host = (window.thinginoUIConfig && window.thinginoUIConfig.device &&
-      window.thinginoUIConfig.device.hostname) || window.location.hostname;
+    var uc = window.thinginoUIConfig || {};
+    var host = (uc.footer && uc.footer.host) || (uc.device && uc.device.hostname) || window.location.hostname;
     var ph = { hostname: host, ip: window.location.hostname, uptime: "0:00:00",
       fps: "25.0", bitrate: "1234", mac: "00:00:00:00:00:00", net: "1.2 M", cpu: "12%", mem: "40%", clients: "1" };
     return String(t || "").replace(/%([A-Za-z%])/g, function (m, c) { return map[c] !== undefined ? map[c] : m; })
       .replace(/\{([a-z0-9_]+)\}/gi, function (m, k) { return ph[k.replace(/\d+$/, "")] || "xxxx"; });
   }
 
-  function boxSize(it) {
-    if (it.type === "logo") return { w: 100, h: 30 };
-    var fs = num(it.font_size, 16), ol = num(it.outline, 0);
-    if (!measureCtx) measureCtx = document.createElement("canvas").getContext("2d");
-    measureCtx.font = fs + "px sans-serif";
-    return { w: measureCtx.measureText(expand(it.text) || " ").width + 2 * ol, h: fs * 1.15 + 2 * ol };
+  // the TTF timps rendered with (osd.font_path at streamer start), fetched from the camera
+  var osdFont = "sans-serif", fontPath = "";
+  function useFont(path) {
+    var m = /^\/usr\/share\/fonts\/([A-Za-z0-9._-]+)$/.exec(path || "");
+    if (!m || path === fontPath || !window.FontFace) return;
+    fontPath = path;
+    var fam = "timpsOsd" + Date.now();
+    new FontFace(fam, "url(/x/timps-upload.cgi?kind=font&raw=" + m[1] + ")").load().then(function (f) {
+      document.fonts.add(f);
+      osdFont = fam;
+      renderBoxes();
+    }, function () { osdFont = "sans-serif"; });
   }
 
+  // same geometry as msttf_render(): em = font_size, pad on every side, even width
+  function boxSize(it) {
+    if (it.type === "logo") return { w: 100, h: 30, pad: 0 };
+    var fs = Math.min(512, Math.max(8, num(it.font_size, 16)));
+    var ol = Math.min(Math.max(0, num(it.outline, 0)), Math.floor(fs / 4) + 1);
+    if (/^0x00/i.test(it.outline_color || "")) ol = 0;
+    var pad = Math.floor(fs / 4) + 1 + ol;
+    if (!measureCtx) measureCtx = document.createElement("canvas").getContext("2d");
+    measureCtx.font = fs + "px " + osdFont;
+    if ("fontKerning" in measureCtx) measureCtx.fontKerning = "none";
+    var w = Math.floor(measureCtx.measureText(expand(it.text) || " ").width + 2 * pad);
+    return { w: (w + 1) & ~1, h: fs + 2 * pad, pad: pad };
+  }
+
+  // region placed like resolve_pos(), the frame drawn around the text (region minus pad)
   function placeBox(el, it) {
     var W = dims[S].w, H = dims[S].h, a = anchorOf(it), sz = boxSize(it);
     var ox = Math.abs(num(it.x, 0)), oy = Math.abs(num(it.y, 0));
-    var left = a[1] === "l" ? ox : a[1] === "r" ? W - ox - sz.w : (W - sz.w) / 2;
-    var top = a[0] === "t" ? oy : a[0] === "b" ? H - oy - sz.h : (H - sz.h) / 2;
-    el.style.left = (left / W * 100) + "%";
-    el.style.top = (top / H * 100) + "%";
-    el.style.width = (sz.w / W * 100) + "%";
-    el.style.height = (sz.h / H * 100) + "%";
+    var left = a[1] === "l" ? ox : a[1] === "r" ? W - ox - sz.w : Math.floor((W - sz.w) / 2);
+    var top = a[0] === "t" ? oy : a[0] === "b" ? H - oy - sz.h : Math.floor((H - sz.h) / 2);
+    left = Math.max(0, Math.min(left, W - sz.w));
+    top = Math.max(0, Math.min(top, H - sz.h));
+    el.style.left = ((left + sz.pad) / W * 100) + "%";
+    el.style.top = ((top + sz.pad) / H * 100) + "%";
+    el.style.width = ((sz.w - 2 * sz.pad) / W * 100) + "%";
+    el.style.height = ((sz.h - 2 * sz.pad) / H * 100) + "%";
   }
 
   function renderBoxes() {
@@ -413,6 +436,7 @@
         }
       });
       if (json.osd && json.osd.enabled !== undefined) $id("osd-master").checked = !!Number(json.osd.enabled);
+      if (first && json.osd) useFont(json.osd.font_path);
       offlineNotice(false);
       var keep = shown;
       selectStream(S);
@@ -471,7 +495,8 @@
     try { linked = localStorage.getItem("timps-osd-link") === "1"; } catch (e) {}
     S = ui().initTabs(function (s) { selectStream(s); });
     ui().uploadCard($id("osd-font"), "font", "OSD font", fontList);
-    ui().onRestarted(function () { load(true); });
+    // any streamer restart (restart bar or outside): new font/boot state
+    document.addEventListener("timps-back", function () { load(true); });
     renderLink();
 
     $id("osd-font-sel").addEventListener("change", function () { setFont(this.value); });

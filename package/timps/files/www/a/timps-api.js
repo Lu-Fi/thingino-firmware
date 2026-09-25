@@ -201,7 +201,7 @@
   }
 
   function events(streams, onEvent, onError) {
-    var es = null, closed = false;
+    var es = null, closed = false, down = false;
     var types = String(streams || "motion,daynight,stats")
       .split(",").map(function (s) { return s.trim(); })
       .filter(Boolean);
@@ -215,6 +215,10 @@
           if (onError) onError(e);
           return;
         }
+        es.onopen = function () {
+          // after a streamer restart: tell the page (preview reconnect etc.)
+          if (down) { down = false; document.dispatchEvent(new Event("timps-back")); }
+        };
         types.forEach(function (t) {
           es.addEventListener(t, function (ev) {
             var data = null;
@@ -225,6 +229,7 @@
         es.onerror = function (err) {
           if (closed) return;
           stop();
+          down = true;
           if (onError) onError(err);
           fetchInfo(true).then(function () {
             if (!closed && !document.hidden) setTimeout(open, 3000);

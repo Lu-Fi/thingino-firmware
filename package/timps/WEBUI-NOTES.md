@@ -475,6 +475,9 @@ GET = file/size/md5, `custom` (copy in the overlay) and `stock` (one in
 copy. `iq` writes `/etc/sensor/<sensor>-<soc>.bin` (8 KB..2 MB, starts with
 the Ingenic version string like `2.10`); `font` writes
 `/usr/share/fonts/default.ttf` (TTF/OTF magic), the default `osd.font_path`.
+The font GET also lists every TTF/OTF there; the Overlays select box sets
+`osd.font_path` from it (restart key, so it lands in `deferred_keys`), and an
+upload switches the selection to `default.ttf` since that is what it replaced.
 `/etc/sensor` is a symlink to `/usr/share/sensor`, so the overlay copy lives
 under `/overlay/usr/share/sensor/`. Both are read at streamer start, so the
 cards raise the restart bar. `streamer-sensor.html` is a redirect stub.

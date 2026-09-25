@@ -148,16 +148,17 @@
   else initPageTabs();
 
   // file card backed by /x/timps-upload.cgi?kind=K; markup uses data-up=kind|info|file|reset|hint
-  function uploadCard(root, kind, pendingKey) {
+  function uploadCard(root, kind, pendingKey, onInfo) {
     if (!root) return;
     var q = function (n) { return root.querySelector('[data-up="' + n + '"]'); };
-    function show(j) {
+    function show(j, changed) {
       var k = q("kind");
       k.textContent = j.custom ? "custom" : "stock";
       k.className = "tv-badge " + (j.custom ? "rst" : "live");
       q("info").textContent = j.file.replace(/.*\//, "") + " · " + Math.round(j.size / 1024) + " KB · md5 " + j.md5.slice(0, 8);
       q("info").title = j.file + "\nmd5 " + j.md5;
       q("reset").hidden = !(j.custom && j.stock);
+      if (onInfo) onInfo(j, changed);
     }
     function call(method, extra, body) {
       q("hint").textContent = method === "GET" ? "" : "working…";
@@ -170,9 +171,9 @@
           return j;
         });
       }).then(function (j) {
-        show(j);
         q("hint").textContent = "";
         if (method !== "GET") markPending([pendingKey]);
+        show(j, method !== "GET");
       }, function (err) {
         q("hint").textContent = "";
         if (method === "GET") q("info").textContent = "unavailable: " + err.message;

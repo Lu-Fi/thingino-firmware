@@ -43,7 +43,12 @@ info() {
 	[ -f "$UPPER" ] && custom=1
 	[ -f "/rom$REAL" ] && stock=1
 	free=$(df -k /overlay 2>/dev/null | awk 'NR==2{print $4}')
-	reply "200 OK" "{\"file\":\"$FILE\",\"size\":${size:-0},\"md5\":\"$md5\",\"custom\":$custom,\"stock\":$stock,\"overlay_free_kb\":${free:-0}}"
+	local list="" f
+	case "$QUERY_STRING" in *kind=font*)
+		for f in "$DIR"/*.ttf "$DIR"/*.otf; do [ -f "$f" ] && list="$list${list:+,}\"${f##*/}\""; done
+		list=",\"fonts\":[$list]" ;;
+	esac
+	reply "200 OK" "{\"file\":\"$FILE\",\"size\":${size:-0},\"md5\":\"$md5\",\"custom\":$custom,\"stock\":$stock,\"overlay_free_kb\":${free:-0}$list}"
 }
 
 [ "$REQUEST_METHOD" = "POST" ] || info

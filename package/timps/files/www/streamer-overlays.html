@@ -60,9 +60,13 @@
                 <label for="osd-master" class="form-check-label">OSD enabled</label>
               </div>
             </div>
-            <div class="d-flex flex-wrap align-items-center gap-2 mt-3" id="osd-font">
-              <span class="small text-body-secondary">Font</span><span class="tv-badge" data-up="kind"></span><span class="tv-cfg" data-up="info">Loading…</span>
-              <label class="btn btn-sm btn-outline-primary mb-0 ms-auto"><i class="bi bi-upload me-1"></i>Upload .ttf<input type="file" data-up="file" accept=".ttf,.otf" hidden></label>
+            <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
+              <label for="osd-font-sel" class="small text-body-secondary">Font</label>
+              <select class="form-select form-select-sm w-auto" id="osd-font-sel" disabled></select>
+            </div>
+            <div class="d-flex flex-wrap align-items-center gap-2 mt-2" id="osd-font">
+              <span class="tv-badge" data-up="kind"></span><span class="tv-cfg" data-up="info">Loading…</span>
+              <label class="btn btn-sm btn-outline-primary mb-0 ms-auto" title="Replaces default.ttf"><i class="bi bi-upload me-1"></i>Upload .ttf<input type="file" data-up="file" accept=".ttf,.otf" hidden></label>
               <button type="button" class="btn btn-sm btn-outline-secondary" data-up="reset" hidden><i class="bi bi-arrow-counterclockwise me-1"></i>Restore stock font</button>
               <span class="small text-body-secondary" data-up="hint"></span>
             </div>

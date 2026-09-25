@@ -436,14 +436,45 @@
     load(false);
   }
 
+  var FONT_DIR = "/usr/share/fonts/";
+  function setFont(path) {
+    return window.timpsApi.set({ osd: { font_path: path } }).then(function (r) {
+      ui().markPending((r && r.deferred_keys) || ["osd.font_path"]);
+    }, function (e) { ui().toast("danger", "Font: " + (e.message || e)); });
+  }
+  // select box: every font in FONT_DIR, current = osd.font_path; an upload lands in default.ttf
+  function fontList(j, uploaded) {
+    var sel = $id("osd-font-sel");
+    if (!sel || !j.fonts) return;
+    window.timpsApi.get().then(function (c) {
+      var cur = (c.osd && c.osd.font_path) || FONT_DIR + "default.ttf";
+      var paths = j.fonts.map(function (f) { return FONT_DIR + f; });
+      if (paths.indexOf(cur) < 0) paths.unshift(cur);
+      sel.innerHTML = "";
+      paths.forEach(function (p) {
+        var o = document.createElement("option");
+        o.value = p;
+        o.textContent = p.indexOf(FONT_DIR) === 0 ? p.slice(FONT_DIR.length) : p;
+        sel.appendChild(o);
+      });
+      sel.value = cur;
+      sel.disabled = false;
+      if (uploaded && cur !== FONT_DIR + "default.ttf") {
+        sel.value = FONT_DIR + "default.ttf";
+        setFont(sel.value);
+      }
+    });
+  }
+
   function init() {
     if (!window.timpsUi) return;
     try { linked = localStorage.getItem("timps-osd-link") === "1"; } catch (e) {}
     S = ui().initTabs(function (s) { selectStream(s); });
-    ui().uploadCard($id("osd-font"), "font", "OSD font");
+    ui().uploadCard($id("osd-font"), "font", "OSD font", fontList);
     ui().onRestarted(function () { load(true); });
     renderLink();
 
+    $id("osd-font-sel").addEventListener("change", function () { setFont(this.value); });
     $id("osd-link").addEventListener("change", function () {
       linked = this.checked;
       try { localStorage.setItem("timps-osd-link", linked ? "1" : "0"); } catch (e) {}

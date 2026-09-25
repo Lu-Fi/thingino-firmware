@@ -1,7 +1,7 @@
 PRUDYNT_T_SITE_METHOD = git
 PRUDYNT_T_SITE = https://github.com/themactep/prudynt-t
 PRUDYNT_T_SITE_BRANCH = stable
-PRUDYNT_T_VERSION = f1e8db3642f34b68462625f58ef39b076f1a7926
+PRUDYNT_T_VERSION = b4d3d962a4069f1b003c61473edfc56cc10c94dd
 
 PRUDYNT_T_OVERRIDE_FILE = $(BR2_EXTERNAL_THINGINO_PATH)/$(CAMERA_SUBDIR)/$(CAMERA)/prudynt.json
 
@@ -408,11 +408,14 @@ define PRUDYNT_T_INSTALL_TARGET_CMDS
 		$(TARGET_DIR)/var/www/a/plugins/prudynt.webui.json
 
 	# HTML pages
-	# The fMP4 preview is prudynt's default preview page, installed as
-	# /var/www/preview.html (same convention as raptor and timps). The MJPEG
-	# preview stays available at /var/www/preview-mjpeg.html.
+	# The default preview page is the combined live view with PTZ controls,
+	# installed as /var/www/preview.html. The plain fMP4 page stays at
+	# /var/www/preview-fmp4.html and the MJPEG page at
+	# /var/www/preview-mjpeg.html.
 	$(INSTALL) -D -m 0644 $(PRUDYNT_T_PKGDIR)/files/www/preview.html \
 		$(TARGET_DIR)/var/www/preview.html
+	$(INSTALL) -D -m 0644 $(PRUDYNT_T_PKGDIR)/files/www/preview-fmp4.html \
+		$(TARGET_DIR)/var/www/preview-fmp4.html
 	$(INSTALL) -D -m 0644 $(PRUDYNT_T_PKGDIR)/files/www/preview-mjpeg.html \
 		$(TARGET_DIR)/var/www/preview-mjpeg.html
 	$(INSTALL) -D -m 0644 $(PRUDYNT_T_PKGDIR)/files/www/config-audio.html \

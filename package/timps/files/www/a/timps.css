@@ -13,9 +13,13 @@
 .tv-tabs .nav-link { display: grid; text-align: left; line-height: 1.25; }
 .tv-tabs .nav-link small { font-family: var(--bs-font-monospace); font-size: .72rem; color: var(--bs-secondary-color); }
 .tv-tabs .nav-link.active { color: #ff8800; }
-.tv-card { border: 1px solid var(--bs-border-color); border-radius: .5rem; padding: .9rem; background: var(--bs-tertiary-bg); }
-.tv-card > h6 { font-size: .78rem; letter-spacing: .06em; text-transform: uppercase; color: var(--bs-secondary-color); margin-bottom: .75rem; }
-.tv-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: .75rem; }
+/* same look as the preview's .card, title at tab size */
+.tv-card { border: 1px solid var(--bs-border-color-translucent); border-radius: var(--bs-border-radius); padding: 0 1rem 1rem; background: var(--bs-body-bg); }
+.tv-card > h6, .card-header .tv-ct { font-size: 1rem; font-weight: 400; color: darkorange; }
+.tv-card > h6 { margin: 0 -1rem 1rem; padding: .5rem 1rem; display: flex; gap: .4rem; align-items: center;
+  background: rgba(var(--bs-body-color-rgb), .03); border-bottom: 1px solid var(--bs-border-color-translucent); }
+.card-header .tv-ct { margin: 0; }
+.tv-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: .75rem; }
 .tv-fields label { font-size: .82rem; color: var(--bs-secondary-color); display: flex; gap: .35rem; align-items: center; margin-bottom: .25rem; }
 .tv-badge { font-size: .62rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; border-radius: .25rem; padding: 0 .3rem; line-height: 1.5; }
 .tv-badge.live { color: #4cc38a; background: rgb(76 195 138 / .12); }

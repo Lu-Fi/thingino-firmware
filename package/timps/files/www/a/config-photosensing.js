@@ -219,6 +219,8 @@
     if (reloadBtn) reloadBtn.disabled = true;
     var t = window.timpsApi.get().then(function (json) {
       fillTimps(json && json.daynight);
+      onNow(json && json.daynight);
+      durHints();
     }).catch(function (e) {
       toast("danger", "Unable to load timps day/night settings: " + (e.message || e));
     });
@@ -302,7 +304,56 @@
     }
   }
 
+  /* ---- "Now" box: mode, gain against both limits, what comes next ------ */
+
+  var now = {};
+  function drawNow() {
+    var d = now, night = Number(d.mode) === 1, g = Number(d.total_gain);
+    var lo = Number(d.day_gain), hi = Number(d.night_gain);
+    $("dn-icon").className = night ? "bi bi-moon-stars" : "bi bi-sun";
+    $("dn-now").textContent = d.mode === undefined ? "–" : night ? "Night" : "Day";
+    var auto = d.dn_mode !== "schedule";
+    $("dn-src").textContent = !(d.enabled === 1 || d.enabled === true) ? "automatic switching off"
+      : auto ? "auto · light level" : "auto · calendar";
+    var sc = $("dn-scale"), mk = $("dn-mark");
+    if (lo > 0 && hi > lo) {
+      var span = Math.max(hi * 2, g * 1.05 || 0), p = function (v) { return (v / span * 100).toFixed(2) + "%"; };
+      sc.style.background = "linear-gradient(90deg,#f0c040 0 " + p(lo) + ",#555 " + p(lo) + " " + p(hi) + ",#3a5fcd " + p(hi) + ")";
+      sc.querySelectorAll(".tk,.lb").forEach(function (e) { e.remove(); });
+      sc.insertAdjacentHTML("beforeend",
+        '<span class="lb" style="left:' + p(lo / 2) + ';color:#f0c040">Day</span>' +
+        '<span class="lb" style="left:' + p((lo + hi) / 2) + '">hysteresis</span>' +
+        '<span class="lb" style="left:' + p((hi + span) / 2) + ';color:#7b9cff">Night</span>' +
+        '<span class="tk" style="left:' + p(lo) + '">' + lo + '</span><span class="tk" style="left:' + p(hi) + '">' + hi + "</span>");
+      if (g >= 0) { mk.style.left = p(Math.min(g, span)); mk.hidden = false; }
+    }
+    var next = "";
+    if (!auto) next = "the calendar decides";
+    else if (night && d.day_trigger > 0) next = "probe for day when gain <b>&lt; " + Math.round(d.day_trigger) + "</b>";
+    else if (night) next = "day when gain <b>&lt; " + lo + "</b>";
+    else if (hi > 0) next = "night when gain <b>&gt; " + hi + "</b>" + (d.day_confirm_s ? " for " + d.day_confirm_s + " s" : "");
+    $("dn-next").innerHTML = (next ? "next: " + next : "") + (g >= 0 ? "<br>gain now " + Math.round(g) : "");
+  }
+  function onNow(d) {
+    if (!d) return;
+    Object.keys(d).forEach(function (k) { now[k] = d[k]; });
+    drawNow();
+  }
+
+  // hour/minute reading next to the second-valued fields
+  function durHints() {
+    ["heartbeat_s", "heartbeat_max_s", "probe_min_gap_s"].forEach(function (k) {
+      var el = $("daynight_" + k), lab = el && document.querySelector('label[for="daynight_' + k + '"]');
+      if (!lab) return;
+      var h = lab.querySelector(".dur") || lab.appendChild(Object.assign(document.createElement("span"), { className: "dur ms-1 text-body-secondary" }));
+      var v = parseInt(el.value, 10);
+      h.textContent = v >= 3600 ? "≈ " + +(v / 3600).toFixed(1) + " h" : v >= 60 ? "≈ " + Math.round(v / 60) + " min" : "";
+    });
+  }
+  document.addEventListener("input", function (e) { if (/daynight_(heartbeat|probe_min_gap)/.test(e.target.id)) durHints(); });
+
   function onConfigEvent(type, data) {
+    if (type === "daynight") { onNow(data); return; }
     if (!data) return;
     if (data.resync) { load(); return; }
     var id = fieldId(data.key);
@@ -316,7 +367,7 @@
   if (reloadBtn) reloadBtn.addEventListener("click", load);
   var calSel = $("daynight_calendar");
   if (calSel) calSel.addEventListener("change", syncCalendarUI);
-  window.timpsApi.events("config", onConfigEvent);
+  window.timpsApi.events("config,daynight", onConfigEvent);
 
   if (document.readyState === "loading")
     document.addEventListener("DOMContentLoaded", load, { once: true });

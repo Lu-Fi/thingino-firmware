@@ -80,12 +80,7 @@
       }
       pointButtons.forEach((btn) => {
         btn.addEventListener("click", (e) => {
-          pointButtons.forEach((b) => {
-            b.classList.remove("btn-primary", "active");
-            b.classList.add("btn-secondary");
-          });
-          e.target.classList.remove("btn-secondary");
-          e.target.classList.add("btn-primary", "active");
+          pointButtons.forEach((b) => b.classList.toggle("active", b === e.target));
           const want = parseInt(e.target.dataset.points, 10) || 300;
           const grew = want > this.maxPoints;
           this.maxPoints = want;
@@ -98,8 +93,26 @@
     }
 
     initChart() {
+      // night stretches as a blue band behind the lines
+      const shade = {
+        id: "nightShade",
+        beforeDatasetsDraw: (c) => {
+          const { ctx, chartArea: a, scales: { x } } = c;
+          const n = this.samples.length;
+          if (!a || n < 2) return;
+          ctx.save();
+          ctx.fillStyle = "rgba(58,95,205,.13)";
+          this.samples.forEach((smp, i) => {
+            if (smp.mode !== 1) return;
+            const x0 = x.getPixelForValue(i), x1 = x.getPixelForValue(Math.min(i + 1, n - 1));
+            ctx.fillRect(x0, a.top, Math.max(1, x1 - x0 + 1), a.bottom - a.top);
+          });
+          ctx.restore();
+        },
+      };
       this.chart = new Chart(chartCanvas.getContext("2d"), {
         type: "line",
+        plugins: [shade],
         data: {
           labels: [],
           datasets: [],
@@ -115,25 +128,21 @@
           plugins: {
             legend: {
               display: true,
-              position: "bottom",
-              labels: { boxWidth: 12, font: { size: 10 } },
+              position: "top",
+              labels: { boxWidth: 10, boxHeight: 10, font: { size: 11 } },
             },
           },
           scales: {
             x: {
               display: true,
-              ticks: { maxTicksLimit: 12, autoSkip: true },
-              title: {
-                display: true,
-                text: "Time",
-              },
+              ticks: { maxTicksLimit: 8, autoSkip: true },
             },
             y: {
               display: true,
               beginAtZero: true,
               title: {
                 display: true,
-                text: "Gain / exposure index",
+                text: "gain",
               },
             },
             // luma (0-255) and brightness (0-100 %) are three orders of
@@ -146,15 +155,8 @@
               grid: { drawOnChartArea: false },
               title: {
                 display: true,
-                text: "Luma / %",
+                text: "luma / %",
               },
-            },
-            y1: {
-              display: false,
-              type: "linear",
-              min: 0,
-              max: 1,
-              position: "right",
             },
           },
         },
@@ -195,8 +197,8 @@
       const note = $("#bg-collect-note");
       if (!note) return;
       note.textContent = this.retainS
-        ? `— the camera is recording a ${fmtDur(this.retainS)} window, whether or not this page is open`
-        : "— off: graphs only while this page is open; timps sends changes, steady values are repeated";
+        ? `The camera keeps a ${fmtDur(this.retainS)} history, a sample every 10 s, page open or not.`
+        : "Live while this page is open: timps sends changes, steady values are repeated every 2 s.";
     }
 
     /* ---- mode: local SSE vs the daemon's ring --------------------------- */
@@ -259,8 +261,8 @@
       const step = this.mode === "ring" ? 10 : (this.intervalMs || 2000) / 1000;
       document.querySelectorAll("#max-points [data-points]").forEach((b) => {
         const s = b.dataset.points * step;
-        b.title = "Show the last " + b.dataset.points + " samples ≈ " +
-          (s >= 3600 ? (s / 3600).toFixed(1) + " h" : Math.round(s / 60) + " min");
+        b.textContent = s >= 3600 ? +(s / 3600).toFixed(1) + " h" : Math.round(s / 60) + " min";
+        b.title = "Last " + b.dataset.points + " samples";
       });
     }
 
@@ -385,13 +387,10 @@
           data: this.samples.map((s) => S.val(s[metric.key])),
           borderColor: metric.color,
           backgroundColor: `${metric.color}20`,
-          borderWidth: 2,
-          tension: 0.4,
+          borderWidth: 1.6,
+          tension: 0.3,
           fill: false,
-          pointRadius: 1,
-          pointBackgroundColor: metric.color,
-          pointBorderColor: metric.color,
-          pointBorderWidth: 1,
+          pointRadius: 0,
           yAxisID: metric.axis || "y",
         });
       });
@@ -399,9 +398,9 @@
       const n = this.samples.length;
       if (this.nightThreshold !== null && !Number.isNaN(this.nightThreshold)) {
         this.chart.data.datasets.push({
-          label: `Night Threshold (${this.nightThreshold})`,
+          label: `night > ${this.nightThreshold}`,
           data: Array(n).fill(this.nightThreshold),
-          borderColor: "rgba(255, 0, 0, 0.7)",
+          borderColor: "rgba(123, 156, 255, 0.8)",
           borderWidth: 1,
           borderDash: [5, 5],
           fill: false,
@@ -410,29 +409,15 @@
       }
       if (this.dayThreshold !== null && !Number.isNaN(this.dayThreshold)) {
         this.chart.data.datasets.push({
-          label: `Day Threshold (${this.dayThreshold})`,
+          label: `day < ${this.dayThreshold}`,
           data: Array(n).fill(this.dayThreshold),
-          borderColor: "rgba(0, 255, 0, 0.7)",
+          borderColor: "rgba(240, 192, 64, 0.8)",
           borderWidth: 1,
           borderDash: [5, 5],
           fill: false,
           pointRadius: 0,
         });
       }
-      if (n) {
-        this.chart.data.datasets.push({
-          label: "Mode (0=Day, 1=Night)",
-          data: this.samples.map((s) => (s.mode >= 0 ? s.mode : null)),
-          borderColor: "rgba(128, 128, 128, 0.5)",
-          backgroundColor: "rgba(128, 128, 128, 0.1)",
-          borderWidth: 1,
-          tension: 0,
-          fill: false,
-          pointRadius: 0,
-          yAxisID: "y1",
-        });
-      }
-
       this.chart.update("none");
       this.updateStatsDisplay();
     }
@@ -467,12 +452,10 @@
         const stat = stats[metric.key];
         if (!stat) return;
         const div = document.createElement("div");
-        div.className = `stat-card ${metric.key}`;
-        div.innerHTML = `
-          <div class="stat-label">${metric.label}</div>
-          <div class="stat-value">${stat.latest.toFixed(1)}</div>
-          <div class="stat-detail">Min: ${stat.min.toFixed(1)} | Max: ${stat.max.toFixed(1)} | Avg: ${stat.avg.toFixed(1)}</div>
-        `;
+        div.className = "col-6";
+        div.innerHTML = `<div class="mt-tile"><div class="l"><i style="background:${metric.color}"></i>${metric.label}</div>
+          <div class="v">${Math.round(stat.latest)}</div>
+          <div class="r" title="avg ${stat.avg.toFixed(1)}">min ${Math.round(stat.min)} · max ${Math.round(stat.max)}</div></div>`;
         container.appendChild(div);
       });
     }
@@ -491,8 +474,7 @@
       this.isPaused = !this.isPaused;
       if (e && e.target) {
         e.target.textContent = this.isPaused ? "Resume" : "Pause";
-        e.target.classList.toggle("btn-warning", this.isPaused);
-        e.target.classList.toggle("btn-secondary", !this.isPaused);
+        e.target.classList.toggle("active", this.isPaused);
       }
       // resuming backfills the paused stretch out of the ring; in live mode
       // that stretch simply never existed

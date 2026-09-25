@@ -12,7 +12,7 @@
           "href": "/config-audio.html"
         },
         {
-          "label": "Photosensing",
+          "label": "Day / Night",
           "href": "/config-photosensing.html"
         }
       ]
@@ -112,7 +112,6 @@
     "/config-audio.html",
     "/config-motion.html",
     "/recordings.html",
-    "/timelapse-player.html",
-    "/tool-sensor-data.html"
+    "/timelapse-player.html"
   ]
 }

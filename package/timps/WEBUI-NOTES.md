@@ -510,3 +510,14 @@ A streamer restart ends the MJPEG connection and changes the per-boot token.
 outage (the restart bar fires it too); the preview then re-fetches the token
 and reconnects, and the overlay page reloads its state. Failed preview loads
 retry with 2..30 s backoff instead of giving up after one attempt.
+
+### Day / Night page (`config-photosensing.html`)
+
+Photosensing and the Sensor Data Collector are one page: a "Now" box (mode,
+gain on a day | hysteresis | night bar, what comes next) above two tabs,
+`#live` (preview, value tiles, history chart: `tool-sensor-data.js`) and
+`#settings` (the photosensing form: `config-photosensing.js`, field ids
+unchanged). The Now box rides the page's config SSE (`config,daynight`).
+`tool-sensor-data.html` redirects to `#live`. The chart shades night samples
+instead of drawing a mode line, and the window buttons show time spans
+(points × sample period: 2 s live, 10 s when the camera records).

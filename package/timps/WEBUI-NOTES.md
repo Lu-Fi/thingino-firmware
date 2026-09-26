@@ -402,6 +402,18 @@ the selector, and `collectTimps()` always CLEARS the unselected calendar's
 values on save. Without that clear, a leftover time window keeps outranking a
 location the user just typed in and the save still reports success.
 
+### "Now" scale (`drawNow()`) and the preview's Day/Night tile
+
+Both plot the exposure index (`exposure`, what the decision runs on; falls
+back to `total_gain` on an older timps), and the scale depends on the mode.
+Day: the two thresholds (day below / hysteresis / night above). Night: the
+IR light keeps the exposure low, so the day thresholds say nothing there;
+the scale is the probe bar `day_trigger` (yellow "probe day" below it, blue
+"Night" above) with the night reference `night_baseline` as a tick, capped at
+2.5x the reference so the ticks stay readable on a phone. Before the
+reference exists (`day_trigger` -1) the bar is plain blue and the marker
+dimmed.
+
 ## a/preview-motion.js
 
 ### File header: SSE protocol, token, and the polling fallback

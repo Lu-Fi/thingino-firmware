@@ -530,17 +530,31 @@
       const mode = dn.dn_mode || (dn.enabled ? "auto" : "manual");
       $st("dn").textContent = (night ? "Night" : dn.mode === 0 ? "Day" : "Unknown") + " · " + mode;
       $st("dn-i").className = night ? "bi bi-moon-stars" : "bi bi-sun";
-      const g = dn.total_gain, lo = dn.total_gain_day_threshold, hi = dn.total_gain_night_threshold;
-      const bar = $st("gain");
-      if (typeof g === "number" && g >= 0 && lo > 0 && hi > lo && mode === "auto") {
-        $st("dn-s").textContent = "gain " + g.toFixed(0) + (night ? " · day below " + lo : " · night above " + hi);
+      // the decision runs on the exposure index; in the night pipeline only
+      // the drop below day_trigger matters (IR keeps it low)
+      const g = dn.exposure >= 0 ? dn.exposure : dn.total_gain,
+            lo = dn.total_gain_day_threshold, hi = dn.total_gain_night_threshold, trig = dn.day_trigger;
+      const bar = $st("gain"), pct = (v, span) => Math.min(100, v / span * 100) + "%";
+      bar.firstChild.style.opacity = "";
+      if (typeof g === "number" && g >= 0 && mode === "auto" && night) {
+        const ref = dn.night_baseline;
+        const span = Math.max(trig > 0 ? trig * 2 : 0, ref > 0 ? ref * 1.3 : 0,
+                              ref > 0 ? Math.min(g * 1.05, ref * 2.5) : g * 1.05, 1);
+        $st("dn-s").textContent = "exp " + g.toFixed(0) + (trig > 0 ? " · probe day below " + trig.toFixed(0) : " · reference pending");
+        bar.style.background = trig > 0
+          ? "linear-gradient(90deg,#f0c040 0 " + pct(trig, span) + ",#3a5fcd " + pct(trig, span) + ")" : "#3a5fcd";
+        if (!(trig > 0)) bar.firstChild.style.opacity = ".4";
+        bar.firstChild.style.left = pct(g, span);
+        bar.hidden = false;
+      } else if (typeof g === "number" && g >= 0 && lo > 0 && hi > lo && mode === "auto") {
+        $st("dn-s").textContent = "exp " + g.toFixed(0) + " · night above " + hi;
         const span = hi * 2;
         bar.style.background = "linear-gradient(90deg,#f0c040 0 " + (lo / span * 100) + "%,#555 " +
           (lo / span * 100) + "% " + (hi / span * 100) + "%,#3a5fcd " + (hi / span * 100) + "%)";
-        bar.firstChild.style.left = Math.min(100, g / span * 100) + "%";
+        bar.firstChild.style.left = pct(g, span);
         bar.hidden = false;
       } else {
-        $st("dn-s").textContent = typeof g === "number" && g >= 0 ? "gain " + g.toFixed(0) : "";
+        $st("dn-s").textContent = typeof g === "number" && g >= 0 ? "exp " + g.toFixed(0) : "";
         bar.hidden = true;
       }
     }

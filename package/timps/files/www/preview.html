@@ -87,6 +87,8 @@
     .st-foot { font-size: .75rem; color: var(--bs-secondary-color); display: flex; flex-wrap: wrap; gap: .2rem 1rem; }
     .st-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
     canvas.st-chart { display: block; width: 100%; height: 70px; }
+    .st-cl td, .st-cl th { font-size: .82rem; font-variant-numeric: tabular-nums; }
+    .st-cl th { font-weight: 400; color: var(--bs-secondary-color); }
     .st-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; }
     .st-tile { padding: .7rem .9rem; display: grid; grid-template-columns: auto 1fr; gap: .1rem .7rem; align-items: center; }
     .st-tile > i { grid-row: span 2; font-size: 1.4rem; color: darkorange; }
@@ -187,6 +189,15 @@
             <div class="st-panel st-tile"><i class="bi bi-people"></i><span class="v" id="st-cl">–</span><span class="s">all protocols</span></div>
             <div class="st-panel st-tile"><i class="bi bi-clock-history"></i><span class="v" id="st-up">–</span><span class="s" id="st-ver"></span></div>
             <div class="st-panel st-tile"><i class="bi bi-heart-pulse"></i><span class="v"><span class="st-dot me-1" id="st-hd"></span><span id="st-h">–</span></span><span class="s" id="st-h-s"></span></div>
+          </div>
+          <div class="st-panel mt-3" id="st-clients-panel" hidden>
+            <div class="st-ph"><b>Connected clients</b><span class="st-chip" id="st-clients-n"></span></div>
+            <div class="table-responsive">
+              <table class="table table-sm mb-0 st-cl">
+                <thead><tr><th>Address</th><th>Client</th><th>Protocol</th><th>Stream</th><th>Connected</th><th class="text-end">Rate</th></tr></thead>
+                <tbody id="st-clients"></tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
@@ -553,6 +564,55 @@
     function fetchStatsExtra() {
       timpsApiReady().then((api) => api.statsExtra()).then(applyStatsExtra)
         .catch(() => { /* offline poll tick - panels just keep their last values */ });
+      fetchClients();
+    }
+
+    const PROTO = { "rtsp/udp": "RTSP (UDP)", "rtsp/tcp": "RTSP (TCP)", rtsps: "RTSPS", fmp4: "fMP4",
+      mjpeg: "MJPEG", events: "Events (SSE)", webrtc: "WebRTC", srt: "SRT" };
+    // a readable name for a User-Agent; the raw string goes in the tooltip
+    function uaShort(ua) {
+      if (!ua) return "–";
+      const m = (re) => { const r = ua.match(re); return r ? r[1] : null; };
+      let v;
+      if ((v = m(/Frigate\/([\d.]+)/))) return "Frigate " + v;
+      if ((v = m(/^Lavf(\d+)/))) return "ffmpeg (Lavf" + v + ")";
+      if ((v = m(/go2rtc\/([\d.]+)/i))) return "go2rtc " + v;
+      if ((v = m(/LibVLC\/([\d.]+)/))) return "VLC " + v;
+      if ((v = m(/Edg[A-Z]?\/(\d+)/))) return "Edge " + v;
+      if ((v = m(/Firefox\/(\d+)/))) return "Firefox " + v;
+      if ((v = m(/(?:Chrome|CriOS)\/(\d+)/))) return "Chrome " + v;
+      if (/Safari\//.test(ua) && (v = m(/Version\/(\d+)/))) return "Safari " + v;
+      if ((v = m(/curl\/([\d.]+)/))) return "curl " + v;
+      if (/GStreamer/i.test(ua)) return "GStreamer";
+      if (/Home ?Assistant/i.test(ua)) return "Home Assistant";
+      return ua.split(/[\s/(]/)[0] || "–";
+    }
+
+    function fetchClients() {
+      timpsApiReady().then((api) => api.clients && api.clients()).then((j) => {
+        const panel = $st("clients-panel"), body = $st("clients");
+        if (!j || !Array.isArray(j.clients)) { panel.hidden = true; return; }   // timps without ?clients=1
+        panel.hidden = false;
+        const list = j.clients.slice().sort((a, b) =>
+          (a.proto > b.proto) - (a.proto < b.proto) || (a.ip > b.ip) - (a.ip < b.ip));
+        $st("clients-n").textContent = list.length;
+        body.textContent = "";
+        if (!list.length) body.innerHTML = '<tr><td colspan="6" class="text-body-secondary">none</td></tr>';
+        list.forEach((c) => {
+          const tr = document.createElement("tr");
+          [c.ip + ":" + c.port, uaShort(c.agent), PROTO[c.proto] || c.proto,
+           c.chn === 0 ? "Main" : c.chn === 1 ? "Sub" : "–",
+           c.since_s < 60 ? c.since_s + " s" : formatUptime(c.since_s),
+           formatKbps(c.kbps)].forEach((v, i) => {
+            const td = document.createElement("td");
+            td.textContent = v;
+            if (i === 5) td.className = "text-end";
+            if (i === 1 && c.agent) td.title = c.agent;
+            tr.appendChild(td);
+          });
+          body.appendChild(tr);
+        });
+      }).catch(() => {});
     }
 
     async function startStats() {
@@ -587,6 +647,7 @@
       if (statsBox) statsBox.innerHTML = '<div class="col text-secondary" data-placeholder>Waiting for stats…</div>';
       ["dn", "mo", "rec", "cl", "up", "h"].forEach((k) => { $st(k).textContent = "–"; });
       ["dn-s", "mo-s", "rec-s", "ver", "h-s"].forEach((k) => { $st(k).textContent = ""; });
+      $st("clients-panel").hidden = true;
       $st("gain").hidden = true;
     }
     if (statsToggle && statsCard) {

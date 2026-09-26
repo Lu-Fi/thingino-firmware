@@ -194,7 +194,7 @@
             <div class="st-ph"><b>Connected clients</b><span class="st-chip" id="st-clients-n"></span></div>
             <div class="table-responsive">
               <table class="table table-sm mb-0 st-cl">
-                <thead><tr><th>Address</th><th>Client</th><th>Protocol</th><th>Stream</th><th>Connected</th><th class="text-end">Rate</th><th class="text-end">Total</th></tr></thead>
+                <thead><tr><th>Address</th><th>Client</th><th>Protocol</th><th>Stream</th><th>Connected</th><th class="text-end" title="Sensor capture to send, measured by timps per client (RTSP, WebRTC)">Latency</th><th class="text-end">Rate</th><th class="text-end">Total</th></tr></thead>
                 <tbody id="st-clients"></tbody>
               </table>
             </div>
@@ -598,12 +598,13 @@
           (a.proto > b.proto) - (a.proto < b.proto) || (a.ip > b.ip) - (a.ip < b.ip));
         $st("clients-n").textContent = list.length;
         body.textContent = "";
-        if (!list.length) body.innerHTML = '<tr><td colspan="7" class="text-body-secondary">none</td></tr>';
+        if (!list.length) body.innerHTML = '<tr><td colspan="8" class="text-body-secondary">none</td></tr>';
         list.forEach((c) => {
           const tr = document.createElement("tr");
           [c.ip + ":" + c.port, uaShort(c.agent), PROTO[c.proto] || c.proto,
            c.chn === 0 ? "Main" : c.chn === 1 ? "Sub" : "–",
            c.since_s < 60 ? c.since_s + " s" : formatUptime(c.since_s),
+           c.lat_ms >= 0 ? c.lat_ms + " ms" : "–",
            formatKbps(c.kbps), c.bytes == null ? "–" : formatBytes(c.bytes)].forEach((v, i) => {
             const td = document.createElement("td");
             td.textContent = v;
@@ -954,7 +955,8 @@
         dead: false, decoder: null, trackId: null, timescale: 90000,
         lenSize: 4, pendingVideo: false, pendingDts: null, sawKey: false,
         frames: 0, lastFrames: 0, queueMax: 0, lastArrival: 0, lat: 0,
-        buf: new Uint8Array(0), statsTimer: null, w: 0, h: 0
+        buf: new Uint8Array(0), statsTimer: null, w: 0, h: 0,
+        t0: performance.now(), camMs: -1, camTick: 0
       };
       rt = st;
 
@@ -1111,11 +1113,14 @@
         if (st.dead || !st.decoder) return;
         const fps = st.frames - st.lastFrames;
         st.lastFrames = st.frames;
+        pollFmp4CamLatency(st, chn);
+        const d = delayText([["camera", st.camMs], ["decode + render", st.lat]],
+                            "without network (TCP), sensor exposure and display");
         setStatus("Real-time (" + label + " stream) · " +
           (st.w ? st.w + "x" + st.h + " · " : "") +
           fps.toFixed(0) + " fps · " + st.frames + " frames · queue " +
           st.decoder.decodeQueueSize + " · render +" + st.lat.toFixed(1) + " ms" +
-          audioNote);
+          d.text + audioNote, d.tip);
       }, 1000);
 
       const ctrl = new AbortController();
@@ -1595,6 +1600,31 @@
       };
     }
 
+    // fMP4 has no port the page can see: pick our /stream.mp4 connection by
+    // stream, User-Agent and the connection age closest to ours.
+    function pollFmp4CamLatency(st, chn) {
+      if (st.camTick++ % 5) return;
+      const age = (performance.now() - st.t0) / 1000;
+      timpsApiReady().then((api) => api.clients && api.clients()).then((j) => {
+        const mine = (j && Array.isArray(j.clients) ? j.clients : []).filter((c) =>
+          c.proto === "fmp4" && c.chn === +chn && c.agent === navigator.userAgent)
+          .sort((a, b) => Math.abs(a.since_s - age) - Math.abs(b.since_s - age));
+        st.camMs = mine.length && mine[0].lat_ms >= 0 ? mine[0].lat_ms : -1;
+      }).catch(() => {});
+    }
+
+    function delayText(parts, note) {
+      const known = parts.filter((x) => x[1] != null && x[1] >= 0);
+      const cam = parts.find((x) => x[0] === "camera");
+      const exact = cam && cam[1] != null && cam[1] >= 0;
+      const total = Math.round(known.reduce((sum, x) => sum + x[1], 0));
+      return {
+        text: " · delay " + (exact ? "≈ " : "≥ ") + total + " ms",
+        tip: known.map((x) => x[0] + " " + Math.round(x[1]) + " ms").join(" + ") +
+             (exact ? "" : " (camera part unknown)") + "\n" + note
+      };
+    }
+
     async function startStream(forceVideoOnly = false) {
       if (running) return;
       running = true;
@@ -1760,7 +1790,18 @@
           setConnectedUi(true);
           noteProgress();
           console.info("[preview] mse: connected (" + (chn === "1" ? "sub" : "main") + " stream)");
-          setStatus("Connected (" + (chn === "1" ? "sub" : "main") + " stream)");
+          const connMsg = "Connected (" + (chn === "1" ? "sub" : "main") + " stream)";
+          setStatus(connMsg);
+          const lst = { t0: performance.now(), camMs: -1, camTick: 0 };
+          const latTimer = setInterval(() => {
+            if (dead || session !== mySession) { clearInterval(latTimer); return; }
+            if (!video.buffered.length) return;
+            pollFmp4CamLatency(lst, chn);
+            const buf = (video.buffered.end(video.buffered.length - 1) - video.currentTime) * 1000;
+            const d = delayText([["camera", lst.camMs], ["playback buffer", Math.max(0, buf)]],
+                                "without network (TCP), decode, sensor exposure and display");
+            setStatus(connMsg + d.text, d.tip);
+          }, 1000);
           const rd = res.body.getReader();
           while (true) {
             const { done, value } = await rd.read();

@@ -330,6 +330,15 @@ buffer is mostly Chrome's A/V sync, and that follows the viewer's audio
 output latency (~240 ms on Bluetooth: ~360 ms total vs ~180 ms on a built-in
 speaker and ~85 ms video-only on Garage).
 
+### fMP4 delay (`pollFmp4CamLatency()`, `delayText()`)
+
+Real-time and the MSE modes show `delay ≈ N ms` too: the camera's `lat_ms`
+plus decode + render (Real-time) or the playback buffer
+(`buffered.end - currentTime`, MSE). The page cannot see its TCP port, so
+its `?clients=1` entry is picked by `fmp4`, stream, `navigator.userAgent` and
+the connection age closest to its own. Network is not included (TCP, small
+in a LAN). The client table's "Latency" column is `lat_ms` for every client.
+
 ### `applyStatsExtra()`: the `ave_bitrate` / queue-backlog fallback
 
 `ave_bitrate` (`IMP_Encoder_GetChnAveBitrate`) only exists on T31; every

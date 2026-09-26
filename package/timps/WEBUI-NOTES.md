@@ -325,8 +325,10 @@ and the browser's share from `getStats()` deltas over the last second:
 network (RTT/2), jitter buffer (`jitterBufferDelay/jitterBufferEmittedCount`)
 and decode (`totalDecodeTime/framesDecoded`). Without `lat_ms` (older timps)
 it shows `≥ N`. Breakdown in the status line's tooltip. Sensor exposure and
-display are not included (~1-2 frames). With audio the jitter buffer is
-mostly Chrome's A/V sync (~350 ms vs ~60 ms video-only on Garage).
+display are not included (~1-2 frames). With audio the video jitter
+buffer is mostly Chrome's A/V sync, and that follows the viewer's audio
+output latency (~240 ms on Bluetooth: ~360 ms total vs ~180 ms on a built-in
+speaker and ~85 ms video-only on Garage).
 
 ### `applyStatsExtra()`: the `ave_bitrate` / queue-backlog fallback
 

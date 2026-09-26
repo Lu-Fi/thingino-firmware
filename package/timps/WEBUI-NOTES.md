@@ -305,6 +305,17 @@ and `version`. ~8 KB per 15s; moving these into `?stats=1` would let it go.
 All loops only run while the Statistics card is visible (toggled by
 `#ms-stats-toggle`).
 
+### Connected clients panel: `GET /control?clients=1`
+
+`fetchClients()` rides the 5 s `?stats=1` loop and fills `#st-clients` from
+`timpsApi.clients()` (timps >= 1.9.24). The panel stays hidden when the
+daemon has no such endpoint. The per-client rate is measured by timps at read
+time, so the page only formats it. `uaShort()` turns the User-Agent into a
+short name (Frigate, ffmpeg/Lavf, VLC, go2rtc, the browser); the full string
+is the cell's tooltip. The SSE `/events` connections of open WebUI tabs are
+listed too, which is why the "clients" tile (streaming subscribers only) can
+show fewer.
+
 ### `applyStatsExtra()`: the `ave_bitrate` / queue-backlog fallback
 
 `ave_bitrate` (`IMP_Encoder_GetChnAveBitrate`) only exists on T31; every

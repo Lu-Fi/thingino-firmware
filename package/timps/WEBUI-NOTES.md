@@ -317,6 +317,17 @@ is the cell's tooltip. The SSE `/events` connections of open WebUI tabs are
 listed too, which is why the "stream clients" tile (subscribers only) can
 show fewer.
 
+### `whepLatency()`: the `delay ≈ N ms` in the WebRTC status line
+
+Sum of the camera's share (`lat_ms` of this session's `?clients=1` entry,
+matched by the selected candidate pair's local port, refreshed every 5 s)
+and the browser's share from `getStats()` deltas over the last second:
+network (RTT/2), jitter buffer (`jitterBufferDelay/jitterBufferEmittedCount`)
+and decode (`totalDecodeTime/framesDecoded`). Without `lat_ms` (older timps)
+it shows `≥ N`. Breakdown in the status line's tooltip. Sensor exposure and
+display are not included (~1-2 frames). With audio the jitter buffer is
+mostly Chrome's A/V sync (~350 ms vs ~60 ms video-only on Garage).
+
 ### `applyStatsExtra()`: the `ave_bitrate` / queue-backlog fallback
 
 `ave_bitrate` (`IMP_Encoder_GetChnAveBitrate`) only exists on T31; every

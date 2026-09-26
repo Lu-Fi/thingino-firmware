@@ -678,7 +678,7 @@
     let lastProgressAt = 0;       // performance.now() of the last byte off the wire
     function noteProgress() { lastProgressAt = performance.now(); }
 
-    function setStatus(message) { status.textContent = message; }
+    function setStatus(message, tip) { status.textContent = message; status.title = tip || ""; }
 
     function setConnectingUi(active) {
       if (overlay) overlay.style.display = active ? "" : "none";
@@ -1350,7 +1350,8 @@
 
       const st = {
         dead: false, pc: null, resource: null, token: token, statsTimer: null,
-        bytes: -1, lastBytes: -1, lastAt: 0, audio: false, w: 0, h: 0
+        bytes: -1, lastBytes: -1, lastAt: 0, audio: false, w: 0, h: 0,
+        prevV: null, camMs: -1, tick: 0
       };
       whep = st;
 
@@ -1531,12 +1532,14 @@
         let report;
         try { report = await pc.getStats(); } catch (e) { return; }
         if (st.dead || session !== mySession) return;
-        let v = null, a = null, tr = null;
+        let v = null, a = null, tr = null, pair = null;
         report.forEach((r) => {
           if (r.type === "inbound-rtp" && r.kind === "video") v = r;
           else if (r.type === "inbound-rtp" && r.kind === "audio") a = r;
           else if (r.type === "transport") tr = r;
+          else if (r.type === "candidate-pair" && (r.selected || (r.nominated && r.state === "succeeded"))) pair = r;
         });
+        if (tr && tr.selectedCandidatePairId) pair = report.get(tr.selectedCandidatePairId) || pair;
         const bytes = (v ? v.bytesReceived || 0 : 0) + (a ? a.bytesReceived || 0 : 0);
         if (bytes > st.bytes) { st.bytes = bytes; noteProgress(); }
         if (!v) return;
@@ -1549,14 +1552,47 @@
         if (w && h) { st.w = w; st.h = h; }
         const dtls = tr && tr.dtlsState && tr.dtlsState !== "connected"
                    ? " · dtls " + tr.dtlsState : "";
+        const lat = whepLatency(st, v, pair, report);
         setStatus("WebRTC (WHEP)" +
                   (st.w ? " · " + st.w + "x" + st.h : "") +
                   (v.framesPerSecond ? " · " + Math.round(v.framesPerSecond) + " fps" : "") +
                   rate +
                   (st.audio ? " · G.711 audio" : " · no audio") +
                   (v.packetsLost ? " · lost " + v.packetsLost : "") +
-                  dtls);
+                  (lat ? " · delay " + lat.total + " ms" : "") +
+                  dtls, lat ? lat.tip : "");
       }, 1000);
+    }
+
+    // Glass-to-glass minus exposure and display: camera part from timps
+    // (?clients=1 lat_ms, capture -> send), browser part from getStats deltas.
+    function whepLatency(st, v, pair, report) {
+      const p = st.prevV, per = (k, n) => {
+        const dn = (v[n] || 0) - (p ? p[n] || 0 : 0);
+        return dn > 0 ? ((v[k] || 0) - (p ? p[k] || 0 : 0)) / dn * 1000 : null;
+      };
+      const jb = per("jitterBufferDelay", "jitterBufferEmittedCount");
+      const dec = per("totalDecodeTime", "framesDecoded");
+      st.prevV = { jitterBufferDelay: v.jitterBufferDelay, jitterBufferEmittedCount: v.jitterBufferEmittedCount,
+                   totalDecodeTime: v.totalDecodeTime, framesDecoded: v.framesDecoded };
+      const net = pair && pair.currentRoundTripTime != null ? pair.currentRoundTripTime * 500 : null;
+      const local = pair && report.get(pair.localCandidateId);
+      if (local && local.port && st.tick++ % 5 === 0)
+        timpsApiReady().then((api) => api.clients && api.clients()).then((j) => {
+          const c = j && Array.isArray(j.clients) && j.clients.find((c) => c.proto === "webrtc" && c.port === local.port);
+          st.camMs = c && c.lat_ms >= 0 ? c.lat_ms : -1;
+        }).catch(() => {});
+      if (jb == null) return null;
+      const parts = [["camera", st.camMs >= 0 ? st.camMs : null], ["network", net],
+                     ["jitter buffer", jb], ["decode", dec]];
+      const known = parts.filter((x) => x[1] != null);
+      const total = Math.round(known.reduce((sum, x) => sum + x[1], 0));
+      return {
+        total: (st.camMs >= 0 ? "≈ " : "≥ ") + total,
+        tip: known.map((x) => x[0] + " " + Math.round(x[1]) + " ms").join(" + ") +
+             (st.camMs >= 0 ? "" : " (camera part unknown)") +
+             "\nwithout sensor exposure and display, ~1-2 frames"
+      };
     }
 
     async function startStream(forceVideoOnly = false) {

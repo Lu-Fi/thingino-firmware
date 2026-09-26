@@ -337,7 +337,13 @@ plus decode + render (Real-time) or the playback buffer
 (`buffered.end - currentTime`, MSE). The page cannot see its TCP port, so
 its `?clients=1` entry is picked by `fmp4`, stream, `navigator.userAgent` and
 the connection age closest to its own. Network is not included (TCP, small
-in a LAN). The client table's "Latency" column is `lat_ms` for every client.
+in a LAN).
+
+The client table has two latency columns: "Camera" is `lat_ms` for every
+client; "End-to-end" is filled only in this tab's own WebRTC / fMP4 row, from
+the same `delay ≈` value (`noteOwnDelay()`, matched by proto + port, stale
+after 5 s), with the breakdown as the cell's tooltip. Other viewers' buffers
+are invisible to the camera, so their rows stay `-`.
 
 ### `applyStatsExtra()`: the `ave_bitrate` / queue-backlog fallback
 

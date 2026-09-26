@@ -194,7 +194,7 @@
             <div class="st-ph"><b>Connected clients</b><span class="st-chip" id="st-clients-n"></span></div>
             <div class="table-responsive">
               <table class="table table-sm mb-0 st-cl">
-                <thead><tr><th>Address</th><th>Client</th><th>Protocol</th><th>Stream</th><th>Connected</th><th class="text-end" title="Sensor capture to send, measured by timps per client (RTSP, WebRTC)">Latency</th><th class="text-end">Rate</th><th class="text-end">Total</th></tr></thead>
+                <thead><tr><th>Address</th><th>Client</th><th>Protocol</th><th>Stream</th><th>Connected</th><th class="text-end" title="Sensor capture to send, measured by timps per client">Camera</th><th class="text-end" title="Capture to screen, only for this tab's own WebRTC / fMP4 session">End-to-end</th><th class="text-end">Rate</th><th class="text-end">Total</th></tr></thead>
                 <tbody id="st-clients"></tbody>
               </table>
             </div>
@@ -598,18 +598,22 @@
           (a.proto > b.proto) - (a.proto < b.proto) || (a.ip > b.ip) - (a.ip < b.ip));
         $st("clients-n").textContent = list.length;
         body.textContent = "";
-        if (!list.length) body.innerHTML = '<tr><td colspan="8" class="text-body-secondary">none</td></tr>';
+        if (!list.length) body.innerHTML = '<tr><td colspan="9" class="text-body-secondary">none</td></tr>';
         list.forEach((c) => {
           const tr = document.createElement("tr");
+          const own = ownDelay && performance.now() - ownDelay.at < 5000 &&
+                      c.proto === ownDelay.proto && c.port === ownDelay.port ? ownDelay : null;
           [c.ip + ":" + c.port, uaShort(c.agent), PROTO[c.proto] || c.proto,
            c.chn === 0 ? "Main" : c.chn === 1 ? "Sub" : "–",
            c.since_s < 60 ? c.since_s + " s" : formatUptime(c.since_s),
            c.lat_ms >= 0 ? c.lat_ms + " ms" : "–",
+           own ? own.total + " ms" : "–",
            formatKbps(c.kbps), c.bytes == null ? "–" : formatBytes(c.bytes)].forEach((v, i) => {
             const td = document.createElement("td");
             td.textContent = v;
             if (i >= 5) td.className = "text-end";
             if (i === 1 && c.agent) td.title = c.agent;
+            if (i === 6 && own) td.title = "this tab\n" + own.tip;
             tr.appendChild(td);
           });
           body.appendChild(tr);
@@ -1121,6 +1125,7 @@
           fps.toFixed(0) + " fps · " + st.frames + " frames · queue " +
           st.decoder.decodeQueueSize + " · render +" + st.lat.toFixed(1) + " ms" +
           d.text + audioNote, d.tip);
+        noteOwnDelay("fmp4", st.selfPort, d.total, d.tip);
       }, 1000);
 
       const ctrl = new AbortController();
@@ -1566,7 +1571,14 @@
                   (v.packetsLost ? " · lost " + v.packetsLost : "") +
                   (lat ? " · delay " + lat.total + " ms" : "") +
                   dtls, lat ? lat.tip : "");
+        if (lat) noteOwnDelay("webrtc", st.selfPort, lat.total, lat.tip);
       }, 1000);
+    }
+
+    // This tab's own end-to-end delay, for its row in the client table.
+    let ownDelay = null;
+    function noteOwnDelay(proto, port, total, tip) {
+      ownDelay = port ? { proto: proto, port: port, total: total, tip: tip, at: performance.now() } : null;
     }
 
     // Glass-to-glass minus exposure and display: camera part from timps
@@ -1582,6 +1594,7 @@
                    totalDecodeTime: v.totalDecodeTime, framesDecoded: v.framesDecoded };
       const net = pair && pair.currentRoundTripTime != null ? pair.currentRoundTripTime * 500 : null;
       const local = pair && report.get(pair.localCandidateId);
+      st.selfPort = local && local.port;
       if (local && local.port && st.tick++ % 5 === 0)
         timpsApiReady().then((api) => api.clients && api.clients()).then((j) => {
           const c = j && Array.isArray(j.clients) && j.clients.find((c) => c.proto === "webrtc" && c.port === local.port);
@@ -1610,6 +1623,7 @@
           c.proto === "fmp4" && c.chn === +chn && c.agent === navigator.userAgent)
           .sort((a, b) => Math.abs(a.since_s - age) - Math.abs(b.since_s - age));
         st.camMs = mine.length && mine[0].lat_ms >= 0 ? mine[0].lat_ms : -1;
+        st.selfPort = mine.length ? mine[0].port : 0;
       }).catch(() => {});
     }
 
@@ -1619,6 +1633,7 @@
       const exact = cam && cam[1] != null && cam[1] >= 0;
       const total = Math.round(known.reduce((sum, x) => sum + x[1], 0));
       return {
+        total: (exact ? "≈ " : "≥ ") + total,
         text: " · delay " + (exact ? "≈ " : "≥ ") + total + " ms",
         tip: known.map((x) => x[0] + " " + Math.round(x[1]) + " ms").join(" + ") +
              (exact ? "" : " (camera part unknown)") + "\n" + note
@@ -1801,6 +1816,7 @@
             const d = delayText([["camera", lst.camMs], ["playback buffer", Math.max(0, buf)]],
                                 "without network (TCP), decode, sensor exposure and display");
             setStatus(connMsg + d.text, d.tip);
+            noteOwnDelay("fmp4", lst.selfPort, d.total, d.tip);
           }, 1000);
           const rd = res.body.getReader();
           while (true) {

@@ -345,6 +345,11 @@ the same `delay ≈` value (`noteOwnDelay()`, matched by proto + port, stale
 after 5 s), with the breakdown as the cell's tooltip. Other viewers' buffers
 are invisible to the camera, so their rows stay `-`.
 
+Below 576 px the table drops Address, Stream, Connected and Total, shows the
+IP under the client name and Main/Sub under the protocol (`cl-ip`), and uses
+short labels (`cl-s`: Proto, Cam, E2E, RTSP/T, SSE), so Camera, End-to-end
+and Rate fit a 390 px phone without sideways scrolling.
+
 ### `applyStatsExtra()`: the `ave_bitrate` / queue-backlog fallback
 
 `ave_bitrate` (`IMP_Encoder_GetChnAveBitrate`) only exists on T31; every

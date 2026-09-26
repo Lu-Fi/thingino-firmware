@@ -87,7 +87,16 @@
     .st-foot { font-size: .75rem; color: var(--bs-secondary-color); display: flex; flex-wrap: wrap; gap: .2rem 1rem; }
     .st-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
     canvas.st-chart { display: block; width: 100%; height: 70px; }
-    .st-cl td, .st-cl th { font-size: .82rem; font-variant-numeric: tabular-nums; }
+    .st-cl td, .st-cl th { font-size: .82rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .st-cl .cl-ip, .st-cl .cl-s { display: none; }
+    .st-cl .cl-ip { font-size: .72rem; color: var(--bs-secondary-color); }
+    @media (max-width: 575.98px) {
+      .st-cl .cl-opt, .st-cl .cl-l { display: none; }
+      .st-cl td, .st-cl th { padding-left: .15rem; padding-right: .15rem; }
+      #st-clients-panel { margin-left: -.75rem; margin-right: -.75rem; }
+      .st-cl .cl-ip { display: block; }
+      .st-cl .cl-s { display: inline; }
+    }
     .st-cl th { font-weight: 400; color: var(--bs-secondary-color); }
     .st-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; }
     .st-tile { padding: .7rem .9rem; display: grid; grid-template-columns: auto 1fr; gap: .1rem .7rem; align-items: center; }
@@ -194,7 +203,7 @@
             <div class="st-ph"><b>Connected clients</b><span class="st-chip" id="st-clients-n"></span></div>
             <div class="table-responsive">
               <table class="table table-sm mb-0 st-cl">
-                <thead><tr><th>Address</th><th>Client</th><th>Protocol</th><th>Stream</th><th>Connected</th><th class="text-end" title="Sensor capture to send, measured by timps per client">Camera</th><th class="text-end" title="Capture to screen, only for this tab's own WebRTC / fMP4 session">End-to-end</th><th class="text-end">Rate</th><th class="text-end">Total</th></tr></thead>
+                <thead><tr><th class="cl-opt">Address</th><th>Client</th><th><span class="cl-l">Protocol</span><span class="cl-s">Proto</span></th><th class="cl-opt">Stream</th><th class="cl-opt">Connected</th><th class="text-end" title="Sensor capture to send, measured by timps per client"><span class="cl-l">Camera</span><span class="cl-s">Cam</span></th><th class="text-end" title="Capture to screen, only for this tab's own WebRTC / fMP4 session"><span class="cl-l">End-to-end</span><span class="cl-s">E2E</span></th><th class="text-end">Rate</th><th class="text-end cl-opt">Total</th></tr></thead>
                 <tbody id="st-clients"></tbody>
               </table>
             </div>
@@ -570,6 +579,7 @@
 
     const PROTO = { "rtsp/udp": "RTSP (UDP)", "rtsp/tcp": "RTSP (TCP)", rtsps: "RTSPS", fmp4: "fMP4",
       mjpeg: "MJPEG", events: "Events (SSE)", webrtc: "WebRTC", srt: "SRT" };
+    const PROTO_S = { "rtsp/udp": "RTSP/U", "rtsp/tcp": "RTSP/T", events: "SSE" };
     // a readable name for a User-Agent; the raw string goes in the tooltip
     function uaShort(ua) {
       if (!ua) return "–";
@@ -610,8 +620,16 @@
            own ? own.total + " ms" : "–",
            formatKbps(c.kbps), c.bytes == null ? "–" : formatBytes(c.bytes)].forEach((v, i) => {
             const td = document.createElement("td");
-            td.textContent = v;
+            const span = (text, cls) => {
+              const e = document.createElement(cls === "cl-ip" ? "div" : "span");
+              e.className = cls; e.textContent = text; td.appendChild(e);
+            };
+            if (i === 2 && PROTO_S[c.proto]) { span(v, "cl-l"); span(PROTO_S[c.proto], "cl-s"); }
+            else td.textContent = v;
+            if (i === 1) span(c.ip, "cl-ip");      // Address and Stream columns are hidden on phones
+            if (i === 2 && c.chn >= 0) span(c.chn === 0 ? "Main" : "Sub", "cl-ip");
             if (i >= 5) td.className = "text-end";
+            if (i === 0 || i === 3 || i === 4 || i === 8) td.classList.add("cl-opt");
             if (i === 1 && c.agent) td.title = c.agent;
             if (i === 6 && own) td.title = "this tab\n" + own.tip;
             tr.appendChild(td);

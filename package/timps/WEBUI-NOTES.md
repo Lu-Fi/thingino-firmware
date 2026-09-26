@@ -314,7 +314,7 @@ time, so the page only formats it, like the `bytes` total ("Total"
 column, `-` on a daemon without it). `uaShort()` turns the User-Agent into a
 short name (Frigate, ffmpeg/Lavf, VLC, go2rtc, the browser); the full string
 is the cell's tooltip. The SSE `/events` connections of open WebUI tabs are
-listed too, which is why the "clients" tile (streaming subscribers only) can
+listed too, which is why the "stream clients" tile (subscribers only) can
 show fewer.
 
 ### `applyStatsExtra()`: the `ave_bitrate` / queue-backlog fallback

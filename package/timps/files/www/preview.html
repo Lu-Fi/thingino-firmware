@@ -186,7 +186,7 @@
               <span class="s" id="st-dn-s"></span><div class="st-gain" id="st-gain" hidden><span class="m"></span></div></div>
             <div class="st-panel st-tile"><i class="bi bi-person-walking"></i><span class="v" id="st-mo">–</span><span class="s" id="st-mo-s"></span></div>
             <div class="st-panel st-tile"><i class="bi bi-record-circle"></i><span class="v" id="st-rec">–</span><span class="s" id="st-rec-s"></span></div>
-            <div class="st-panel st-tile"><i class="bi bi-people"></i><span class="v" id="st-cl">–</span><span class="s">all protocols</span></div>
+            <div class="st-panel st-tile"><i class="bi bi-people"></i><span class="v" id="st-cl">–</span><span class="s">all protocols, no events</span></div>
             <div class="st-panel st-tile"><i class="bi bi-clock-history"></i><span class="v" id="st-up">–</span><span class="s" id="st-ver"></span></div>
             <div class="st-panel st-tile"><i class="bi bi-heart-pulse"></i><span class="v"><span class="st-dot me-1" id="st-hd"></span><span id="st-h">–</span></span><span class="s" id="st-h-s"></span></div>
           </div>
@@ -464,7 +464,7 @@
     // fast path: every "stats" SSE frame (~2s)
     function renderStats(j) {
       $st("up").textContent = formatUptime(j.uptime_s);
-      $st("cl").textContent = j.clients + (j.clients === 1 ? " client" : " clients");
+      $st("cl").textContent = j.clients + (j.clients === 1 ? " stream client" : " stream clients");
       stLive.drops = 0;
       (j.video || []).forEach((s) => {
         const row = ensureStatsRow(s.chn);

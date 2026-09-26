@@ -194,7 +194,7 @@
             <div class="st-ph"><b>Connected clients</b><span class="st-chip" id="st-clients-n"></span></div>
             <div class="table-responsive">
               <table class="table table-sm mb-0 st-cl">
-                <thead><tr><th>Address</th><th>Client</th><th>Protocol</th><th>Stream</th><th>Connected</th><th class="text-end">Rate</th></tr></thead>
+                <thead><tr><th>Address</th><th>Client</th><th>Protocol</th><th>Stream</th><th>Connected</th><th class="text-end">Rate</th><th class="text-end">Total</th></tr></thead>
                 <tbody id="st-clients"></tbody>
               </table>
             </div>
@@ -379,7 +379,8 @@
     function formatBytes(n) {
       if (n < 1024) return n + " B";
       if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
-      return (n / (1024 * 1024)).toFixed(1) + " MB";
+      if (n < 1024 * 1024 * 1024) return (n / (1024 * 1024)).toFixed(1) + " MB";
+      return (n / (1024 * 1024 * 1024)).toFixed(2) + " GB";
     }
     function formatKbps(kbps) {
       return kbps >= 1000 ? (kbps / 1000).toFixed(2) + " Mb/s" : kbps.toFixed(0) + " kb/s";
@@ -597,16 +598,16 @@
           (a.proto > b.proto) - (a.proto < b.proto) || (a.ip > b.ip) - (a.ip < b.ip));
         $st("clients-n").textContent = list.length;
         body.textContent = "";
-        if (!list.length) body.innerHTML = '<tr><td colspan="6" class="text-body-secondary">none</td></tr>';
+        if (!list.length) body.innerHTML = '<tr><td colspan="7" class="text-body-secondary">none</td></tr>';
         list.forEach((c) => {
           const tr = document.createElement("tr");
           [c.ip + ":" + c.port, uaShort(c.agent), PROTO[c.proto] || c.proto,
            c.chn === 0 ? "Main" : c.chn === 1 ? "Sub" : "–",
            c.since_s < 60 ? c.since_s + " s" : formatUptime(c.since_s),
-           formatKbps(c.kbps)].forEach((v, i) => {
+           formatKbps(c.kbps), c.bytes == null ? "–" : formatBytes(c.bytes)].forEach((v, i) => {
             const td = document.createElement("td");
             td.textContent = v;
-            if (i === 5) td.className = "text-end";
+            if (i >= 5) td.className = "text-end";
             if (i === 1 && c.agent) td.title = c.agent;
             tr.appendChild(td);
           });

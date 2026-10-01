@@ -5,9 +5,13 @@
 ################################################################################
 
 OPEN_TX_ISP_SITE_METHOD = git
-OPEN_TX_ISP_SITE = https://github.com/opensensor/open-tx-isp
-OPEN_TX_ISP_SITE_BRANCH = main
-OPEN_TX_ISP_VERSION = e92166b985606613f2395831bac65413c7542877
+# Worktree-only (thingino-ciao-t21, 2026-10-01): local, unpushed open-tx-isp
+# branch claude/t21-bringup (claude/open-tx-isp-all + T21 bring-up fixes).
+# All former package patches 0001-0006 are upstreamed or superseded there and
+# have been removed from this worktree.
+OPEN_TX_ISP_SITE = /mnt/NVMe/git/open-tx-isp
+OPEN_TX_ISP_SITE_BRANCH = claude/t21-bringup
+OPEN_TX_ISP_VERSION = 253150e61a73a109f8d8b271becb81605f946554
 
 # Upstream identifies the project as GPLv3 but does not currently ship a
 # top-level license file for legal-info to collect.

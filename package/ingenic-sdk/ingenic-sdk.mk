@@ -1,7 +1,10 @@
 INGENIC_SDK_SITE_METHOD = git
-INGENIC_SDK_SITE = https://github.com/themactep/ingenic-sdk
-INGENIC_SDK_SITE_BRANCH = master
-INGENIC_SDK_VERSION = 1bda5c486b688d86a10e2f3c10223647106e09ff
+# TEMPORARY: testing themactep/ingenic-sdk#51 (sc2336/t23 shvflip race fix)
+# on the reporting board before it's merged upstream. Revert to themactep +
+# a post-merge commit once #51 lands.
+INGENIC_SDK_SITE = https://github.com/Lu-Fi/ingenic-sdk
+INGENIC_SDK_SITE_BRANCH = fix/sc2336-t23-shvflip-init-race
+INGENIC_SDK_VERSION = 0c2aaa3023ea749ec139492bc212002252d2eb22
 
 INGENIC_SDK_LICENSE = GPL-3.0
 INGENIC_SDK_LICENSE_FILES = LICENSE

@@ -5,9 +5,15 @@
 ################################################################################
 
 OPENIMP_SITE_METHOD = git
-OPENIMP_SITE = https://github.com/opensensor/openimp
-OPENIMP_SITE_BRANCH = main
-OPENIMP_VERSION = 9cab2192f058c0c5e6c18a6052158a5f7a44b268
+# Worktree-only (thingino-ciao-t21, 2026-10-01): local, unpushed OpenIMP
+# branch claude/t21-bringup (claude/openimp-all + T21 bring-up fixes).
+OPENIMP_SITE = /mnt/NVMe/git/openimp
+OPENIMP_SITE_BRANCH = claude/t21-bringup
+OPENIMP_VERSION = f32a27c6f1e030d0df219a3b38e751176925d75d
+# BR2_DL_DIR is shared with the thingino-ciao-openstack worktree, whose
+# openimp pin fetches from GitHub; the git download helper rewrites the
+# cached clone's origin URL, so keep this local-path clone in its own subdir.
+OPENIMP_DL_SUBDIR = openimp-local
 
 # Upstream describes OpenIMP as MIT but does not currently ship a top-level
 # license file for legal-info to collect.

@@ -33,12 +33,12 @@ The Thingino Kconfig gates mirror that, minus the T10 odd case:
 **T10** has an open-tx-isp driver but no OpenIMP build target, so it stays
 out of the OpenIMP gate and keeps the Ingenic libimp provider.
 
-**T23** is a hybrid build: a partial `libimp.so` with no audio entry points
-plus an `openimp-t23-helixd` worker that links the OEM `libimp.so` for the
-proprietary Helix encoder, while RAD keeps using OEM `libimp.so` for audio.
-`openimp.mk` selects `BR2_PACKAGE_INGENIC_LIB_LIBIMP`, copies that OEM
-`libimp.so` to `/opt/openimp-t23/libimp.so` next to the helixd worker, and
-installs OpenIMP's `libimp.so` as `/usr/lib/libimp.so` for RAD.
+**T23** uses OpenIMP's native Helix encoder for bound channels and YuvInit,
+so no vendor code is built or shipped by default. The optional
+`BR2_PACKAGE_OPENIMP_T23_OEM_HELPER` (default off) additionally builds the
+`openimp-t23-helixd` worker and installs the OEM `libimp.so` next to it under
+`/opt/openimp-t23/`, for `OPENIMP_T23_ENCODER=worker` and the hardware JPEG
+`IMP_Decoder`.
 
 C100 is not covered by either component.
 
@@ -61,8 +61,8 @@ Kernel focus:
 - **IVS**: still incomplete — no `IMP_IVS_MoveDetect`, and T40 stubs the IVS
   entry points.
 - **Encoder**: per-SoC encode paths exist — Helix for T21/T30, the shared
-  AVPU backend for T31/T40/T41, and for T23 the AVPU backend plus the
-  separate `openimp-t23-helixd` worker that links the OEM Helix encoder. The
+  AVPU backend for T31/T40/T41, and for T23 the native Helix encoder (the
+  `openimp-t23-helixd` worker with the OEM Helix encoder is opt-in). The
   upstream README reports decoder-clean H.264 on T30/T31/T40; T41 is still
   in correctness bring-up.
 

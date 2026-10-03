@@ -13,7 +13,6 @@ config BR2_PACKAGE_OPENIMP
 	depends on BR2_PACKAGE_OPENIMP_SUPPORTED
 	depends on BR2_PACKAGE_THINGINO_ISP_OPEN
 	depends on BR2_THINGINO_DEV_CAMERA
-	select BR2_PACKAGE_INGENIC_LIB_LIBIMP if BR2_SOC_FAMILY = "t23"
 	help
 	  OpenIMP is an open-source implementation of the Ingenic IMP
 	  (Image Media Process) library. It provides a
@@ -25,12 +24,23 @@ config BR2_PACKAGE_OPENIMP
 	  in staging and on the target, then preserves that replacement
 	  during target finalization.
 
-	  T23 is a hybrid: OpenIMP's libimp.so serves RAD from
-	  /usr/lib/libimp.so, while the OEM libimp.so and the
-	  openimp-t23-helixd worker are installed under /opt/openimp-t23/
-	  for the proprietary Helix encoder. T30 is video-only: its build
-	  deliberately refuses to export the IMP audio entry points.
+	  T23 uses OpenIMP's native Helix encoder; the OEM Helix worker
+	  is optional (BR2_PACKAGE_OPENIMP_T23_OEM_HELPER). T30 is video-only:
+	  its build deliberately refuses to export the IMP audio entry points.
 	  T20/T21 reuse the T31 audio implementation; T31/T40/T41 include
 	  audio. Some optional OSD/IVS entry points remain incomplete.
 
 	  https://github.com/opensensor/openimp
+
+config BR2_PACKAGE_OPENIMP_T23_OEM_HELPER
+	bool "Install the T23 OEM Helix helper (vendor libimp + openimp-t23-helixd)"
+	default n
+	depends on BR2_PACKAGE_OPENIMP
+	depends on BR2_SOC_FAMILY = "t23"
+	select BR2_PACKAGE_INGENIC_LIB_LIBIMP
+	help
+	  Build openimp-t23-helixd and ship it with the vendor libimp.so under
+	  /opt/openimp-t23/, so OPENIMP_T23_ENCODER=worker works.
+	  Off by default: OpenIMP T23 uses its native Helix encoder for bound
+	  channels and YuvInit, and no vendor code is built or shipped. Needed
+	  only for the worker fallback and the hardware JPEG IMP_Decoder.

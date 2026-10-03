@@ -44,10 +44,10 @@ config BR2_PACKAGE_THINGINO_ISP_OPEN
 	help
 	  Use open-tx-isp on supported T10, T20, T21, T23, T30, T31,
 	  T40, and T41 targets. OpenIMP supplies the userspace ABI on
-	  T20, T21, T23, T30, T31, T40, and T41; the T23 build is a
-	  hybrid that keeps the OEM libimp.so under /opt/openimp-t23/
-	  for the proprietary Helix encoder. T10 has no OpenIMP build
-	  and retains the Ingenic libimp provider.
+	  T20, T21, T23, T30, T31, T40, and T41; the T23 build uses
+	  OpenIMP's native Helix encoder (the OEM libimp.so under
+	  /opt/openimp-t23/ is an opt-in helper). T10 has no OpenIMP
+	  build and retains the Ingenic libimp provider.
 
 	  Image tuning and sensor coverage remain experimental.
 
@@ -65,5 +65,5 @@ config BR2_PACKAGE_THINGINO_ISP_OPEN_VENDOR_LIBIMP
 	  open kernel driver.
 
 	  Turn this on to tell a kernel problem apart from an OpenIMP one,
-	  and on T23 to skip the OpenIMP Helix encoder hybrid. Off means
+	  and to run the stock userspace. Off means
 	  OpenIMP supplies the userspace wherever it is supported.

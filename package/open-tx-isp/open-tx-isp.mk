@@ -5,11 +5,9 @@
 ################################################################################
 
 OPEN_TX_ISP_SITE_METHOD = git
-# Lu-Fi fork (all-17: the 3 former package patches are included or superseded,
-# plus the T10/T20/T21 DPC/DRC/defog controls). Not in opensensor/open-tx-isp.
-OPEN_TX_ISP_SITE = https://github.com/Lu-Fi/open-tx-isp
-OPEN_TX_ISP_SITE_BRANCH = claude/open-tx-isp-all-17
-OPEN_TX_ISP_VERSION = e7c8610763cc1be177140bd530d4fd6377203148
+OPEN_TX_ISP_SITE = https://github.com/opensensor/open-tx-isp
+OPEN_TX_ISP_SITE_BRANCH = main
+OPEN_TX_ISP_VERSION = e92166b985606613f2395831bac65413c7542877
 
 # Upstream identifies the project as GPLv3 but does not currently ship a
 # top-level license file for legal-info to collect.

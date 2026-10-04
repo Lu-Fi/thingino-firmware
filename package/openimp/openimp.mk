@@ -5,11 +5,11 @@
 ################################################################################
 
 OPENIMP_SITE_METHOD = git
-# Lu-Fi fork (all-15): optional T23 OEM worker (T23_BUILD_OEM_WORKER), opt-in MB-RC,
-# T10/T20 OEM rate controller, DPC/DRC/defog/scene setters. Not in opensensor/openimp.
+# Lu-Fi fork: openimp-all-13 plus the optional T23 OEM worker
+# (T23_BUILD_OEM_WORKER). Not in opensensor/openimp.
 OPENIMP_SITE = https://github.com/Lu-Fi/openimp
-OPENIMP_SITE_BRANCH = claude/openimp-all-15
-OPENIMP_VERSION = afd2d072840d8644b19db0b11c4bd946e3d54b8e
+OPENIMP_SITE_BRANCH = claude/t23-no-oem-worker
+OPENIMP_VERSION = 9eefbaef3922bff3a32105f74d31cb31df98491e
 
 # Upstream describes OpenIMP as MIT but does not currently ship a top-level
 # license file for legal-info to collect.
@@ -23,11 +23,6 @@ OPENIMP_PLATFORM = $(shell echo $(SOC_FAMILY) | tr a-z A-Z)
 OPENIMP_PLATFORM_LOWER = $(shell echo $(SOC_FAMILY) | tr A-Z a-z)
 OPENIMP_TOOLCHAIN_PREFIX = $(patsubst %-,%,$(TARGET_CROSS))
 OPENIMP_OUTPUT_DIR = $(@D)/build/$(OPENIMP_PLATFORM_LOWER)
-# Vendor libimp straight from the ingenic-lib SDK tree (only the opt-in T23 OEM
-# helper uses it): with per-package directories $(BASE_DIR)/target does not
-# exist yet when openimp builds, and $(TARGET_DIR)/usr/lib/libimp.so is
-# OpenIMP's own copy after a rebuild.
-OPENIMP_T23_OEM_LIB_DIR = $(INGENIC_LIB_DIR)/$(SOC_FAMILY_CAPS)/lib/$(SDK_VERSION)/$(SDK_LIBC_NAME)/$(SDK_LIBC_VERSION)
 OPENIMP_BUILT_LIB = $(BUILD_DIR)/openimp-$(OPENIMP_VERSION)/build/$(OPENIMP_PLATFORM_LOWER)/libimp.so
 
 ifneq ($(filter t40 t41,$(SOC_FAMILY)),)
@@ -52,7 +47,6 @@ define OPENIMP_BUILD_CMDS
 		T23_OUTPUT_DIR=$(OPENIMP_OUTPUT_DIR) \
 		T23_TARGET_DIR=$(BASE_DIR) \
 		T23_BUILD_OEM_WORKER=$(if $(BR2_PACKAGE_OPENIMP_T23_OEM_HELPER),1,0) \
-		T23_OEM_LIB_DIR=$(OPENIMP_T23_OEM_LIB_DIR) \
 		T30_OUTPUT_DIR=$(OPENIMP_OUTPUT_DIR) \
 		T30_TARGET_DIR=$(BASE_DIR) \
 		T31_OUTPUT_DIR=$(OPENIMP_OUTPUT_DIR) \
@@ -68,7 +62,7 @@ ifeq ($(BR2_PACKAGE_OPENIMP_T23_OEM_HELPER),y)
 # Helix worker live under /opt/openimp-t23/, while OpenIMP's libimp.so takes
 # /usr/lib/libimp.so.
 define OPENIMP_INSTALL_T23_TARGET
-	$(INSTALL) -D -m 0755 $(OPENIMP_T23_OEM_LIB_DIR)/libimp.so \
+	$(INSTALL) -D -m 0755 $(TARGET_DIR)/usr/lib/libimp.so \
 		$(TARGET_DIR)/opt/openimp-t23/libimp.so
 	$(INSTALL) -D -m 0755 $(OPENIMP_OUTPUT_DIR)/openimp-t23-helixd \
 		$(TARGET_DIR)/opt/openimp-t23/openimp-t23-helixd

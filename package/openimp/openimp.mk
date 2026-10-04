@@ -5,11 +5,9 @@
 ################################################################################
 
 OPENIMP_SITE_METHOD = git
-# Lu-Fi fork: openimp-all-13 plus the optional T23 OEM worker
-# (T23_BUILD_OEM_WORKER). Not in opensensor/openimp.
-OPENIMP_SITE = https://github.com/Lu-Fi/openimp
-OPENIMP_SITE_BRANCH = claude/t23-no-oem-worker
-OPENIMP_VERSION = 9eefbaef3922bff3a32105f74d31cb31df98491e
+OPENIMP_SITE = https://github.com/opensensor/openimp
+OPENIMP_SITE_BRANCH = main
+OPENIMP_VERSION = 9cab2192f058c0c5e6c18a6052158a5f7a44b268
 
 # Upstream describes OpenIMP as MIT but does not currently ship a top-level
 # license file for legal-info to collect.
@@ -46,7 +44,6 @@ define OPENIMP_BUILD_CMDS
 		T21_TARGET_DIR=$(BASE_DIR) \
 		T23_OUTPUT_DIR=$(OPENIMP_OUTPUT_DIR) \
 		T23_TARGET_DIR=$(BASE_DIR) \
-		T23_BUILD_OEM_WORKER=$(if $(BR2_PACKAGE_OPENIMP_T23_OEM_HELPER),1,0) \
 		T30_OUTPUT_DIR=$(OPENIMP_OUTPUT_DIR) \
 		T30_TARGET_DIR=$(BASE_DIR) \
 		T31_OUTPUT_DIR=$(OPENIMP_OUTPUT_DIR) \
@@ -57,10 +54,10 @@ define OPENIMP_BUILD_CMDS
 		$(@D)/build-for-device.sh $(OPENIMP_PLATFORM)
 endef
 
-ifeq ($(BR2_PACKAGE_OPENIMP_T23_OEM_HELPER),y)
-# Optional T23 OEM helper: the OEM libimp.so (installed by ingenic-lib) and the
+ifeq ($(SOC_FAMILY),t23)
+# Hybrid T23 build: the OEM libimp.so (installed by ingenic-lib) and the
 # Helix worker live under /opt/openimp-t23/, while OpenIMP's libimp.so takes
-# /usr/lib/libimp.so.
+# /usr/lib/libimp.so for RAD.
 define OPENIMP_INSTALL_T23_TARGET
 	$(INSTALL) -D -m 0755 $(TARGET_DIR)/usr/lib/libimp.so \
 		$(TARGET_DIR)/opt/openimp-t23/libimp.so

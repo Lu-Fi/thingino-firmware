@@ -1,0 +1,49 @@
+# Merge every push to ciao into aperto (Lu-Fi fork only).
+# Streamer (timps) work is committed to ciao only; aperto carries the open
+# ISP stack on top of upstream aperto. On a conflict a PR ciao -> aperto is
+# opened instead, to be resolved by hand.
+name: sync ciao -> aperto
+
+on:
+  push:
+    branches: [ciao]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: sync-ciao-aperto
+  cancel-in-progress: false
+
+jobs:
+  merge:
+    if: github.repository == 'Lu-Fi/thingino-firmware'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: aperto
+          fetch-depth: 0
+      - name: Merge ciao into aperto
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin ciao
+          if git merge-base --is-ancestor origin/ciao HEAD; then
+            echo "aperto already contains ciao"; exit 0
+          fi
+          if git merge --no-edit origin/ciao; then
+            git push origin HEAD:aperto
+          else
+            git merge --abort
+            if [ -z "$(gh pr list --base aperto --head ciao --state open --json number --jq '.[].number')" ]; then
+              gh pr create --base aperto --head ciao \
+                --title "sync: merge ciao into aperto (conflicts)" \
+                --body "Automatic merge of ciao into aperto hit conflicts. Resolve by hand: streamer files (package/timps, WebUI) follow ciao; keep the OpenIMP-only link line in package/timps/timps.mk."
+            fi
+            exit 1
+          fi

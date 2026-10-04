@@ -1,8 +1,9 @@
-# Merge every push to ciao into aperto (Lu-Fi fork only).
-# Streamer (timps) work is committed to ciao only; aperto carries the open
-# ISP stack on top of upstream aperto. On a conflict a PR ciao -> aperto is
-# opened instead, to be resolved by hand.
-name: sync ciao -> aperto
+# Carry the timps and motors packages from ciao over to aperto (Lu-Fi fork only).
+# Only the changes made to PATHS on ciao since the last run are applied to
+# aperto (3-way, so aperto's own edits to those packages survive); the rest of
+# ciao stays out. The tag ciao-synced marks the ciao commit handled so far. On
+# a conflict nothing is pushed and the run fails.
+name: sync ciao packages -> aperto
 
 on:
   push:
@@ -11,14 +12,16 @@ on:
 
 permissions:
   contents: write
-  pull-requests: write
 
 concurrency:
   group: sync-ciao-aperto
   cancel-in-progress: false
 
+env:
+  PATHS: package/timps package/thingino-motors
+
 jobs:
-  merge:
+  sync:
     if: github.repository == 'Lu-Fi/thingino-firmware'
     runs-on: ubuntu-latest
     steps:
@@ -26,24 +29,24 @@ jobs:
         with:
           ref: aperto
           fetch-depth: 0
-      - name: Merge ciao into aperto
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Apply ciao package changes to aperto
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch origin ciao
-          if git merge-base --is-ancestor origin/ciao HEAD; then
-            echo "aperto already contains ciao"; exit 0
-          fi
-          if git merge --no-edit origin/ciao; then
-            git push origin HEAD:aperto
-          else
-            git merge --abort
-            if [ -z "$(gh pr list --base aperto --head ciao --state open --json number --jq '.[].number')" ]; then
-              gh pr create --base aperto --head ciao \
-                --title "sync: merge ciao into aperto (conflicts)" \
-                --body "Automatic merge of ciao into aperto hit conflicts. Resolve by hand: streamer files (package/timps, WebUI) follow ciao; keep the OpenIMP-only link line in package/timps/timps.mk."
+          git fetch origin ciao '+refs/tags/ciao-synced:refs/tags/ciao-synced'
+          base=$(git rev-parse -q --verify refs/tags/ciao-synced^{commit} || git merge-base origin/ciao HEAD)
+          tip=$(git rev-parse origin/ciao)
+          if [ "$base" != "$tip" ]; then
+            git diff --binary "$base" "$tip" -- $PATHS > /tmp/ciao-pkg.patch
+            if [ -s /tmp/ciao-pkg.patch ]; then
+              if git apply --3way --index /tmp/ciao-pkg.patch; then
+                git commit -q -m "sync: timps/motors packages from ciao ${tip:0:9}"
+                git push origin HEAD:aperto
+              else
+                echo "::error::conflict applying ciao package changes to aperto - resolve by hand"
+                exit 1
+              fi
             fi
-            exit 1
           fi
+          git tag -f ciao-synced "$tip"
+          git push -f origin refs/tags/ciao-synced

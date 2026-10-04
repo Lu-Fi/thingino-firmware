@@ -21,15 +21,6 @@ sed -i "/^127.0.1.1/c127.0.1.1\t$HOSTNAME" ${TARGET_DIR}/etc/hosts
 # must target that volume instead of a raw MTD offset (the NOR default).
 if grep -q "^BR2_THINGINO_FLASH_NAND=y" "$BR2_CONFIG"; then
 	printf '/dev/ubi0:uboot-env 0x0 0x10000 0x10000\n' > "${TARGET_DIR}/etc/fw_env.config"
-elif grep -q '^BR2_TARGET_UBOOT_VERSION="20[2-9][0-9]\.' "$BR2_CONFIG" &&
-	[ "$(cat "${TARGET_DIR}/etc/fw_env.config" 2>/dev/null)" = "/dev/mtd1 0x0 0x8000" ]; then
-	# The modern NOR U-Boot (2026.07: T20/T32/T40/T41) keeps a 64 KiB env
-	# (CONFIG_ENV_SIZE=0x10000, CONFIG_ENV_SECT_SIZE=0x10000, 64k "env"
-	# partition). The overlay default 0x8000 is right for U-Boot 2013.07 only:
-	# on this one fw_setenv would write a 32 KiB env whose CRC U-Boot rejects,
-	# silently dropping every user variable. A board overlay that already sets
-	# its own fw_env.config (the Wyze T20s) is left alone.
-	printf '/dev/mtd1 0x0 0x10000 0x10000\n' > "${TARGET_DIR}/etc/fw_env.config"
 fi
 
 cd $BR2_EXTERNAL

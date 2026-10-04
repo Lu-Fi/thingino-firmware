@@ -1,7 +1,7 @@
 INGENIC_SDK_SITE_METHOD = git
 INGENIC_SDK_SITE = https://github.com/themactep/ingenic-sdk
 INGENIC_SDK_SITE_BRANCH = master
-INGENIC_SDK_VERSION = 1bda5c486b688d86a10e2f3c10223647106e09ff
+INGENIC_SDK_VERSION = e0974182df7e001ff76e6cdf25d36d593fde7ed4
 
 INGENIC_SDK_LICENSE = GPL-3.0
 INGENIC_SDK_LICENSE_FILES = LICENSE
@@ -60,6 +60,15 @@ INGENIC_SDK_EXTRA_CFLAGS += -DSENSOR_PROC_OWNED_BY_ISP
 ifeq ($(BR2_PACKAGE_THINGINO_ISP_OPEN_VENDOR_LIBIMP),y)
 INGENIC_SDK_EXTRA_CFLAGS += -DSENSOR_PROC_PUBLISH_FLAT_TREE
 endif
+else ifneq ($(filter $(SOC_FAMILY),t23 t31 t40 t41),)
+# Proprietary ISP: compile the SDK registry (common/isp/common/tx-isp-sinfo.c)
+# into tx-isp-<soc> and feed it from the sensor modules via the
+# SENSOR_REGISTRY_IN_SDK hook, the same sensorN/ ABI the open stack uses.
+# The vendor flat tree stays published by the sensor modules: prudynt reads
+# /proc/jz/sensor/{width,height,max_fps,min_fps}, which the registry cannot
+# supply for every family (the sensor attribute carries no min/max fps).
+INGENIC_SDK_EXTRA_CFLAGS += -DSENSOR_REGISTRY_IN_SDK
+INGENIC_SDK_MODULE_MAKE_OPTS += SENSOR_REGISTRY_IN_SDK=1
 endif
 
 INGENIC_SDK_MODULE_MAKE_OPTS += EXTRA_CFLAGS="$(INGENIC_SDK_EXTRA_CFLAGS)"
@@ -75,12 +84,14 @@ INGENIC_SDK_MODULE_MAKE_OPTS += EXTRA_CFLAGS="$(INGENIC_SDK_EXTRA_CFLAGS)"
 # help text for why this must NOT simply mirror BR2_THINGINO_MOTORS.
 INGENIC_SDK_MODULE_MAKE_OPTS += BR2_THINGINO_MOTORS=$(if $(BR2_INGENIC_SDK_MOTOR),y,n)
 
-# Per-camera IQ file overrides (paths relative to BR2_EXTERNAL root)
+# Per-camera IQ file overrides. A bare file name (no '/') is resolved against
+# the SDK's sensor-iq/<SOC_FAMILY>/ directory; anything else is a path relative
+# to the BR2_EXTERNAL root.
 ifneq ($(call qstrip,$(BR2_SENSOR_1_IQ_FILE)),)
-	SENSOR_1_IQ_OVERRIDE = $(BR2_EXTERNAL_THINGINO_PATH)/$(call qstrip,$(BR2_SENSOR_1_IQ_FILE))
+	SENSOR_1_IQ_OVERRIDE = $(call qstrip,$(BR2_SENSOR_1_IQ_FILE))
 endif
 ifneq ($(call qstrip,$(BR2_SENSOR_2_IQ_FILE)),)
-	SENSOR_2_IQ_OVERRIDE = $(BR2_EXTERNAL_THINGINO_PATH)/$(call qstrip,$(BR2_SENSOR_2_IQ_FILE))
+	SENSOR_2_IQ_OVERRIDE = $(call qstrip,$(BR2_SENSOR_2_IQ_FILE))
 endif
 
 # Old SDK's don't set the SOC in the IQ file name
@@ -138,17 +149,32 @@ define GENERATE_GPIO_USERKEYS_CONFIG
 	fi
 endef
 
-# $(call INSTALL_SENSOR_BIN, model, bin_name, config_name, iq_override_path)
+# $(call INSTALL_SENSOR_BIN, model, bin_name, config_name, iq_override)
+# iq_override is either a bare file name found under the SDK's
+# sensor-iq/<SOC_FAMILY>/ directory, or a path relative to BR2_EXTERNAL.
 define INSTALL_SENSOR_BIN
 	if [ "$(1)" != "" ] && [ "$(1)" != "none" ]; then \
 		$(if $(filter-out $(SENSOR_2_MODEL),$(1)),ln -sf /usr/share/sensor $(TARGET_DIR)/etc/sensor;) \
-		if [ -n "$(4)" ] && [ -f "$(4)" ]; then \
-			$(INSTALL) -D -m 0644 $(4) \
+		iqdir=$(@D)/sensor-iq/$(SOC_FAMILY); \
+		iqfile="$(4)"; \
+		if [ -n "$$iqfile" ]; then \
+			case "$$iqfile" in \
+				*/*) iqfile="$(BR2_EXTERNAL_THINGINO_PATH)/$$iqfile" ;; \
+				*)   iqfile="$$iqdir/$$iqfile" ;; \
+			esac; \
+			if [ ! -f "$$iqfile" ]; then \
+				echo "ERROR: sensor IQ file '$(4)' for $(1) not found"; \
+				exit 1; \
+			fi; \
+			$(INSTALL) -D -m 0644 $$iqfile \
 				$(TARGET_DIR)/usr/share/sensor/$(3); \
 		else \
-			iqdir=$(@D)/sensor-iq/$(SOC_FAMILY); \
 			if [ -n "$(SENSOR_ISP_FW)" ] && [ -f $$iqdir/$(SENSOR_ISP_FW)/$(2).bin ]; then \
 				iqdir=$$iqdir/$(SENSOR_ISP_FW); \
+			fi; \
+			if [ ! -f $$iqdir/$(2).bin ]; then \
+				echo "ERROR: no IQ file $$iqdir/$(2).bin for sensor $(1) ($(SOC_FAMILY)); add one or set BR2_SENSOR_1_IQ_FILE"; \
+				exit 1; \
 			fi; \
 			$(INSTALL) -D -m 0644 $$iqdir/$(2).bin \
 				$(TARGET_DIR)/usr/share/sensor/$(3); \

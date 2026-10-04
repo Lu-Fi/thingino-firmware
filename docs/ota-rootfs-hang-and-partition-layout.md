@@ -143,7 +143,7 @@ produced images dated 14:12 containing a v1.9.1 `timpsd`, byte-identical to the
 one built at 10:37. Use `make rebuild-<pkg>` (dirclean + build + reinstall).
 
 **Within one make run the images are packed before the forced install lands.**
-Running `make rebuild-timps && make` is still not enough: on 192.168.241.102 the
+Running `make rebuild-timps && make` is still not enough: on 192.0.2.102 the
 squashfs was written 14:24:30 and `target/usr/bin/timpsd` at 14:25:28 — the
 image predates the binary it was supposed to contain. The pack has to happen in
 a *separate* invocation, after the rebuild has fully settled.

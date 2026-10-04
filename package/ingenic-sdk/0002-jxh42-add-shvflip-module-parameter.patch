@@ -1,4 +1,4 @@
-From: Lu-Fi <lutz@fiebach.de>
+From: Lu-Fi <lu-fi@users.noreply.github.com>
 Date: Thu, 24 Sep 2026 15:00:00 +0200
 Subject: [PATCH] sensor: t10/t20 jxh42: add shvflip module parameter
 

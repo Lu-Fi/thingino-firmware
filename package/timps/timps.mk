@@ -392,7 +392,7 @@ endef
 #
 #   timps daynight thread -> execlp("daynight", "night") -> rc=127
 #
-# Live incident (Garage, T31/SC4336P, 2026-08-12): timps's own detection was
+# Live incident (cam-01, T31/SC4336P, 2026-08-12): timps's own detection was
 # working perfectly ("[DAYNIGHT] switching to night (total_gain 3557)") but
 # every switch_cmd invocation failed with rc=127, so the IR-cut filter was
 # never removed and the IR illuminator never lit. The sensor kept ramping

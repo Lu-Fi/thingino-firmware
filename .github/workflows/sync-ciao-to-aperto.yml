@@ -40,8 +40,10 @@ jobs:
             git diff --binary "$base" "$tip" -- $PATHS > /tmp/ciao-pkg.patch
             if [ -s /tmp/ciao-pkg.patch ]; then
               if git apply --3way --index /tmp/ciao-pkg.patch; then
-                git commit -q -m "sync: timps/motors packages from ciao ${tip:0:9}"
-                git push origin HEAD:aperto
+                if ! git diff --cached --quiet; then
+                  git commit -q -m "sync: timps/motors packages from ciao ${tip:0:9}"
+                  git push origin HEAD:aperto
+                fi
               else
                 echo "::error::conflict applying ciao package changes to aperto - resolve by hand"
                 exit 1

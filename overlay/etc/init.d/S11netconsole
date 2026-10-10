@@ -1,0 +1,52 @@
+#!/bin/sh
+# Netconsole for hard-hang debugging: kernel messages via UDP to the collector.
+# Never blocks boot (work runs in background) and never fails fatally.
+
+NC_TARGET_IP=192.168.178.17
+NC_TARGET_PORT=6666
+NC_SRC_PORT=6665
+
+nc_setup() {
+	local i=0 gw iface ip mac route
+
+	# wait (max 180 s) for the default route, i.e. network is up
+	while [ $i -lt 90 ]; do
+		route=$(ip -4 route show default 2>/dev/null | head -1)
+		gw=$(echo "$route" | sed -n 's/^default via \([0-9.]*\) dev .*/\1/p')
+		iface=$(echo "$route" | sed -n 's/^default via [0-9.]* dev \([^ ]*\).*/\1/p')
+		[ -n "$iface" ] && [ -n "$gw" ] && break
+		i=$((i + 1))
+		sleep 2
+	done
+	[ -n "$iface" ] || return 0
+
+	ip=$(ip -4 addr show dev "$iface" 2>/dev/null | sed -n 's/^ *inet \([0-9.]*\).*/\1/p' | head -1)
+	[ -n "$ip" ] || return 0
+
+	# target is off-subnet: use the gateway MAC (resolved via ARP)
+	ping -c 1 -W 2 "$gw" >/dev/null 2>&1 || true
+	mac=$(sed -n "s/^$gw  *0x[0-9a-f]  *0x[0-9a-f]  *\([0-9a-f:]*\).*/\1/p" /proc/net/arp | head -1)
+	case "$mac" in 00:00:00:00:00:00) mac= ;; esac
+
+	echo 8 > /proc/sys/kernel/printk 2>/dev/null || dmesg -n 8 2>/dev/null || true
+	modprobe netconsole "netconsole=${NC_SRC_PORT}@${ip}/${iface},${NC_TARGET_PORT}@${NC_TARGET_IP}/${mac}" 2>/dev/null || true
+	echo "netconsole: iface=$iface src=$ip gw=$gw mac=${mac:-none} -> $NC_TARGET_IP:$NC_TARGET_PORT" > /dev/kmsg 2>/dev/null || true
+}
+
+case "$1" in
+	start)
+		nc_setup >/dev/null 2>&1 &
+		;;
+	stop)
+		rmmod netconsole 2>/dev/null || true
+		;;
+	restart)
+		"$0" stop
+		"$0" start
+		;;
+	*)
+		echo "Usage: $0 {start|stop|restart}"
+		;;
+esac
+
+exit 0

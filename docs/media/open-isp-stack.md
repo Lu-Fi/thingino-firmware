@@ -45,12 +45,9 @@ The Thingino Kconfig gates mirror that:
 platform (`openimp.mk` maps `t10` to the `T20` build). The open-tx-isp driver
 has its own `driver/t10`.
 
-**T23** is a hybrid build: a partial `libimp.so` with no audio entry points
-plus an `openimp-t23-helixd` worker that links the OEM `libimp.so` for the
-proprietary Helix encoder, while RAD keeps using OEM `libimp.so` for audio.
-`openimp.mk` selects `BR2_PACKAGE_INGENIC_LIB_LIBIMP`, copies that OEM
-`libimp.so` to `/opt/openimp-t23/libimp.so` next to the helixd worker, and
-installs OpenIMP's `libimp.so` as `/usr/lib/libimp.so` for RAD.
+**T23** runs fully on OpenIMP, Helix encoder included. `openimp.mk` installs
+OpenIMP's `libimp.so` as `/usr/lib/libimp.so`; no OEM `libimp.so` or helper
+worker is shipped on T23 images.
 
 C100 is not covered by either component.
 
@@ -73,8 +70,7 @@ Kernel focus:
 - **IVS**: still incomplete — no `IMP_IVS_MoveDetect`, and T40 stubs the IVS
   entry points.
 - **Encoder**: per-SoC encode paths exist — Helix for T21/T30, the shared
-  AVPU backend for T31/T40/T41, and for T23 the AVPU backend plus the
-  separate `openimp-t23-helixd` worker that links the OEM Helix encoder. The
+  AVPU backend for T31/T40/T41, and for T23 the in-tree Helix path. The
   upstream README reports decoder-clean H.264 on T30/T31/T40; T41 is still
   in correctness bring-up.
 
@@ -182,8 +178,7 @@ Known issue - T23 + Raptor: the OpenIMP userspace still hangs the device a
 minute or so into boot on T23 (userspace starves, SSH stops completing the
 banner exchange, ping still answers) and the watchdog resets it in a loop.
 The registry is populated and `tx-isp-t23`/`sensor_gc2083_t23` load, so the
-runaway is in the OpenIMP userspace (its T23 encoder goes through the
-`openimp-t23-helixd` bridge), not the kernel driver. T31
+runaway is in the OpenIMP userspace (its T23 encoder path), not the kernel driver. T31
 (`wyze_cam3_t31x`) and T20 (`wyze_cam2_t20x`) stream fine under Raptor.
 
 Still experimental: night/IR, WDR, extreme exposure, additional sensors, and

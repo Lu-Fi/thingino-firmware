@@ -321,6 +321,25 @@ config BR2_THINGINO_RMEM_MB
 	default 64 if BR2_SOC_RAM_MB = 256
 	default 23
 
+config BR2_THINGINO_RAMOOPS
+	bool "Keep the kernel log across a reset (pstore/ramoops)"
+	depends on BR2_SOC_FAMILY = "t20" || BR2_SOC_FAMILY = "t21" || BR2_SOC_FAMILY = "t23" || BR2_SOC_FAMILY = "t31"
+	help
+	  Carve a small RAM region out of the top of the Linux memory
+	  (osmem) and hand it to the kernel as a ramoops/pstore area. After a
+	  panic, an oops or a watchdog reset the last kernel messages are
+	  readable in /sys/fs/pstore. Whether the SoC keeps its RAM across the
+	  reset has to be verified on the device (see docs/dev/pstore-ramoops.md).
+	  The area is not part of the memory Linux uses, so it costs
+	  BR2_THINGINO_RAMOOPS_KB of RAM.
+
+config BR2_THINGINO_RAMOOPS_KB
+	int "ramoops area size, KB"
+	depends on BR2_THINGINO_RAMOOPS
+	default 128
+	help
+	  Console log gets half of it, the rest is split into 16 KB panic/oops records.
+
 config BR2_THINGINO_ISPMEM_MB
 	int "ISP Reserved RAM (ispmem), MB"
 	depends on BR2_SOC_FAMILY = "t10" || BR2_SOC_FAMILY = "t20"

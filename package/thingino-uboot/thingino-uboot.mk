@@ -152,6 +152,12 @@ define THINGINO_GENERATE_UBOOT_ENV
 endef
 UBOOT_PRE_BUILD_HOOKS += THINGINO_GENERATE_UBOOT_ENV
 
+# pstore/ramoops: shrink osmem by the ramoops area and add ramoops.* to bootargs
+define THINGINO_UBOOT_RAMOOPS
+	@sh $(BR2_EXTERNAL_THINGINO_PATH)/package/thingino-uboot/files/ramoops-env.sh $(THINGINO_UENV_TXT) "$(BR2_THINGINO_RAMOOPS)" "$(BR2_THINGINO_RAMOOPS_KB)"
+endef
+UBOOT_PRE_BUILD_HOOKS += THINGINO_UBOOT_RAMOOPS
+
 define THINGINO_PATCH_DEV_ENV
 	@if [ -f $(@D)/include/configs/isvp_common.h ] && [ -f $(THINGINO_BINARIES_DIR)/uImage ] && [ -f $(THINGINO_BINARIES_DIR)/rootfs.squashfs ]; then \
 		KERNEL_OFFSET=$$(( $(U_BOOT_PARTITION_SIZE) + $(UB_ENV_PARTITION_SIZE) + $(BACKUP_PARTITION_SIZE) )); \

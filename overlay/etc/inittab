@@ -5,6 +5,7 @@
 ::sysinit:/bin/mkdir -p /dev/pts
 ::sysinit:/bin/mkdir -p /dev/shm
 ::sysinit:/bin/mount -a
+::sysinit:/bin/sh -c '[ -d /sys/fs/pstore ] && /bin/mount -t pstore pstore /sys/fs/pstore'
 ::sysinit:/bin/mkdir -p /run/lock/subsys
 ::sysinit:/bin/mkdir -p /run/dropbear
 ::sysinit:/bin/mkdir -p /mnt/nfs

@@ -923,6 +923,7 @@
 			ingenic,sdio_clk = <0x01>;
 			ingenic,wp-gpios = <0x00>;
 			ingenic,rst-gpios = <0x00>;
+			mmc-pwrseq = <0x1e>;
 		};
 
 		ipu@0x13080000 {
@@ -966,11 +967,42 @@
 		};
 	};
 
+	leds {
+		compatible = "gpio-leds";
+
+		led_b {
+			label = "led_b";
+			/* GPB14 = gpio 46 */
+			gpios = <0x07 0x0e 0x00 0x00>;
+			default-state = "off";
+		};
+
+		led_r {
+			label = "led_r";
+			/* GPC01 = gpio 65 */
+			gpios = <0x05 0x01 0x00 0x00>;
+			default-state = "off";
+		};
+	};
+
 	mmc0_pwrseq {
 		compatible = "mmc-pwrseq-simple";
 		reset-gpios = <0x07 0x0f 0x00 0x00>;
 		linux,phandle = <0x1a>;
 		phandle = <0x1a>;
+	};
+
+	mmc1_pwrseq {
+		compatible = "mmc-pwrseq-simple";
+		/*
+		 * GPA6 is wl_reg_on of the SDIO aic8800 on msc1; pwrseq pulses it
+		 * low->high around msc1 power-up. Not GPA0 (wifi_reset): with no
+		 * bcmdhd child node, ingenic_sdio_wlan_init() already requests
+		 * gpio 0, so a pwrseq on it would fail with -EBUSY.
+		 */
+		reset-gpios = <0x06 0x06 0x00 0x00>;
+		linux,phandle = <0x1e>;
+		phandle = <0x1e>;
 	};
 
 	gpio_keys {

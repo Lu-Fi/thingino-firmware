@@ -29,7 +29,7 @@ config BR2_PACKAGE_THINGINO_ISP_PROPRIETARY
 	select BR2_PACKAGE_THINGINO_ISP
 	select BR2_PACKAGE_INGENIC_SDK
 	select BR2_PACKAGE_INGENIC_LIB
-	select BR2_PACKAGE_INGENIC_LIB_LIBIMP
+	select BR2_PACKAGE_INGENIC_LIB_LIBIMP if !BR2_PACKAGE_THINGINO_ISP_PROPRIETARY_OPENIMP
 	help
 	  Use the Ingenic SDK TX-ISP driver and libimp userspace ABI.
 
@@ -63,6 +63,19 @@ config BR2_PACKAGE_THINGINO_ISP_OPEN
 	  Image tuning and sensor coverage remain experimental.
 
 endchoice
+
+config BR2_PACKAGE_THINGINO_ISP_PROPRIETARY_OPENIMP
+	bool "Use OpenIMP userspace with the Ingenic ISP driver"
+	depends on BR2_PACKAGE_THINGINO_ISP_PROPRIETARY
+	depends on BR2_PACKAGE_OPENIMP_SUPPORTED
+	depends on BR2_SOC_FAMILY = "t40"
+	select BR2_PACKAGE_OPENIMP
+	help
+	  Keep the Ingenic tx-isp kernel driver and replace only its
+	  libimp.so with OpenIMP. For T40 boards whose sensors the open
+	  tx-isp-t40 driver does not run yet. OpenIMP talks to the vendor
+	  driver through the same frame-channel and tuning ABI as the
+	  stock libimp; no Ingenic userspace blob is installed.
 
 config BR2_PACKAGE_THINGINO_ISP_OPEN_VENDOR_LIBIMP
 	bool "Use the Ingenic libimp.so userspace with the open kernel driver"

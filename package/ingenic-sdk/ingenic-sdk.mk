@@ -1,9 +1,9 @@
 INGENIC_SDK_SITE_METHOD = git
-INGENIC_SDK_SITE = https://github.com/themactep/ingenic-sdk
-INGENIC_SDK_SITE_BRANCH = master
-INGENIC_SDK_VERSION = 9e87773d918234097dc054a8730b776552a69e16
+INGENIC_SDK_SITE = https://github.com/thingino/ingenic-sdk
+INGENIC_SDK_SITE_BRANCH = main
+INGENIC_SDK_VERSION = d30c0af67b224e5ac1fd241968fb09ef0ad75e9f
 
-INGENIC_SDK_LICENSE = GPL-3.0
+INGENIC_SDK_LICENSE = GPL-2.0+
 INGENIC_SDK_LICENSE_FILES = LICENSE
 
 # Ensure thingino-core is installed before ingenic-sdk so thingino.json is available
@@ -14,12 +14,35 @@ INGENIC_SDK_DEPENDENCIES = thingino-core host-thingino-jct
 # per-soc default. Empty selects the primary version.
 SENSOR_ISP_FW = $(call qstrip,$(BR2_SENSOR_ISP_FW))
 
+# Map thingino's config onto the SDK's own CONFIG_INGENIC_* component
+# switches, driven by the "SDK components" menu in this package's Config.in.
+# The SDK no longer reads BR2_* symbols itself.
+#
+# Each mapping forces an explicit y/n so the menu is authoritative: the
+# Config.in default already carries the SoC/kernel-correct value, and an
+# override there wins. Audio follows the top-level BR2_THINGINO_AUDIO
+# switch rather than a component-menu entry.
+INGENIC_SDK_COMPONENTS = \
+	CONFIG_INGENIC_ISP=$(if $(BR2_THINGINO_DEV_CAMERA),y,n) \
+	CONFIG_INGENIC_SENSOR=$(if $(BR2_THINGINO_DEV_CAMERA),y,n) \
+	CONFIG_INGENIC_AUDIO=$(if $(BR2_THINGINO_AUDIO),y,n) \
+	CONFIG_INGENIC_AVPU=$(if $(BR2_INGENIC_SDK_AVPU),y,n) \
+	CONFIG_INGENIC_SOC_NNA=$(if $(BR2_INGENIC_SDK_SOC_NNA),y,n) \
+	CONFIG_INGENIC_MPSYS=$(if $(BR2_INGENIC_SDK_MPSYS),y,n) \
+	CONFIG_INGENIC_JZ_DTRNG=$(if $(BR2_INGENIC_SDK_MPSYS),y,n) \
+	CONFIG_INGENIC_GPIO_USERKEYS=$(if $(BR2_INGENIC_SDK_GPIO_USERKEYS),y,n) \
+	CONFIG_INGENIC_JZ_AES=$(if $(BR2_INGENIC_SDK_JZ_AES),y,n) \
+	CONFIG_INGENIC_TCU_ALLOC=$(if $(BR2_INGENIC_SDK_TCU_ALLOC),y,n) \
+	CONFIG_INGENIC_PWM=$(if $(BR2_INGENIC_SDK_PWM),y,n) \
+	CONFIG_INGENIC_MOTOR=$(if $(BR2_INGENIC_SDK_MOTOR),y,n)
+
 INGENIC_SDK_MODULE_MAKE_OPTS = \
 	SOC_FAMILY=$(SOC_FAMILY) \
 	KERNEL_VERSION=$(KERNEL_VERSION) \
 	INSTALL_MOD_PATH=$(TARGET_DIR) \
 	INSTALL_MOD_DIR=ingenic \
 	SENSOR_1_MODEL=$(SENSOR_1_MODEL) \
+	$(INGENIC_SDK_COMPONENTS) \
 	$(MULTI_SENSOR_ENABLED) \
 	$(MULTI_SENSOR_1_ENABLED) \
 	$(MULTI_SENSOR_2_ENABLED)
@@ -41,49 +64,14 @@ define INGENIC_SDK_LINUX_CONFIG_FIXUPS
 endef
 endif
 
-# open-tx-isp's tx_isp_sinfo owns /proc/jz/sensor and is the registry both
-# userspaces resolve a sensor through (IMP_ISP_AddSensor -> driver_add/bind),
-# so the sensor modules always feed it - that is the SENSOR_PROC_OWNED_BY_ISP
-# hook in common/isp/<arch>/include/sensor-common.h.
-#
-# OpenIMP's Raptor model reads the same registry as the indexed sensorN/ tree,
-# and the sensor modules must not create the procfs node in that case: procfs
-# resolves a duplicated name to the last registrant, so the vendor flat tree
-# would shadow sensorN/ and Raptor could not autodetect the active sensor.
-ifeq ($(BR2_PACKAGE_THINGINO_ISP_OPEN),y)
-INGENIC_SDK_EXTRA_CFLAGS += -DSENSOR_PROC_OWNED_BY_ISP
-# The stock libimp.so userspace (prudynt, and the open driver's libimp.so
-# compatibility goal) reads the vendor's flat /proc/jz/sensor/{width,height,
-# max_fps,...} tree - which also carries max_fps, a value the T23 open driver
-# does not expose. Publish it for the consumers that read it: the vendor
-# libimp, or prudynt. OpenIMP/raptor resolve the sensor through the registry
-# and the flat tree would shadow sensorN/, so leave it off for them.
-ifneq ($(filter y,$(BR2_PACKAGE_THINGINO_ISP_OPEN_VENDOR_LIBIMP) $(BR2_PACKAGE_THINGINO_STREAMER_PRUDYNT)),)
-INGENIC_SDK_EXTRA_CFLAGS += -DSENSOR_PROC_PUBLISH_FLAT_TREE
-endif
-endif
-
 INGENIC_SDK_MODULE_MAKE_OPTS += EXTRA_CFLAGS="$(INGENIC_SDK_EXTRA_CFLAGS)"
 
-# The pinned SDK's Kbuild still keys misc/motor off the exported
-# BR2_THINGINO_MOTORS (this repo's capability flag), not a menu symbol of
-# its own - upstream ingenic-sdk (10cbee9d) and thingino-firmware master
-# (87be0d0d2) already moved to an opt-in CONFIG_INGENIC_MOTOR switch, which
-# this mirrors ahead of the SDK bump that will require it. Command-line
-# make variables beat the exported environment through nested sub-makes
-# (verified), so this is authoritative over BR2_THINGINO_MOTORS regardless
-# of what a board's defconfig exports it as - see BR2_INGENIC_SDK_MOTOR's
-# help text for why this must NOT simply mirror BR2_THINGINO_MOTORS.
-INGENIC_SDK_MODULE_MAKE_OPTS += BR2_THINGINO_MOTORS=$(if $(BR2_INGENIC_SDK_MOTOR),y,n)
-
-# Per-camera IQ file overrides. A bare file name (no '/') is resolved against
-# the SDK's sensor-iq/<SOC_FAMILY>/ directory; anything else is a path relative
-# to the BR2_EXTERNAL root.
+# Per-camera IQ file overrides (paths relative to BR2_EXTERNAL root)
 ifneq ($(call qstrip,$(BR2_SENSOR_1_IQ_FILE)),)
-	SENSOR_1_IQ_OVERRIDE = $(call qstrip,$(BR2_SENSOR_1_IQ_FILE))
+	SENSOR_1_IQ_OVERRIDE = $(BR2_EXTERNAL_THINGINO_PATH)/$(call qstrip,$(BR2_SENSOR_1_IQ_FILE))
 endif
 ifneq ($(call qstrip,$(BR2_SENSOR_2_IQ_FILE)),)
-	SENSOR_2_IQ_OVERRIDE = $(call qstrip,$(BR2_SENSOR_2_IQ_FILE))
+	SENSOR_2_IQ_OVERRIDE = $(BR2_EXTERNAL_THINGINO_PATH)/$(call qstrip,$(BR2_SENSOR_2_IQ_FILE))
 endif
 
 # Old SDK's don't set the SOC in the IQ file name
@@ -116,57 +104,83 @@ TARGET_MODULES_PATH = $(TARGET_DIR)/usr/lib/modules/$(KERNEL_VERSION)$(call qstr
 # Use the host jct tool by absolute path, not a bare `which jct`: the
 # host PATH is not guaranteed to carry it, and a silent miss here drops
 # the button config with no error. host-thingino-jct is a build
-# dependency (above) so the tool exists when this runs.
+# dependency (below) so the tool exists when this runs.
 INGENIC_SDK_JCT = $(HOST_DIR)/bin/jct
 
+# Board wiring is read from the camera's own config file, NOT from
+# $(TARGET_DIR)/etc/thingino.json: thingino-core installs only
+# configs/common.thingino.json to the target and stages the camera json as
+# 90-camera.json, merging the two in a target-finalize hook that runs after
+# every package has installed. With per-package directories a package
+# therefore sees a thingino.json with no gpio section at all. This is also
+# the file the U-Boot device-tree injectors in package/thingino-uboot read,
+# so the kernel and the bootloader cannot end up driving different pins.
+# Like those injectors, it does not see user/ layer overrides.
+INGENIC_SDK_CAMERA_JSON = $(BR2_EXTERNAL_THINGINO_PATH)/$(CAMERA_SUBDIR)/$(CAMERA)/thingino.json
+
+# Physical buttons come from gpio.button_reset and gpio.chime, accepted in
+# the section's usual shapes: a bare pin number, or a {"pin": N, ...} object.
+# The module wants KEYCODE,GPIO,ACTIVE_LOW triples joined by ";" (28 =
+# KEY_ENTER for reset, 2 = KEY_1 for the chime), and appends them to the
+# board's built-in button table.
+#
+# ACTIVE_LOW is fixed at 1 rather than read from the json. These are buttons
+# that pull the pin to ground against a pull-up, which is why
+# inject-uboot-mmc-dt.sh hardcodes GPIO_ACTIVE_LOW for this very same
+# gpio.button_reset; the bare-int short notation would claim active-high and
+# be wrong for every button in the fleet.
+#
+# Reads the camera config for the same reason INSTALL_AUDIO_SUPPORT does -
+# $(TARGET_DIR)/etc/thingino.json holds nothing but common.thingino.json
+# while this package installs, which is why this config had silently never
+# been generated at all.
 define GENERATE_GPIO_USERKEYS_CONFIG
-	if [ -r $(TARGET_DIR)/etc/thingino.json ]; then \
+	if [ "$(BR2_INGENIC_SDK_GPIO_USERKEYS)" = "y" ] && [ -r $(INGENIC_SDK_CAMERA_JSON) ]; then \
 		if [ ! -x $(INGENIC_SDK_JCT) ]; then \
 			echo "ERROR: host jct tool missing: $(INGENIC_SDK_JCT)"; exit 1; \
 		fi; \
 		gpio_userkeys_config=""; \
-		button_reset=$$($(INGENIC_SDK_JCT) $(TARGET_DIR)/etc/thingino.json get gpio.button_reset 2>/dev/null || true); \
-		if [ -n "$$button_reset" ] && [ "$$button_reset" != "null" ]; then \
-			gpio_userkeys_config="28,$${button_reset},1"; \
-		fi; \
-		button_chime=$$($(INGENIC_SDK_JCT) $(TARGET_DIR)/etc/thingino.json get gpio.chime 2>/dev/null || true); \
-		if [ -n "$$button_chime" ] && [ "$$button_chime" != "null" ]; then \
-			gpio_userkeys_config="$${gpio_userkeys_config:+$$gpio_userkeys_config;}2,$${button_chime},1"; \
-		fi; \
+		for key_code in button_reset:28 chime:2; do \
+			key=$${key_code%%:*}; \
+			code=$${key_code##*:}; \
+			pin=$$($(INGENIC_SDK_JCT) $(INGENIC_SDK_CAMERA_JSON) get gpio.$$key.pin 2>/dev/null); \
+			if [ -z "$$pin" ]; then \
+				pin=$$($(INGENIC_SDK_JCT) $(INGENIC_SDK_CAMERA_JSON) get gpio.$$key 2>/dev/null); \
+			fi; \
+			case "$$pin" in \
+				"" | *[!0-9]*) continue ;; \
+			esac; \
+			gpio_userkeys_config="$${gpio_userkeys_config:+$$gpio_userkeys_config;}$$code,$$pin,1"; \
+		done; \
 		if [ -n "$$gpio_userkeys_config" ]; then \
-			echo "gpio-userkeys gpio_config=\"$$gpio_userkeys_config\"" > $(TARGET_DIR)/etc/modules.d/gpio-userkeys; \
-		else \
-			echo "WARNING: gpio-userkeys config not generated - no button_reset/chime found in thingino.json"; \
+			echo "gpio-userkeys gpio_config=\"$$gpio_userkeys_config\"" > $(TARGET_DIR)/etc/modules.d/05-gpio-userkeys; \
 		fi; \
 	fi
 endef
 
-# $(call INSTALL_SENSOR_BIN, model, bin_name, config_name, iq_override)
-# iq_override is either a bare file name found under the SDK's
-# sensor-iq/<SOC_FAMILY>/ directory, or a path relative to BR2_EXTERNAL.
+# $(call INSTALL_SENSOR_BIN, model, bin_name, config_name, iq_override_path)
 define INSTALL_SENSOR_BIN
 	if [ "$(1)" != "" ] && [ "$(1)" != "none" ]; then \
 		$(if $(filter-out $(SENSOR_2_MODEL),$(1)),ln -sf /usr/share/sensor $(TARGET_DIR)/etc/sensor;) \
-		iqdir=$(@D)/sensor-iq/$(SOC_FAMILY); \
-		iqfile="$(4)"; \
-		if [ -n "$$iqfile" ]; then \
-			case "$$iqfile" in \
-				*/*) iqfile="$(BR2_EXTERNAL_THINGINO_PATH)/$$iqfile" ;; \
-				*)   iqfile="$$iqdir/$$iqfile" ;; \
-			esac; \
-			if [ ! -f "$$iqfile" ]; then \
-				echo "ERROR: sensor IQ file '$(4)' for $(1) not found"; \
+		if [ -n "$(4)" ] && [ -f "$(4)" ]; then \
+			$(INSTALL) -D -m 0644 $(4) \
+				$(TARGET_DIR)/usr/share/sensor/$(3); \
+		elif [ "$(SOC_FAMILY)" = "t32" ]; then \
+			found=0; \
+			for b in $(@D)/sensor-iq/t32/$(2)-PRJ007-*.bin; do \
+				[ -f "$$b" ] || continue; \
+				$(INSTALL) -D -m 0644 "$$b" \
+					$(TARGET_DIR)/usr/share/sensor/$$(basename "$$b"); \
+				found=1; \
+			done; \
+			if [ $$found -eq 0 ]; then \
+				echo "ERROR: no IQ bin for $(2) in sensor-iq/t32/ (want $(2)-PRJ007-day.bin)"; \
 				exit 1; \
 			fi; \
-			$(INSTALL) -D -m 0644 $$iqfile \
-				$(TARGET_DIR)/usr/share/sensor/$(3); \
 		else \
+			iqdir=$(@D)/sensor-iq/$(SOC_FAMILY); \
 			if [ -n "$(SENSOR_ISP_FW)" ] && [ -f $$iqdir/$(SENSOR_ISP_FW)/$(2).bin ]; then \
 				iqdir=$$iqdir/$(SENSOR_ISP_FW); \
-			fi; \
-			if [ ! -f $$iqdir/$(2).bin ]; then \
-				echo "ERROR: no IQ file $$iqdir/$(2).bin for sensor $(1) ($(SOC_FAMILY)); add one or set BR2_SENSOR_1_IQ_FILE"; \
-				exit 1; \
 			fi; \
 			$(INSTALL) -D -m 0644 $$iqdir/$(2).bin \
 				$(TARGET_DIR)/usr/share/sensor/$(3); \
@@ -216,18 +230,18 @@ define GENERATE_MODULE_LOADER
 			echo tx_isp_$(SOC_FAMILY) $(ISP_CLK_SRC) $(ISP_CLK) $(ISP_CH0_PRE_DEQUEUE_TIME) $(ISP_MEMOPT) $(ISP_PRINT_LEVEL) $(BR2_ISP_PARAMS) > $(TARGET_DIR)/etc/modules.d/20-isp; \
 		elif [ "$(SOC_FAMILY)" = "t41" ]; then \
 			echo tx_isp_$(SOC_FAMILY) $(ISP_CLK_SRC) $(ISP_CLK) $(ISP_CLKA_CLK_SRC) $(ISP_CLKA_CLK) $(ISP_CLKS_CLK_SRC) $(ISP_CLKS_CLK) $(ISP_DIRECT_MODE) $(ISP_MEMOPT) $(BR2_ISP_PARAMS) > $(TARGET_DIR)/etc/modules.d/20-isp; \
+		elif [ "$(SOC_FAMILY)" = "t32" ]; then \
+			echo tx_isp_$(SOC_FAMILY) $(ISP_CLK_SRC) $(ISP_CLK) $(ISP_CLKA_CLK_SRC) $(ISP_CLKA_CLK) $(ISP_CLKS_CLK_SRC) $(ISP_CLKS_CLK) $(ISP_CLKV_CLK_SRC) $(ISP_CLKV_CLK) $(ISP_DIRECT_MODE) $(ISP_IVDC_MEM_LINE) $(ISP_MEMOPT) $(ISP_PRINT_LEVEL) $(BR2_ISP_PARAMS) > $(TARGET_DIR)/etc/modules.d/20-isp; \
 		else \
 			echo tx_isp_$(SOC_FAMILY) $(ISP_CLK) $(ISP_DAY_NIGHT_SWITCH_DROP_FRAME_NUM) $(ISP_CH0_PRE_DEQUEUE_TIME) $(ISP_CH0_PRE_DEQUEUE_INTERRUPT_PROCESS) $(ISP_CH0_PRE_DEQUEUE_VALID_LINES) $(ISP_CH1_DEQUEUE_DELAY_TIME) $(ISP_MEMOPT) $(ISP_PRINT_LEVEL) $(BR2_ISP_PARAMS) > $(TARGET_DIR)/etc/modules.d/20-isp; \
 		fi \
 	fi
 
-	if [ "$(BR2_THINGINO_DEV_CAMERA)" = "y" ]; then \
-		if [ "$(SOC_FAMILY)" = "t31" ] || [ "$(SOC_FAMILY)" = "c100" ] || [ "$(SOC_FAMILY)" = "t40" ] || [ "$(SOC_FAMILY)" = "t41" ]; then \
-			echo "avpu $(AVPU_CLK_SRC) $(AVPU_CLK)" > $(TARGET_DIR)/etc/modules.d/10-avpu; \
-		fi \
+	if [ "$(BR2_INGENIC_SDK_AVPU)" = "y" ]; then \
+		echo "avpu $(AVPU_CLK_SRC) $(AVPU_CLK)" > $(TARGET_DIR)/etc/modules.d/10-avpu; \
 	fi
 
-	if [ "$(BR2_THINGINO_PWM_ENABLE)" = "y" ]; then \
+	if [ "$(BR2_INGENIC_SDK_PWM)" = "y" ]; then \
 		echo "pwm_core tcu_channels=0,1,3" >> $(TARGET_DIR)/etc/modules.d/15-pwm; \
 		echo "pwm_hal" >> $(TARGET_DIR)/etc/modules.d/15-pwm; \
 	fi
@@ -257,18 +271,35 @@ define GENERATE_MODULE_LOADER
 	fi
 endef
 
+# The speaker-amp enable line comes from gpio.speaker in the board's
+# thingino.json, in the same short notation as the rest of the gpio section:
+# a bare int is an active-high pin, {"pin": N, "active_low": true} an
+# active-low one. No key means the board has no amp gpio, which the codec
+# module reads as spk_gpio=-1 (it gates every drive on spk_gpio > 0, so the
+# level is moot). The same key is what package/thingino-uboot/
+# inject-uboot-audio-dt.sh puts in the U-Boot device tree as
+# ingenic,spk-gpio.
 define INSTALL_AUDIO_SUPPORT
-	gpio_speaker=$(BR2_THINGINO_AUDIO_GPIO); \
-	if [ -z "$$gpio_speaker" ]; then \
-		spk_gpio=-1; \
-		spk_level=-1; \
-	else \
-		spk_gpio=$$gpio_speaker; \
-		if [ "$(BR2_THINGINO_AUDIO_GPIO_LOW)" = "y" ]; then \
-			spk_level=0; \
-		else \
-			spk_level=1; \
+	spk_gpio=-1; \
+	spk_level=1; \
+	if [ -r $(INGENIC_SDK_CAMERA_JSON) ]; then \
+		if [ ! -x $(INGENIC_SDK_JCT) ]; then \
+			echo "ERROR: host jct tool missing: $(INGENIC_SDK_JCT)"; exit 1; \
 		fi; \
+		spk=$$($(INGENIC_SDK_JCT) $(INGENIC_SDK_CAMERA_JSON) get gpio.speaker.pin 2>/dev/null); \
+		if [ -z "$$spk" ]; then \
+			spk=$$($(INGENIC_SDK_JCT) $(INGENIC_SDK_CAMERA_JSON) get gpio.speaker 2>/dev/null); \
+		fi; \
+		case "$$spk" in \
+			"" | *[!0-9]*) ;; \
+			*) \
+				spk_gpio=$$spk; \
+				spk_al=$$($(INGENIC_SDK_JCT) $(INGENIC_SDK_CAMERA_JSON) get gpio.speaker.active_low 2>/dev/null); \
+				if [ "$$spk_al" = "true" ]; then \
+					spk_level=0; \
+				fi; \
+				;; \
+		esac; \
 	fi; \
 	echo "audio spk_gpio=$$spk_gpio spk_level=$$spk_level $(BR2_THINGINO_AUDIO_PARAMS)" > $(TARGET_DIR)/etc/modules.d/40-audio
 
@@ -296,22 +327,9 @@ define INGENIC_SDK_INSTALL_TARGET_CMDS
 	fi
 
 	$(GENERATE_MODULE_LOADER)
+	$(GENERATE_GPIO_USERKEYS_CONFIG)
 	[ "$(BR2_THINGINO_AUDIO)" = "y" ] && $(INSTALL_AUDIO_SUPPORT)
 endef
 
-INGENIC_SDK_ROOTFS_PRE_CMD_HOOKS += GENERATE_GPIO_USERKEYS_CONFIG
-
 $(eval $(kernel-module))
-
-# open-tx-isp installs the same canonical tx-isp-<soc>.ko path. Drop the SDK's
-# proprietary module after the kernel-module install so the two packages
-# cannot race for that file when the final target is assembled; the open
-# driver must be the one that ships.
-ifeq ($(BR2_PACKAGE_OPEN_TX_ISP),y)
-define INGENIC_SDK_DROP_PROPRIETARY_TX_ISP
-	rm -f $(TARGET_DIR)/usr/lib/modules/*/ingenic/tx-isp-*.ko
-endef
-INGENIC_SDK_POST_INSTALL_TARGET_HOOKS += INGENIC_SDK_DROP_PROPRIETARY_TX_ISP
-endif
-
 $(eval $(generic-package))

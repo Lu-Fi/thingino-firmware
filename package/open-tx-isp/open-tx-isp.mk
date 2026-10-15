@@ -25,6 +25,10 @@ OPEN_TX_ISP_MODULE_MAKE_OPTS = \
 	INSTALL_MOD_DIR=ingenic \
 	DIR=.
 
+# The download has no .git, so the driver's build id (printed when the
+# module probes, otherwise "unknown") is taken from the package version.
+OPEN_TX_ISP_MODULE_MAKE_OPTS += OTX_BUILD_ID=$(OPEN_TX_ISP_VERSION)
+
 # Add XBurst platform include paths for soc headers
 OPEN_TX_ISP_MODULE_MAKE_OPTS += \
 	EXTRA_CFLAGS="-I$(LINUX_DIR)/arch/mips/xburst/soc-$(SOC_FAMILY)/include \

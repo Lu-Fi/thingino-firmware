@@ -132,28 +132,24 @@ define THINGINO_UBOOT_RMEM_SET_VALUE
 	@touch $(THINGINO_UENV_TXT)
 	if [ -n "$(ISP_RMEM_MB)" ]; then \
 		if [ "$(SOC_FAMILY)" = "t20" -o "$(SOC_FAMILY)" = "t10" ]; then \
-			osmem=$$(( $(SOC_RAM_MB) - $(ISP_RMEM_MB) - $(ISP_ISPMEM_MB) - $(or $(RAMOOPS_MB),0) )) && \
+			osmem=$$(( $(SOC_RAM_MB) - $(ISP_RMEM_MB) - $(ISP_ISPMEM_MB) )) && \
 			ispmem_offset=$$(( ($(SOC_RAM_MB) - $(ISP_RMEM_MB) - $(ISP_ISPMEM_MB)) * 0x100000 )) && \
 			rmem_offset=$$(( ($(SOC_RAM_MB) - $(ISP_RMEM_MB)) * 0x100000 )) && \
 			grep -q "^osmem=$${osmem}M@0x0" $(THINGINO_UENV_TXT) || echo "osmem=$${osmem}M@0x0" >> $(THINGINO_UENV_TXT) && \
 			grep -q "^ispmem=$(ISP_ISPMEM_MB)M@$$(printf '0x%x' $$ispmem_offset)" $(THINGINO_UENV_TXT) || echo "ispmem=$(ISP_ISPMEM_MB)M@$$(printf '0x%x' $$ispmem_offset)" >> $(THINGINO_UENV_TXT) && \
 			grep -q "^rmem=$(ISP_RMEM_MB)M@$$(printf '0x%x' $$rmem_offset)" $(THINGINO_UENV_TXT) || echo "rmem=$(ISP_RMEM_MB)M@$$(printf '0x%x' $$rmem_offset)" >> $(THINGINO_UENV_TXT); \
 		elif [ "$(SOC_FAMILY)" = "t40" -o "$(SOC_FAMILY)" = "t41" ]; then \
-			osmem=$$(( $(SOC_RAM_MB) - $(ISP_RMEM_MB) - $(ISP_NMEM_MB) - $(or $(RAMOOPS_MB),0) )) && \
+			osmem=$$(( $(SOC_RAM_MB) - $(ISP_RMEM_MB) - $(ISP_NMEM_MB) )) && \
 			rmem_offset=$$(( ($(SOC_RAM_MB) - $(ISP_RMEM_MB) - $(ISP_NMEM_MB)) * 0x100000 )) && \
 			nmem_offset=$$(( ($(SOC_RAM_MB) - $(ISP_NMEM_MB)) * 0x100000 )) && \
 			grep -q "^osmem=$${osmem}M@0x0" $(THINGINO_UENV_TXT) || echo "osmem=$${osmem}M@0x0" >> $(THINGINO_UENV_TXT) && \
 			grep -q "^rmem=$(ISP_RMEM_MB)M@$$(printf '0x%x' $$rmem_offset)" $(THINGINO_UENV_TXT) || echo "rmem=$(ISP_RMEM_MB)M@$$(printf '0x%x' $$rmem_offset)" >> $(THINGINO_UENV_TXT) && \
 			grep -q "^nmem=$(ISP_NMEM_MB)M@$$(printf '0x%x' $$nmem_offset)" $(THINGINO_UENV_TXT) || echo "nmem=$(ISP_NMEM_MB)M@$$(printf '0x%x' $$nmem_offset)" >> $(THINGINO_UENV_TXT); \
 		else \
-			osmem=$$(( $(SOC_RAM_MB) - $(ISP_RMEM_MB) - $(or $(RAMOOPS_MB),0) )) && \
+			osmem=$$(( $(SOC_RAM_MB) - $(ISP_RMEM_MB) )) && \
 			rmem_offset=$$(( ($(SOC_RAM_MB) - $(ISP_RMEM_MB)) * 0x100000 )) && \
 			grep -q "^osmem=$${osmem}M@0x0" $(THINGINO_UENV_TXT) || echo "osmem=$${osmem}M@0x0" >> $(THINGINO_UENV_TXT) && \
 			grep -q "^rmem=$(ISP_RMEM_MB)M@$$(printf '0x%x' $$rmem_offset)" $(THINGINO_UENV_TXT) || echo "rmem=$(ISP_RMEM_MB)M@$$(printf '0x%x' $$rmem_offset)" >> $(THINGINO_UENV_TXT); \
-		fi; \
-		if [ -n "$(RAMOOPS_MB)" -a "$(RAMOOPS_MB)" != "0" ]; then \
-			ramoops_addr=$$(( $${osmem} * 0x100000 )) && \
-			grep -q "^ramoops=" $(THINGINO_UENV_TXT) || echo "ramoops=ramoops.mem_address=$$(printf '0x%x' $$ramoops_addr) ramoops.mem_size=$$(printf '0x%x' $$(( $(RAMOOPS_MB) * 0x100000 ))) ramoops.record_size=0x20000 ramoops.console_size=0x40000" >> $(THINGINO_UENV_TXT); \
 		fi; \
 	else \
 		echo "No ISP_RMEM_MB value set"; \
@@ -171,7 +167,6 @@ define THINGINO_GENERATE_UBOOT_ENV
 	@env THINGINO_UBOOT_NETCONSOLE='$(THINGINO_UBOOT_NETCONSOLE)' THINGINO_UBOOT_NETCONSOLE_USB='$(THINGINO_UBOOT_NETCONSOLE_USB)' THINGINO_NETCONSOLE_IPADDR='$(strip $(IP))' sh -c 'if [ "$$THINGINO_UBOOT_NETCONSOLE" = "y" ]; then if [ "$$THINGINO_UBOOT_NETCONSOLE_USB" = "y" ]; then grep -q "^preboot=" $(THINGINO_UENV_TXT) || echo "preboot=usb start;setenv ethact \$${nc_ethact};setenv stdout serial,nc;setenv stderr serial,nc;setenv stdin serial,nc" >> $(THINGINO_UENV_TXT); grep -q "^nc_ethact=" $(THINGINO_UENV_TXT) || echo "nc_ethact=asx0" >> $(THINGINO_UENV_TXT); else grep -q "^preboot=" $(THINGINO_UENV_TXT) || echo "preboot=setenv stdout serial,nc;setenv stderr serial,nc;setenv stdin serial,nc" >> $(THINGINO_UENV_TXT); fi; case "$$THINGINO_NETCONSOLE_IPADDR" in [0-9]*.[0-9]*.[0-9]*.[0-9]*) NC_IPADDR="$$THINGINO_NETCONSOLE_IPADDR" ;; *) NC_IPADDR=192.168.1.10 ;; esac; grep -q "^bootdelay=" $(THINGINO_UENV_TXT) || echo "bootdelay=5" >> $(THINGINO_UENV_TXT); grep -q "^ipaddr=" $(THINGINO_UENV_TXT) || echo "ipaddr=$$NC_IPADDR" >> $(THINGINO_UENV_TXT); fi'
 	@sed -i "s|\$$(UBOOT_FLASH_CONTROLLER)|$(THINGINO_UBOOT_FLASH_CONTROLLER)|g" $(THINGINO_UENV_TXT)
 	@sh -c '[ "$(SOC_FAMILY)" = "t40" -o "$(SOC_FAMILY)" = "t41" ] && sed -i "s|\$$(UBOOT_NMEM)|nmem=$$\{nmem\} |g" $(THINGINO_UENV_TXT) || sed -i "s|\$$(UBOOT_NMEM)||g" $(THINGINO_UENV_TXT)'
-	@sh -c 'if [ -n "$(RAMOOPS_MB)" -a "$(RAMOOPS_MB)" != "0" ]; then sed -i "s|\$$(UBOOT_RAMOOPS)| \$$\{ramoops\}|g" $(THINGINO_UENV_TXT); else sed -i "s|\$$(UBOOT_RAMOOPS)||g" $(THINGINO_UENV_TXT); fi'
 	@sh -c '[ "$(SOC_FAMILY)" = "t20" -o "$(SOC_FAMILY)" = "t10" ] && sed -i "s|\$$(UBOOT_ISPMEM)| ispmem=$$\{ispmem\} |g" $(THINGINO_UENV_TXT) || sed -i "s|\$$(UBOOT_ISPMEM)| |g" $(THINGINO_UENV_TXT)'
 endef
 UBOOT_PRE_BUILD_HOOKS += THINGINO_GENERATE_UBOOT_ENV

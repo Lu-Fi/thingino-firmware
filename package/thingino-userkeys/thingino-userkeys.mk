@@ -11,3 +11,10 @@ endef
 
 $(eval $(kernel-module))
 $(eval $(generic-package))
+
+# ingenic-sdk writes /etc/modules.d/gpio-userkeys from thingino.json at its own
+# install step, which on a clean build runs before thingino.json exists, so the
+# key module was never loaded. Regenerate it once the target tree is final.
+ifeq ($(BR2_PACKAGE_THINGINO_USERKEYS),y)
+TARGET_FINALIZE_HOOKS += GENERATE_GPIO_USERKEYS_CONFIG
+endif

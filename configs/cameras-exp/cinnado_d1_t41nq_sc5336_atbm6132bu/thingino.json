@@ -2,7 +2,7 @@
   "gpio": {
     "button_reset": 62,
     "ir850": 79,
-    "ircut": "49 50",
+    "ircut": "50 49",
     "led_b": {
       "pin": 82,
       "active_low": true
@@ -23,7 +23,7 @@
     "gpio_tilt": "84 83 69 68",
     "homing": true,
     "invert_x": false,
-    "invert_y": false,
+    "invert_y": true,
     "is_spi": false,
     "presets": [
       {
@@ -36,6 +36,7 @@
     "speed_pan": 900,
     "speed_tilt": 900,
     "steps_pan": 3650,
-    "steps_tilt": 1200
+    "steps_tilt": 1200,
+    "limitless": true
   }
 }

@@ -49,8 +49,9 @@ config BR2_PACKAGE_THINGINO_ISP_OPEN
 	select BR2_PACKAGE_LIBAUDIOPROCESS_NEO
 	help
 	  Use open-tx-isp on supported T10, T20, T21, T23, T30, T31,
-	  T40, and T41 targets. OpenIMP supplies the userspace ABI where
-	  it is supported (T10 builds it through the shared T20 userspace).
+	  T40, and T41 targets. OpenIMP supplies the userspace ABI on
+	  all of them (T10 builds it through the shared T20 userspace);
+	  T23 runs fully on OpenIMP, Helix encoder included.
 	  Turn on "Use the Ingenic libimp.so userspace with the open kernel
 	  driver" to keep Ingenic's proprietary libimp.so instead, for full
 	  IMP audio codec parity.

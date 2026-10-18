@@ -1,5 +1,5 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Lu-Fi <lu-fi@users.noreply.github.com>
+From: Lu-Fi <lutz@fiebach.de>
 Date: Sun, 4 Oct 2026 11:39:39 +0200
 Subject: [PATCH 3/3] sensors: t31 sc4336p: sensor_set_vflip returns the real
  i2c result

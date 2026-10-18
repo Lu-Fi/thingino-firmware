@@ -28,7 +28,7 @@ only takes a spinlock (gpiolib gpio_lock, soc gpio chip->gpio_lock).
 + * pinctrl_gpio_direction_output(), which takes pctldev->mutex and must not be
 + * called in hard-irq context ("scheduling while atomic", then a stuck move
 + * state and an unkillable rmmod).  The pins are made outputs once by mgo_dir()
-+ * in process context (probe, reset, stop).
++ * in process context (motor_set_default: probe and the end of a reset).
 + */
  static void mgo(unsigned int gpio, int v)
  {

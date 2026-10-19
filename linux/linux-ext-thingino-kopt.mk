@@ -31,3 +31,13 @@ define THINGINO_KOPT_SYNC_CAMERA_DTS
 endef
 LINUX_PRE_BUILD_HOOKS += THINGINO_KOPT_SYNC_CAMERA_DTS
 endif
+
+# 4.4 has no board file for the LEDs: generate a gpio-leds node from the
+# profile's thingino.json (after the camera .dts sync above).
+ifeq ($(BR2_PACKAGE_THINGINO_KOPT_LEDS)$(KERNEL_VERSION),y4.4.94)
+define THINGINO_KOPT_LEDS_DT
+	sh $(BR2_EXTERNAL_THINGINO_PATH)/package/thingino-kopt/inject-leds-dt.sh \
+		$(BR2_EXTERNAL_THINGINO_PATH)/$(CAMERA_SUBDIR)/$(CAMERA)/thingino.json $(LINUX_DIR)
+endef
+LINUX_PRE_BUILD_HOOKS += THINGINO_KOPT_LEDS_DT
+endif

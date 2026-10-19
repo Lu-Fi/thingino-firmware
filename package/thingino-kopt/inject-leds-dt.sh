@@ -5,7 +5,8 @@
 # gpio.led_<c> is a pin number or {"pin": N, "active_low": true}; colours
 # b g r w y v. Same tree handling as thingino-button's inject-button-dt.sh: a
 # decompiled camera .dts has no labels, so the GPIO bank is referenced by
-# phandle. A tree that already has a gpio-leds node is left alone.
+# phandle. The T41 GPIO controller has #gpio-cells = <3> (pin, flags, bias).
+# A tree that already has a gpio-leds node is left alone.
 #
 # Usage: inject-leds-dt.sh <thingino.json> <linux-dir>
 set -e
@@ -52,7 +53,7 @@ for name, pin, low in leds:
         print("thingino-kopt: %s: %s has no phandle, %s skipped"
               % (os.path.basename(dts), gp, name), file=sys.stderr)
         continue
-    body += ("\n\t\t%s {\n\t\t\tlabel = \"%s\";\n\t\t\tgpios = <%s %d %d>;\n"
+    body += ("\n\t\t%s {\n\t\t\tlabel = \"%s\";\n\t\t\tgpios = <%s %d %d 0>;\t/* flags, INGENIC_GPIO_NOBIAS */\n"
              "\t\t\tdefault-state = \"off\";\n\t\t};\n"
              % (name, name, ref, pin % 32, 1 if low else 0))
     added.append("%s=gpio%d%s" % (name, pin, "/low" if low else ""))

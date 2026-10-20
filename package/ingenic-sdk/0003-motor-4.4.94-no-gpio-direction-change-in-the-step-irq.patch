@@ -12,36 +12,36 @@ Write only the level (gpio_set_value, no lock) from the step path. The pins
 become outputs once in motor_set_default() (probe and the end of a reset,
 process context), which keeps gpio_direction_output().
 ---
---- a/4.4.94/misc/motor/motor.c
-+++ b/4.4.94/misc/motor/motor.c
-@@ -215,22 +215,22 @@
+--- a/common/misc/motor/motor.c
++++ b/common/misc/motor/motor.c
+@@ -116,22 +116,22 @@
  			step = motor->cur_steps % 8;
  			step = step < 0 ? step + 8 : step;
  			if (motor->pdata->motor_st1_gpio)
--				gpio_direction_output(motor->pdata->motor_st1_gpio, motor_coil_level(step_8[step] & 0x8));
-+				gpio_set_value(motor->pdata->motor_st1_gpio, motor_coil_level(step_8[step] & 0x8));
+-				gpio_direction_output(motor->pdata->motor_st1_gpio, step_8[step] & 0x8);
++				gpio_set_value(motor->pdata->motor_st1_gpio, step_8[step] & 0x8);
  			if (motor->pdata->motor_st2_gpio)
--				gpio_direction_output(motor->pdata->motor_st2_gpio, motor_coil_level(step_8[step] & 0x4));
-+				gpio_set_value(motor->pdata->motor_st2_gpio, motor_coil_level(step_8[step] & 0x4));
+-				gpio_direction_output(motor->pdata->motor_st2_gpio, step_8[step] & 0x4);
++				gpio_set_value(motor->pdata->motor_st2_gpio, step_8[step] & 0x4);
  			if (motor->pdata->motor_st3_gpio)
--				gpio_direction_output(motor->pdata->motor_st3_gpio, motor_coil_level(step_8[step] & 0x2));
-+				gpio_set_value(motor->pdata->motor_st3_gpio, motor_coil_level(step_8[step] & 0x2));
+-				gpio_direction_output(motor->pdata->motor_st3_gpio, step_8[step] & 0x2);
++				gpio_set_value(motor->pdata->motor_st3_gpio, step_8[step] & 0x2);
  			if (motor->pdata->motor_st4_gpio)
--				gpio_direction_output(motor->pdata->motor_st4_gpio, motor_coil_level(step_8[step] & 0x1));
-+				gpio_set_value(motor->pdata->motor_st4_gpio, motor_coil_level(step_8[step] & 0x1));
+-				gpio_direction_output(motor->pdata->motor_st4_gpio, step_8[step] & 0x1);
++				gpio_set_value(motor->pdata->motor_st4_gpio, step_8[step] & 0x1);
  		}else{
  			if (motor->pdata->motor_st1_gpio)
--				gpio_direction_output(motor->pdata->motor_st1_gpio, motor_coil_level(0));
-+				gpio_set_value(motor->pdata->motor_st1_gpio, motor_coil_level(0));
+-				gpio_direction_output(motor->pdata->motor_st1_gpio, 0);
++				gpio_set_value(motor->pdata->motor_st1_gpio, 0);
  			if (motor->pdata->motor_st2_gpio)
--				gpio_direction_output(motor->pdata->motor_st2_gpio, motor_coil_level(0));
-+				gpio_set_value(motor->pdata->motor_st2_gpio, motor_coil_level(0));
+-				gpio_direction_output(motor->pdata->motor_st2_gpio, 0);
++				gpio_set_value(motor->pdata->motor_st2_gpio, 0);
  			if (motor->pdata->motor_st3_gpio)
--				gpio_direction_output(motor->pdata->motor_st3_gpio, motor_coil_level(0));
-+				gpio_set_value(motor->pdata->motor_st3_gpio, motor_coil_level(0));
+-				gpio_direction_output(motor->pdata->motor_st3_gpio, 0);
++				gpio_set_value(motor->pdata->motor_st3_gpio, 0);
  			if (motor->pdata->motor_st4_gpio)
--				gpio_direction_output(motor->pdata->motor_st4_gpio, motor_coil_level(0));
-+				gpio_set_value(motor->pdata->motor_st4_gpio, motor_coil_level(0));
+-				gpio_direction_output(motor->pdata->motor_st4_gpio, 0);
++				gpio_set_value(motor->pdata->motor_st4_gpio, 0);
  		}
  		if(motor->state == MOTOR_OPS_RESET){
  			motor->total_steps++;

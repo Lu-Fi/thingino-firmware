@@ -13,7 +13,8 @@
     },
     "wlan": {
       "pin": 57,
-      "active_low": true
+      "active_low": true,
+      "toggle": true
     }
   },
   "motors": {

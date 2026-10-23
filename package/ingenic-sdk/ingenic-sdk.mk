@@ -119,8 +119,13 @@ TARGET_MODULES_PATH = $(TARGET_DIR)/usr/lib/modules/$(KERNEL_VERSION)$(call qstr
 # dependency (above) so the tool exists when this runs.
 INGENIC_SDK_JCT = $(HOST_DIR)/bin/jct
 
+# Camera profile json (as upstream master: the target json carries no gpio section
+# while this package installs).
+INGENIC_SDK_CAMERA_JSON = $(BR2_EXTERNAL_THINGINO_PATH)/$(CAMERA_SUBDIR)/$(CAMERA)/thingino.json
+
+# 4.4 + thingino-button: the keys come from the device tree (inject-button-dt.sh), no gpio-userkeys module.
 define GENERATE_GPIO_USERKEYS_CONFIG
-	if [ -r $(TARGET_DIR)/etc/thingino.json ]; then \
+	if [ -r $(TARGET_DIR)/etc/thingino.json ] && { [ "$(KERNEL_VERSION)" != "4.4.94" ] || [ "$(BR2_PACKAGE_THINGINO_BUTTON)" != "y" ]; }; then \
 		if [ ! -x $(INGENIC_SDK_JCT) ]; then \
 			echo "ERROR: host jct tool missing: $(INGENIC_SDK_JCT)"; exit 1; \
 		fi; \
@@ -259,6 +264,13 @@ endef
 
 define INSTALL_AUDIO_SUPPORT
 	gpio_speaker=$(BR2_THINGINO_AUDIO_GPIO); \
+	spk_json=""; \
+	if [ -r $(INGENIC_SDK_CAMERA_JSON) ] && [ -x $(INGENIC_SDK_JCT) ]; then \
+		spk_json=$$($(INGENIC_SDK_JCT) $(INGENIC_SDK_CAMERA_JSON) get gpio.speaker.pin 2>/dev/null); \
+		[ -n "$$spk_json" ] || spk_json=$$($(INGENIC_SDK_JCT) $(INGENIC_SDK_CAMERA_JSON) get gpio.speaker 2>/dev/null); \
+		case "$$spk_json" in "" | *[!0-9]*) spk_json="" ;; esac; \
+	fi; \
+	[ -z "$$spk_json" ] || gpio_speaker=$$spk_json; \
 	if [ -z "$$gpio_speaker" ]; then \
 		spk_gpio=-1; \
 		spk_level=-1; \

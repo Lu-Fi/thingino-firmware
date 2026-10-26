@@ -39,6 +39,26 @@ ifeq ($(SOC_FAMILY),t41)
 OPENIMP_T41_HEADERS = $(THINGINO_RAPTOR_HAL_DIR)/ingenic-headers/T41/1.2.0/zh
 endif
 
+ifeq ($(BR2_PACKAGE_OPENIMP_APITEST),y)
+ifeq ($(filter t40 t41,$(SOC_FAMILY)),)
+OPENIMP_DEPENDENCIES += thingino-raptor-hal
+endif
+OPENIMP_APITEST_SOC = $(shell echo $(SOC_FAMILY) | tr a-z A-Z)
+
+# Device test app (tools/apitest): built against the libimp built above, vendor headers from thingino-raptor-hal.
+define OPENIMP_BUILD_APITEST
+	$(TARGET_MAKE_ENV) LC_ALL=C \
+		$(MAKE) -C $(@D) apitest \
+			PLATFORM=$(OPENIMP_PLATFORM) APITEST_SOC=$(OPENIMP_APITEST_SOC) \
+			TOOLCHAIN_PREFIX=$(OPENIMP_TOOLCHAIN_PREFIX) \
+			APITEST_HEADERS=$(THINGINO_RAPTOR_HAL_DIR)/ingenic-headers
+endef
+define OPENIMP_INSTALL_APITEST
+	$(INSTALL) -D -m 0755 $(OPENIMP_OUTPUT_DIR)/openimp-apitest \
+		$(TARGET_DIR)/usr/bin/openimp-apitest
+endef
+endif
+
 define OPENIMP_BUILD_CMDS
 	$(TARGET_MAKE_ENV) \
 		LC_ALL=C \
@@ -58,6 +78,7 @@ define OPENIMP_BUILD_CMDS
 		T41_OUTPUT_DIR=$(OPENIMP_OUTPUT_DIR) \
 		T41_HEADERS=$(OPENIMP_T41_HEADERS) \
 		$(@D)/build-for-device.sh $(OPENIMP_PLATFORM)
+	$(OPENIMP_BUILD_APITEST)
 endef
 
 define OPENIMP_INSTALL_STAGING_CMDS
@@ -80,6 +101,7 @@ define OPENIMP_INSTALL_TARGET_CMDS
 		$(TARGET_DIR)/etc/init.d/S30openimp-tuning
 	$(INSTALL) -D -m 0644 $(OPENIMP_PKGDIR)/files/openimp-tuning.conf \
 		$(TARGET_DIR)/etc/openimp-tuning.conf
+	$(OPENIMP_INSTALL_APITEST)
 endef
 
 define OPENIMP_FINALIZE_TARGET

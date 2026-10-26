@@ -34,3 +34,18 @@ config BR2_PACKAGE_OPENIMP
 
 	  https://github.com/Lu-Fi/openimp
 	  (open-stack fork of https://github.com/opensensor/openimp)
+
+config BR2_PACKAGE_OPENIMP_APITEST
+	bool "openimp-apitest (device test app)"
+	depends on BR2_PACKAGE_OPENIMP
+	default n
+	help
+	  Build and install /usr/bin/openimp-apitest, the OpenIMP device test
+	  app: one binary that calls every vendor IMP/SU function of this SoC
+	  (areas sys, fs, enc, osd, ivs, audio, isp, su, cases, picture) and
+	  writes a JSON report (--json FILE) with one verdict per function.
+	  About 200 KB; needs the vendor headers of thingino-raptor-hal at
+	  build time. Off by default; for testers.
+
+	  Run it with the streamer stopped (see package/openimp/README.md,
+	  section "Device test app") and send the JSON report with the issue.

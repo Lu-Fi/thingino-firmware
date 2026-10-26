@@ -179,3 +179,21 @@ To contribute to OpenIMP:
 - [OpenIMP GitHub Repository](https://github.com/opensensor/openimp)
 - [Thingino Firmware](https://github.com/thingino/firmware)
 - [Buildroot Documentation](https://buildroot.org/downloads/manual/manual.html)
+
+## Device test app (openimp-apitest)
+
+Enable `BR2_PACKAGE_OPENIMP_APITEST` (menuconfig: OpenIMP, "openimp-apitest (device test app)"; default off). The image then
+contains `/usr/bin/openimp-apitest`, one binary that tests every vendor IMP/SU function of the SoC against the libimp on the camera.
+Run it with the streamer stopped (it owns the ISP, FrameSource and the encoder; it plays no sound and writes no flash):
+
+```
+/etc/init.d/S95timps stop                # the streamer init script of the image
+export APITEST_AO=0                      # no speaker call at all
+openimp-apitest --json /tmp/apitest.json SENSOR I2C_ADDR W H sys,fs,enc,osd,ivs,audio,isp,su,cases
+scp root@CAMERA:/tmp/apitest.json .      # then: rm /tmp/apitest.json; reboot or restart the streamer
+```
+
+`SENSOR I2C_ADDR W H` are the sensor name, its I2C address and the sensor size (for example `sc5336 0x30 2592 1944`). The run
+takes 2 to 5 minutes. Send `apitest.json` with the issue or pull request: it holds one verdict (PASS, FAIL, RT = round trip only,
+NA = not exported, SKIP = deliberately not run) with the detail for every function. `openimp-apitest --areas` and `--cases` list
+the areas and the case names. Source: `tools/apitest` in OpenIMP.

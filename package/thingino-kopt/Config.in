@@ -502,7 +502,8 @@ config BR2_THINGINO_DIAG_LASTPANIC
 	  reason, uptime bucket and epc (or comm) go to RTC RTCSAR, which
 	  survives the WDT reset (DRAM and CPM CPSPR do not), plus an unproven
 	  CP0 copy with ra/sp. /proc/diag_lastpanic shows the previous
-	  record; S02resetcause logs it. Also enables KALLSYMS so the record
-	  is resolved to function+offset on the camera. Local test builds only.
+	  record; S02resetcause logs it. KALLSYMS stays off (it changes sizeof(struct
+	  module) and breaks every prebuilt module); resolve the logged addresses
+	  on the host with nm of the build's vmlinux. Local test builds only.
 
 endmenu

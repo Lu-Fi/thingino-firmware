@@ -30,7 +30,7 @@ diff -urN a/arch/mips/kernel/cpu-probe.c b/arch/mips/kernel/cpu-probe.c
 diff -urN a/arch/mips/xburst/common/diag_lastpanic.c b/arch/mips/xburst/common/diag_lastpanic.c
 --- a/arch/mips/xburst/common/diag_lastpanic.c	1970-01-01 01:00:00.000000000 +0100
 +++ b/arch/mips/xburst/common/diag_lastpanic.c	2026-10-31 14:02:53.208857233 +0100
-@@ -0,0 +1,435 @@
+@@ -0,0 +1,496 @@
 +/*
 + * Reset-surviving record of the last kernel death (diagnostics only,
 + * CONFIG_JZ_DIAG_LASTPANIC, T23/T31).
@@ -108,7 +108,18 @@ diff -urN a/arch/mips/xburst/common/diag_lastpanic.c b/arch/mips/xburst/common/d
 +static struct {
 +	int done;
 +	u32 errorepc, epc, elo0, elo1, entryhi, rtcsar, rtccr, rsr;
++	u32 rtcsar_early, rtccr_early, wrdy_early;	/* cpu_probe time */
++	u32 rtcsar_late, rtccr_late;			/* core_initcall time */
++	int clr_rc;
++	u32 clr_rb;
 +} boot;
++
++/* status of the last RTC write attempt (shown in /proc, no console needed) */
++static struct {
++	u32 stage, rtccr0, rtccr1, wenr, rb, reg, val;
++	int rc;
++	u32 ok, fail, skip_ae, n;
++} lw;
 +
 +static u32 xor8(u32 v)
 +{
@@ -207,18 +218,43 @@ diff -urN a/arch/mips/xburst/common/diag_lastpanic.c b/arch/mips/xburst/common/d
 +{
 +	int i;
 +
++	lw.n++;
++	lw.reg = reg;
++	lw.val = val;
++	lw.rtccr0 = DREG(D_RTCCR);
++	lw.stage = 1;
 +	if (!rtc_ready())
-+		return -1;
++		goto fail;
 +	DREG(D_WENR) = 0xa55a;
++	lw.stage = 2;
++	if (!rtc_ready())
++		goto fail;
 +	for (i = 0; i < 200000; i++)
 +		if (DREG(D_WENR) & WENR_WEN)
 +			break;
-+	if (!(DREG(D_WENR) & WENR_WEN) || !rtc_ready())
-+		return -1;
-+	DREG(reg) = val;
++	lw.wenr = DREG(D_WENR);
++	if (!(lw.wenr & WENR_WEN))
++		goto fail;
++	lw.stage = 3;
 +	if (!rtc_ready())
-+		return -1;
-+	return DREG(reg) == val ? 0 : -1;
++		goto fail;
++	DREG(reg) = val;
++	lw.stage = 4;
++	if (!rtc_ready())
++		goto fail;
++	lw.stage = 5;
++	lw.rb = DREG(reg);
++	lw.rtccr1 = DREG(D_RTCCR);
++	if (lw.rb != val)
++		goto fail;
++	lw.stage = 0;
++	lw.rc = 0;
++	lw.ok++;
++	return 0;
++fail:
++	lw.rc = -1;
++	lw.fail++;
++	return -1;
 +}
 +
 +static void make_word(u32 payload24)
@@ -232,6 +268,8 @@ diff -urN a/arch/mips/xburst/common/diag_lastpanic.c b/arch/mips/xburst/common/d
 +{
 +	if (!(DREG(D_RTCCR) & RTCCR_AE))
 +		rtc_write(D_RTCSAR, rec.word);
++	else
++		lw.skip_ae++;
 +}
 +
 +/* optional channel: only with IRQs off on a path that never returns */
@@ -335,7 +373,10 @@ diff -urN a/arch/mips/xburst/common/diag_lastpanic.c b/arch/mips/xburst/common/d
 +	boot.elo0 = read_c0_entrylo0();
 +	boot.elo1 = read_c0_entrylo1();
 +	boot.entryhi = read_c0_entryhi();
-+	boot.rtcsar = DREG(D_RTCSAR);
++	boot.rtccr_early = DREG(D_RTCCR);
++	boot.wrdy_early = rtc_ready();	/* bounded wait: RTC reads may need WRDY after a reset */
++	boot.rtcsar_early = DREG(D_RTCSAR);
++	boot.rtcsar = boot.rtcsar_early;
 +	boot.rtccr = DREG(D_RTCCR);
 +	boot.rsr = DREG(D_RSR);
 +}
@@ -367,6 +408,12 @@ diff -urN a/arch/mips/xburst/common/diag_lastpanic.c b/arch/mips/xburst/common/d
 +	seq_printf(m, "raw rtcsar=0x%08x rtccr=0x%08x rsr=0x%08x errorepc=0x%08x c0_epc=0x%08x c0_entrylo0=0x%08x c0_entrylo1=0x%08x c0_entryhi=0x%08x\n",
 +		   boot.rtcsar, boot.rtccr, boot.rsr, boot.errorepc,
 +		   boot.epc, boot.elo0, boot.elo1, boot.entryhi);
++	seq_printf(m, "rtc early_sar=0x%08x early_cr=0x%08x early_wrdy=%u late_sar=0x%08x late_cr=0x%08x clear_rc=%d clear_rb=0x%08x\n",
++		   boot.rtcsar_early, boot.rtccr_early, boot.wrdy_early,
++		   boot.rtcsar_late, boot.rtccr_late, boot.clr_rc, boot.clr_rb);
++	seq_printf(m, "lastwrite n=%u ok=%u fail=%u skip_ae=%u stage=%u rc=%d reg=0x%08x val=0x%08x rb=0x%08x cr0=0x%08x cr1=0x%08x wenr=0x%08x now_sar=0x%08x now_cr=0x%08x\n",
++		   lw.n, lw.ok, lw.fail, lw.skip_ae, lw.stage, lw.rc, lw.reg, lw.val,
++		   lw.rb, lw.rtccr0, lw.rtccr1, lw.wenr, DREG(D_RTCSAR), DREG(D_RTCCR));
 +	seq_printf(m, "errorepc %pS\n", (void *)boot.errorepc);
 +	if (!valid) {
 +		seq_printf(m, "record none\n");
@@ -426,6 +473,12 @@ diff -urN a/arch/mips/xburst/common/diag_lastpanic.c b/arch/mips/xburst/common/d
 +		*diag_null = 0xd1a9;
 +	} else if (!strncmp(b, "panic", 5)) {
 +		panic("diag_lastpanic test panic");
++	} else if (!strncmp(b, "rtctest", 7)) {
++		u32 v = 0x7e570000 | (lw.n & 0xffff);
++		int rc = rtc_write(D_RTCSAR, v);
++
++		pr_info("diag_lastpanic: rtctest wrote 0x%08x rc=%d readback 0x%08x stage=%u cr0=0x%08x cr1=0x%08x wenr=0x%08x\n",
++			v, rc, DREG(D_RTCSAR), lw.stage, lw.rtccr0, lw.rtccr1, lw.wenr);
 +	} else if (!strncmp(b, "selftest", 8)) {
 +		rec.reason = R_SELFTEST;
 +		rec.up_s = uptime_s();
@@ -436,8 +489,8 @@ diff -urN a/arch/mips/xburst/common/diag_lastpanic.c b/arch/mips/xburst/common/d
 +		rec.elo1 = enc_sp(0x8123abc8);
 +		rec.valid = 1;
 +		store_rtc();	/* CP0 follows in jz_wdt_restart() */
-+		pr_info("diag_lastpanic: selftest word 0x%08x, rtcsar readback 0x%08x; now reboot -f\n",
-+			rec.word, DREG(D_RTCSAR));
++		pr_info("diag_lastpanic: selftest word 0x%08x, rtcsar readback 0x%08x stage=%u rc=%d cr0=0x%08x cr1=0x%08x wenr=0x%08x skip_ae=%u; now reboot -f\n",
++			rec.word, DREG(D_RTCSAR), lw.stage, lw.rc, lw.rtccr0, lw.rtccr1, lw.wenr, lw.skip_ae);
 +	} else {
 +		return -EINVAL;
 +	}
@@ -455,12 +508,20 @@ diff -urN a/arch/mips/xburst/common/diag_lastpanic.c b/arch/mips/xburst/common/d
 +static int __init diag_lastpanic_init(void)
 +{
 +	/* consume the previous record so a later reset without one reads 0 */
-+	if (boot.rtcsar && !(DREG(D_RTCCR) & RTCCR_AE))
-+		rtc_write(D_RTCSAR, 0);
++	boot.rtccr_late = DREG(D_RTCCR);
++	boot.rtcsar_late = DREG(D_RTCSAR);
++	if (boot.rtcsar_late != boot.rtcsar_early)
++		boot.rtcsar = boot.rtcsar_late;	/* early read was not valid: decode the late one */
++	if (boot.rtcsar_late && !(boot.rtccr_late & RTCCR_AE)) {
++		boot.clr_rc = rtc_write(D_RTCSAR, 0);
++		boot.clr_rb = DREG(D_RTCSAR);
++	}
 +	register_die_notifier(&diag_die_nb);
 +	atomic_notifier_chain_register(&panic_notifier_list, &diag_panic_nb);
 +	register_reboot_notifier(&diag_reboot_nb);
 +	proc_create("diag_lastpanic", 0600, NULL, &diag_fops);
++	pr_info("diag_lastpanic: early_sar=0x%08x late_sar=0x%08x clear_rc=%d clear_rb=0x%08x stage=%u cr0=0x%08x cr1=0x%08x wenr=0x%08x\n",
++		boot.rtcsar_early, boot.rtcsar_late, boot.clr_rc, boot.clr_rb, lw.stage, lw.rtccr0, lw.rtccr1, lw.wenr);
 +	pr_info("diag_lastpanic: prev rtcsar=0x%08x rtccr=0x%08x c0_epc=0x%08x entrylo0=0x%08x entrylo1=0x%08x entryhi=0x%08x\n",
 +		boot.rtcsar, boot.rtccr, boot.epc, boot.elo0, boot.elo1, boot.entryhi);
 +	return 0;

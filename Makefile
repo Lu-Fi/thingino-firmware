@@ -143,6 +143,9 @@ THINGINO_USER_OVERLAY_DIRS += $(wildcard $(THINGINO_USER_DEVICE_DIR)/overlay)
 THINGINO_USER_OPT_DIRS += $(wildcard $(THINGINO_USER_DEVICE_DIR)/opt)
 endif
 
+# local diagnostics builds: DIAG_FRAGMENT=configs/diag/diag.fragment is applied after the user fragments
+THINGINO_USER_FRAGMENT_FILES += $(wildcard $(DIAG_FRAGMENT))
+
 export THINGINO_USER_COMMON_DIR
 export THINGINO_USER_CAMERA_DIR
 export THINGINO_USER_DEVICE_DIR

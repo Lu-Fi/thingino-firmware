@@ -1,39 +1,85 @@
 #!/bin/sh
 # Reset diagnostics (BR2_THINGINO_DIAG): log why the last boot happened.
-#  cppsr 0x3535 = kernel-initiated restart (reboot or panic); 0 = no kernel restart before reset
-#  (WDT bite, hard stall, power cycle). rsr = CPM reset status register (raw).
-# Then save and log what pstore kept (dmesg-ramoops-*, console-ramoops-*).
+#  /proc/diag_lastpanic (kernel JZ_DIAG_LASTPANIC): record of the previous kernel death/restart,
+#  kept in registers that survive the WDT reset (CPM CPSPR, RTC RTCSAR, CP0 EPC/EntryLo0/1/EntryHi).
+#  Summary line in syslog (tag resetcause):
+#   PANIC reason=oops epc=0x... <func+off/size> ra=0x... <func+off/size> sp=0x... up_min=N
+#   PANIC reason=hung_task|lockup|panic msg="..." comm="..." up_min=N
+#   RESTART reason=reboot|restart comm="..." pid=N ppid=N up_min=N   (clean kernel restart, no panic)
+#   NORECORD rsr=0x...   (no kernel restart before the reset: WDT bite / power loss / hard hang)
+#  rsr = CPM RSR 0x10000008: bit0 power-on, bit1 WDT, bit3 hibernate (T21 PM; same CPM on T23/T31).
+# The same lines are logged again after 120 s (remote syslog is reachable then, module symbols loaded).
+P=/proc/diag_lastpanic
+D=/tmp/diag-lastreset
+
+rsr_txt() {
+	r=$(($1))
+	t=""
+	[ $((r & 1)) -ne 0 ] && t="$t poweron"
+	[ $((r & 2)) -ne 0 ] && t="$t wdt"
+	[ $((r & 8)) -ne 0 ] && t="$t hibernate"
+	echo "${t# }"
+}
+
+summary() {
+	f=$1
+	raw=$(grep '^raw ' "$f")
+	rsr=$(echo "$raw" | sed -n 's/.* rsr=\(0x[0-9a-f]*\).*/\1/p')
+	rec=$(grep '^record ' "$f")
+	if [ -z "$rec" ] || [ "$rec" = "record none" ]; then
+		echo "NORECORD rsr=$rsr ($(rsr_txt ${rsr:-0})) $(grep '^errorepc ' "$f")"
+		return
+	fi
+	reason=$(echo "$rec" | sed -n 's/.* reason=\([a-z_]*\).*/\1/p')
+	up=$(echo "$rec" | sed -n 's/.* uptime_min=\([0-9+]*\).*/\1/p')
+	ok=$(echo "$rec" | sed -n 's/record \(cpspr_ok=[01] cp0_ok=[01] rtcsar_used=[01]\).*/\1/p')
+	case "$reason" in
+	reboot|restart) kind=RESTART ;;
+	selftest) kind=SELFTEST ;;
+	*) kind=PANIC ;;
+	esac
+	if grep -q '^epc=' "$f"; then
+		regs=$(grep '^epc=' "$f")
+		esym=$(sed -n 's/^epc \(.*\)/\1/p' "$f")
+		rsym=$(sed -n 's/^ra \(.*\)/\1/p' "$f")
+		set -- $regs
+		echo "$kind reason=$reason $1 <$esym> $2 <$rsym> $3 up_min=$up rsr=$rsr $ok"
+	else
+		echo "$kind reason=$reason $(grep -E '^(msg|comm)=' "$f") up_min=$up rsr=$rsr $ok"
+	fi
+}
+
+report() {
+	tag=$1
+	if [ -r $P ]; then
+		f=$D/lastpanic; [ -n "$tag" ] && f=$D/lastpanic-late
+		cat $P > $f 2>/dev/null
+		while IFS= read -r l; do logger -t resetcause "$tag$l"; done < $f
+		logger -p user.crit -t resetcause "$tag$(summary $f)"
+	else
+		CPPSR=$(devmem 0x10000034 32 2>/dev/null)
+		RSR=$(devmem 0x10000008 32 2>/dev/null)
+		logger -t resetcause "${tag}no $P (kernel without JZ_DIAG_LASTPANIC) cpspr=$CPPSR rsr=$RSR ($(rsr_txt ${RSR:-0}))"
+	fi
+}
+
 case "$1" in
 start)
-	CPPSR=$(devmem 0x10000034 32 2>/dev/null)
-	RSR=$(devmem 0x10000008 32 2>/dev/null)
-	logger -t resetcause "cppsr=$CPPSR rsr=$RSR up=$(cut -d' ' -f1 /proc/uptime)"
-	# clear the kernel-restart signature so the next boot sees only its own predecessor
-	devmem 0x10000038 32 0x5a5a; devmem 0x10000034 32 0; devmem 0x10000038 32 0
-	D=/tmp/diag-lastreset
 	mkdir -p $D
-	echo "cppsr=$CPPSR rsr=$RSR" > $D/regs
-	if [ -d /sys/fs/pstore ]; then
-		[ -e /sys/fs/pstore/console-ramoops-0 ] || mount -t pstore pstore /sys/fs/pstore 2>/dev/null
-		for f in /sys/fs/pstore/*; do
-			[ -f "$f" ] || continue
-			cp "$f" "$D/" 2>/dev/null
-			logger -t resetcause "pstore $(basename "$f") $(wc -c < "$f") bytes"
-		done
-		if [ -f "$D/console-ramoops-0" ]; then
-			tail -n 60 "$D/console-ramoops-0" | while IFS= read -r l; do logger -t pstore-console "$l"; done
-		fi
-		for f in "$D"/dmesg-ramoops-*; do
-			[ -f "$f" ] || continue
-			head -n 80 "$f" | while IFS= read -r l; do logger -t pstore-dmesg "$l"; done
-		done
-		# keep a copy over the next reboot (flash, written only after a reset that left data, max ~300 KB)
-		if [ -w /opt ] && ls "$D"/*-ramoops-* >/dev/null 2>&1; then
-			rm -rf /opt/diag-lastreset; mkdir -p /opt/diag-lastreset && cp "$D"/* /opt/diag-lastreset/ 2>/dev/null
-		fi
-	else
-		logger -t resetcause "no /sys/fs/pstore (kernel without pstore)"
+	logger -t resetcause "boot up=$(cut -d' ' -f1 /proc/uptime)"
+	report ""
+	# keep the record over the next reboot (only when there is one; rare flash write)
+	if [ -w /opt ] && grep -q '^record cpspr' $D/lastpanic 2>/dev/null; then
+		mkdir -p /opt/diag-lastreset && cp $D/lastpanic /opt/diag-lastreset/lastpanic-$(date +%Y%m%d%H%M%S 2>/dev/null) 2>/dev/null
+		ls -1t /opt/diag-lastreset/lastpanic-* 2>/dev/null | tail -n +6 | xargs -r rm -f
 	fi
+	# diag1 compatibility: pstore files, if a ramoops kernel left any
+	if [ -d /sys/fs/pstore ] && ls /sys/fs/pstore/* >/dev/null 2>&1; then
+		for f in /sys/fs/pstore/*; do
+			cp "$f" $D/ 2>/dev/null && logger -t resetcause "pstore $(basename "$f") $(wc -c < "$f") bytes"
+		done
+	fi
+	( sleep 120; report "late " ) </dev/null >/dev/null 2>&1 &
 	;;
 stop|restart|reload) ;;
 *) echo "Usage: $0 {start|stop|restart}"; exit 1 ;;

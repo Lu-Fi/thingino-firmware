@@ -1,7 +1,7 @@
 Diagnostics (CONFIG_JZ_DIAG_LASTPANIC, default n): keep the last panic/oops/restart
-location in registers that survive the WDT reset (CPM CPSPR, RTC RTCSAR,
-CP0 EPC/EntryLo0/EntryLo1/EntryHi) and show it in /proc/diag_lastpanic.
-T23/T31 only; no effect unless the option is enabled.
+reason and epc in RTC RTCSAR, which survives the WDT reset (DRAM and CPM CPSPR do not),
+plus an unproven second copy with ra/sp in CP0 EPC/EntryLo0/EntryLo1/EntryHi;
+show it in /proc/diag_lastpanic. T23/T31 only; no effect unless enabled.
 
 diff -urN a/arch/mips/kernel/cpu-probe.c b/arch/mips/kernel/cpu-probe.c
 --- a/arch/mips/kernel/cpu-probe.c	2026-10-31 13:42:48.483548086 +0100
@@ -29,39 +29,32 @@ diff -urN a/arch/mips/kernel/cpu-probe.c b/arch/mips/kernel/cpu-probe.c
  			print_ip_sym(errorpc);
 diff -urN a/arch/mips/xburst/common/diag_lastpanic.c b/arch/mips/xburst/common/diag_lastpanic.c
 --- a/arch/mips/xburst/common/diag_lastpanic.c	1970-01-01 01:00:00.000000000 +0100
-+++ b/arch/mips/xburst/common/diag_lastpanic.c	2026-10-31 13:44:28.953855723 +0100
-@@ -0,0 +1,443 @@
++++ b/arch/mips/xburst/common/diag_lastpanic.c	2026-10-31 14:02:53.208857233 +0100
+@@ -0,0 +1,435 @@
 +/*
 + * Reset-surviving record of the last kernel death (diagnostics only,
-+ * CONFIG_JZ_DIAG_LASTPANIC).
++ * CONFIG_JZ_DIAG_LASTPANIC, T23/T31).
 + *
-+ * DRAM does not survive the WDT reset on these SoCs, so pstore/ramoops cannot
-+ * work. This keeps a few words in places that a WDT reset does not clear:
++ * DRAM and CPM CPSPR do not survive the WDT reset (measured on T31L);
++ * RTC RTCSAR (0x10003008, RTC domain) does (measured on T31L). The alarm is
++ * unused (no RTC_CLASS), RTCSAR is written only while RTCCR.AE = 0.
 + *
-+ *   CPM CPSPR  0x10000034  0xD2 magic | flags | reason | uptime minutes
-+ *                          (documented "not initialized by power on and WDT
-+ *                          reset"; low 16 bits never 0x1a1a/0x0666, bits 22:18
-+ *                          never set - those are boot signatures)
-+ *   RTC RTCSAR 0x10003008  oops: sp; panic: comm; restart: pid | ppid << 16
-+ *                          (RTC domain, WDT reset does not change it; written
-+ *                          only while the RTC alarm is disabled, RTCCR.AE = 0)
-+ *   CP0 EPC     $14        oops: epc; panic: message[0..3]; restart: comm[0..3]
-+ *   CP0 EntryLo0 $2        oops: ra (word offset, 64 MB kseg0/kseg2 window);
-+ *                          panic: message[4..6]; restart: comm[4..6]
-+ *   CP0 EntryLo1 $3        oops: sp (64 MB kseg0 window); panic: comm[0..2];
-+ *                          restart: pid
-+ *   CP0 EntryHi $10        uptime seconds (19 bit) << 13 | xor8 checksum
++ * Primary channel, RTCSAR (one 32-bit word, 0 = no record):
++ *   [31:28] reason (1..8)
++ *   [27]    jz_wdt_restart() was reached (clean restart after the record)
++ *   [26:24] uptime bucket: <1m <10m <1h <6h <24h <3d <7d >=7d
++ *   [23:0]  oops: [23] kseg2 (module) flag, [22:0] epc word offset in the
++ *           32 MB window at 0x80000000 / 0xc0000000;
++ *           panic/reboot/restart: first 3 chars of current->comm
 + *
-+ * The CP0 words rely on the core keeping its state over the WDT reset, the
-+ * same thing the boot-time "CPU0 RESET ERROR PC" print relies on. U-Boot SPL
-+ * and U-Boot do not write these four CP0 registers; the kernel writes them
-+ * only after cpu_probe(), where they are captured. The CP0 words are written
-+ * last, from jz_wdt_restart(), because any TLB exception after the panic
-+ * notifier would overwrite EPC.
++ * Optional second channel, NOT proven (inferred from ErrorEPC surviving the
++ * reset): CP0 EPC = epc (full) or text, EntryLo0 = ra (24-bit word offset +
++ * kseg2 flag) or text, EntryLo1 = sp >> 3, EntryHi = uptime s << 13 | xor8
++ * checksum. Written only with IRQs off on the way to the reset (panic
++ * notifier, jz_wdt_restart()); captured in cpu_probe_ingenic().
 + *
-+ * /proc/diag_lastpanic: read = decoded record of the previous boot,
-+ * write "oops" (NULL dereference), "panic", "selftest" (store a known pattern,
-+ * no reset; follow with reboot -f).
++ * /proc/diag_lastpanic: read = decoded previous record; write "oops",
++ * "panic", "selftest" (store a known record, no reset; then reboot -f).
 + */
 +#include <linux/kernel.h>
 +#include <linux/init.h>
@@ -80,8 +73,6 @@ diff -urN a/arch/mips/xburst/common/diag_lastpanic.c b/arch/mips/xburst/common/d
 +#include <asm/ptrace.h>
 +
 +#define DREG(a)		(*(volatile u32 *)(0xa0000000 | (a)))
-+#define D_CPSPR		0x10000034
-+#define D_CPSPPR	0x10000038
 +#define D_RSR		0x10000008
 +#define D_RTCCR		0x10003000
 +#define D_RTCSAR	0x10003008
@@ -91,32 +82,32 @@ diff -urN a/arch/mips/xburst/common/diag_lastpanic.c b/arch/mips/xburst/common/d
 +#define RTCCR_AE	(1 << 2)
 +#define WENR_WEN	(1u << 31)
 +
-+#define CPS_MAGIC	0xd2000000u
-+#define CPS_RTC		(1u << 23)	/* RTCSAR holds this record */
-+#define CPS_RESTART	(1u << 16)	/* jz_wdt_restart() was reached */
-+#define CPS_ONE		(1u << 15)	/* keeps the low half off boot signatures */
++#define W_RESTART	(1u << 27)
 +#define ELO_MARK	(1u << 25)
 +
 +enum {
-+	R_SELFTEST = 0, R_OOPS, R_PANIC, R_HUNG, R_LOCKUP, R_REBOOT,
-+	R_RESTART, R_OOPS_IRQ,
++	R_NONE = 0, R_OOPS, R_PANIC, R_HUNG, R_LOCKUP, R_REBOOT, R_RESTART,
++	R_OOPS_IRQ, R_SELFTEST,
 +};
-+static const char *const reason_name[8] = {
-+	"selftest", "oops", "panic", "hung_task", "lockup", "reboot",
-+	"restart", "oops_in_irq",
++static const char *const reason_name[16] = {
++	"none", "oops", "panic", "hung_task", "lockup", "reboot", "restart",
++	"oops_in_irq", "selftest",
++};
++static const char *const up_name[8] = {
++	"<1m", "1m-10m", "10m-1h", "1h-6h", "6h-24h", "1d-3d", "3d-7d", ">=7d",
 +};
 +
 +struct diag_rec {
 +	int valid;
 +	u32 reason, up_s;
-+	u32 epc, elo0, elo1, rtc;	/* words as stored */
-+	u32 cps;
++	u32 word;			/* RTCSAR */
++	u32 epc, elo0, elo1;		/* CP0 (optional channel) */
 +};
 +static struct diag_rec rec;
 +
 +static struct {
 +	int done;
-+	u32 errorepc, epc, elo0, elo1, entryhi, cpspr, rtcsar, rtccr, rsr;
++	u32 errorepc, epc, elo0, elo1, entryhi, rtcsar, rtccr, rsr;
 +} boot;
 +
 +static u32 xor8(u32 v)
@@ -124,13 +115,38 @@ diff -urN a/arch/mips/xburst/common/diag_lastpanic.c b/arch/mips/xburst/common/d
 +	return (v ^ (v >> 8) ^ (v >> 16) ^ (v >> 24)) & 0xff;
 +}
 +
-+static u32 csum(u32 cps, u32 epc, u32 elo0, u32 elo1, u32 rtc)
++static u32 csum(u32 word, u32 epc, u32 elo0, u32 elo1)
 +{
-+	return xor8((cps & ~CPS_RESTART) ^ epc ^ (elo0 & 0x3ffffff) ^
-+		    (elo1 & 0x3ffffff) ^ rtc) ^ 0x5a;
++	return xor8((word & ~W_RESTART) ^ epc ^ (elo0 & 0x3ffffff) ^
++		    (elo1 & 0x3ffffff)) ^ 0x5a;
 +}
 +
-+static u32 enc_addr(u32 a)	/* 24-bit word offset + kseg2 flag */
++static u32 up_bucket(u32 s)
++{
++	static const u32 lim[7] = { 60, 600, 3600, 21600, 86400, 259200, 604800 };
++	u32 i;
++
++	for (i = 0; i < 7; i++)
++		if (s < lim[i])
++			return i;
++	return 7;
++}
++
++static u32 enc_epc23(u32 a)	/* [23] kseg2, [22:0] word offset (32 MB) */
++{
++	u32 v = (a & 0x01fffffc) >> 2;
++
++	if ((a & 0xe0000000) == 0xc0000000)
++		v |= 1 << 23;
++	return v;
++}
++
++static u32 dec_epc23(u32 v)
++{
++	return ((v & (1 << 23)) ? 0xc0000000 : 0x80000000) | ((v & 0x7fffff) << 2);
++}
++
++static u32 enc_addr(u32 a)	/* CP0: 24-bit word offset + kseg2 flag */
 +{
 +	u32 v = (a & 0x03fffffc) >> 2;
 +
@@ -169,7 +185,7 @@ diff -urN a/arch/mips/xburst/common/diag_lastpanic.c b/arch/mips/xburst/common/d
 +
 +static u32 pack3(const char *s)
 +{
-+	return (pack4(s) >> 8) | ELO_MARK;
++	return pack4(s) >> 8;
 +}
 +
 +static u32 uptime_s(void)
@@ -205,63 +221,39 @@ diff -urN a/arch/mips/xburst/common/diag_lastpanic.c b/arch/mips/xburst/common/d
 +	return DREG(reg) == val ? 0 : -1;
 +}
 +
-+static void cpspr_write(u32 val)
++static void make_word(u32 payload24)
 +{
-+	int t;
-+	volatile int i;
-+
-+	for (t = 0; t < 3; t++) {
-+		DREG(D_CPSPPR) = 0x5a5a;
-+		for (i = 0; i < 0x3ff; i++)
-+			;
-+		DREG(D_CPSPR) = val;
-+		DREG(D_CPSPPR) = 0xa5a5;
-+		if (DREG(D_CPSPR) == val)
-+			break;
-+	}
++	rec.word = ((rec.reason & 0xf) << 28) | (up_bucket(rec.up_s) << 24) |
++		   (payload24 & 0xffffff) | (rec.word & W_RESTART);
 +}
 +
-+/* CPM/RTC words: safe to write at any time, written as soon as a record exists */
-+static void store_mmio(void)
++/* primary channel: safe to write at any time */
++static void store_rtc(void)
 +{
-+	u32 up_min = rec.up_s / 60;
-+
-+	if (up_min > 0xfff)
-+		up_min = 0xfff;
-+	rec.cps = CPS_MAGIC | CPS_ONE | ((rec.reason & 7) << 12) | up_min |
-+		  (rec.cps & CPS_RESTART);
-+	if (!(DREG(D_RTCCR) & RTCCR_AE) && rtc_write(D_RTCSAR, rec.rtc) == 0)
-+		rec.cps |= CPS_RTC;
-+	cpspr_write(rec.cps);
++	if (!(DREG(D_RTCCR) & RTCCR_AE))
++		rtc_write(D_RTCSAR, rec.word);
 +}
 +
-+/* CP0 words: rewritten at the very end (EPC changes on every exception) */
++/* optional channel: only with IRQs off on a path that never returns */
 +static void store_cp0(void)
 +{
-+	u32 cs = csum(rec.cps, rec.epc, rec.elo0, rec.elo1,
-+		      (rec.cps & CPS_RTC) ? rec.rtc : 0);
-+
 +	write_c0_epc(rec.epc);
 +	write_c0_entrylo0(rec.elo0);
 +	write_c0_entrylo1(rec.elo1);
-+	write_c0_entryhi(((rec.up_s & 0x7ffff) << 13) | cs);
++	write_c0_entryhi(((rec.up_s & 0x7ffff) << 13) |
++			 csum(rec.word, rec.epc, rec.elo0, rec.elo1));
 +}
 +
 +static void fill_comm(u32 reason)
 +{
 +	struct task_struct *p = current;
-+	u32 pid = task_pid_nr(p), ppid = 0;
 +
-+	rcu_read_lock();
-+	if (p->real_parent)
-+		ppid = task_pid_nr(p->real_parent);
-+	rcu_read_unlock();
 +	rec.reason = reason;
 +	rec.up_s = uptime_s();
++	make_word(pack3(p->comm));
 +	rec.epc = pack4(p->comm);
-+	rec.elo0 = strlen(p->comm) > 4 ? pack3(p->comm + 4) : ELO_MARK;
-+	rec.elo1 = (pid & 0x7fffff) | ELO_MARK;
-+	rec.rtc = (pid & 0xffff) | (ppid << 16);
++	rec.elo0 = (strlen(p->comm) > 4 ? pack3(p->comm + 4) : 0) | ELO_MARK;
++	rec.elo1 = (task_pid_nr(p) & 0x7fffff) | ELO_MARK;
 +	rec.valid = 1;
 +}
 +
@@ -272,8 +264,8 @@ diff -urN a/arch/mips/xburst/common/diag_lastpanic.c b/arch/mips/xburst/common/d
 +	local_irq_disable();
 +	if (!rec.valid)
 +		fill_comm(R_RESTART);
-+	rec.cps |= CPS_RESTART;
-+	store_mmio();
++	rec.word |= W_RESTART;
++	store_rtc();
 +	store_cp0();
 +}
 +
@@ -286,13 +278,14 @@ diff -urN a/arch/mips/xburst/common/diag_lastpanic.c b/arch/mips/xburst/common/d
 +		return NOTIFY_DONE;
 +	rec.reason = in_interrupt() ? R_OOPS_IRQ : R_OOPS;
 +	rec.up_s = uptime_s();
++	rec.word = 0;
++	make_word(enc_epc23(regs->cp0_epc));
 +	rec.epc = regs->cp0_epc;
 +	rec.elo0 = enc_addr(regs->regs[31]);
 +	rec.elo1 = enc_sp(regs->regs[29]);
-+	rec.rtc = regs->regs[29];
 +	rec.valid = 1;
 +	/* CP0 only from panic/restart: die() may still sleep with IRQs on */
-+	store_mmio();
++	store_rtc();
 +	return NOTIFY_DONE;
 +}
 +
@@ -307,13 +300,13 @@ diff -urN a/arch/mips/xburst/common/diag_lastpanic.c b/arch/mips/xburst/common/d
 +			r = R_HUNG;
 +		else if (strstr(msg, "lockup") || strstr(msg, "LOCKUP"))
 +			r = R_LOCKUP;
++		rec.word = 0;
 +		fill_comm(r);
-+		rec.rtc = pack4(current->comm);
-+		rec.elo1 = pack3(current->comm);
 +		rec.epc = pack4(msg);
-+		rec.elo0 = strlen(msg) > 4 ? pack3(msg + 4) : ELO_MARK;
++		rec.elo0 = (strlen(msg) > 4 ? pack3(msg + 4) : 0) | ELO_MARK;
++		rec.elo1 = pack3(current->comm) | ELO_MARK;
 +	}
-+	store_mmio();
++	store_rtc();
 +	store_cp0();
 +	return NOTIFY_DONE;
 +}
@@ -322,7 +315,7 @@ diff -urN a/arch/mips/xburst/common/diag_lastpanic.c b/arch/mips/xburst/common/d
 +{
 +	if (!rec.valid) {
 +		fill_comm(R_REBOOT);
-+		store_mmio();
++		store_rtc();
 +	}
 +	return NOTIFY_DONE;
 +}
@@ -342,7 +335,6 @@ diff -urN a/arch/mips/xburst/common/diag_lastpanic.c b/arch/mips/xburst/common/d
 +	boot.elo0 = read_c0_entrylo0();
 +	boot.elo1 = read_c0_entrylo1();
 +	boot.entryhi = read_c0_entryhi();
-+	boot.cpspr = DREG(D_CPSPR);
 +	boot.rtcsar = DREG(D_RTCSAR);
 +	boot.rtccr = DREG(D_RTCCR);
 +	boot.rsr = DREG(D_RSR);
@@ -366,49 +358,51 @@ diff -urN a/arch/mips/xburst/common/diag_lastpanic.c b/arch/mips/xburst/common/d
 +
 +static int diag_show(struct seq_file *m, void *v)
 +{
-+	u32 cps = boot.cpspr;
-+	int cps_ok = (cps & 0xff008000) == (CPS_MAGIC | CPS_ONE) && !(cps & 0x7c0000);
-+	u32 rtcw = (cps_ok && (cps & CPS_RTC)) ? boot.rtcsar : 0;
-+	int cp0_ok = (boot.elo0 & ELO_MARK) && (boot.elo1 & ELO_MARK) &&
-+		     csum(cps, boot.epc, boot.elo0, boot.elo1, rtcw) == (boot.entryhi & 0xff);
-+	u32 reason = (cps >> 12) & 7;
++	u32 w = boot.rtcsar, reason = w >> 28;
++	int valid = reason >= R_OOPS && reason <= R_SELFTEST;
++	int cp0_ok = valid && (boot.elo0 & ELO_MARK) && (boot.elo1 & ELO_MARK) &&
++		     csum(w, boot.epc, boot.elo0, boot.elo1) == (boot.entryhi & 0xff);
++	int is_oops = reason == R_OOPS || reason == R_OOPS_IRQ || reason == R_SELFTEST;
 +
-+	seq_printf(m, "raw cpspr=0x%08x rtcsar=0x%08x rtccr=0x%08x rsr=0x%08x errorepc=0x%08x c0_epc=0x%08x c0_entrylo0=0x%08x c0_entrylo1=0x%08x c0_entryhi=0x%08x\n",
-+		   boot.cpspr, boot.rtcsar, boot.rtccr, boot.rsr, boot.errorepc,
++	seq_printf(m, "raw rtcsar=0x%08x rtccr=0x%08x rsr=0x%08x errorepc=0x%08x c0_epc=0x%08x c0_entrylo0=0x%08x c0_entrylo1=0x%08x c0_entryhi=0x%08x\n",
++		   boot.rtcsar, boot.rtccr, boot.rsr, boot.errorepc,
 +		   boot.epc, boot.elo0, boot.elo1, boot.entryhi);
 +	seq_printf(m, "errorepc %pS\n", (void *)boot.errorepc);
-+	if (!cps_ok && !cp0_ok) {
++	if (!valid) {
 +		seq_printf(m, "record none\n");
 +		return 0;
 +	}
-+	seq_printf(m, "record cpspr_ok=%d cp0_ok=%d rtcsar_used=%d reason=%s reached_restart=%d uptime_min=%u%s uptime_s_mod=%u\n",
-+		   cps_ok, cp0_ok, !!(cps_ok && (cps & CPS_RTC)),
-+		   cps_ok ? reason_name[reason] : "unknown",
-+		   cps_ok ? !!(cps & CPS_RESTART) : -1,
-+		   cps & 0xfff, (cps & 0xfff) == 0xfff ? "+" : "",
-+		   boot.entryhi >> 13);
-+	if (!cps_ok || reason == R_OOPS || reason == R_OOPS_IRQ || reason == R_SELFTEST) {
-+		u32 ra = dec_addr(boot.elo0), sp = rtcw ? rtcw : dec_sp(boot.elo1);
++	seq_printf(m, "record reason=%s reached_restart=%d uptime=%s cp0_ok=%d",
++		   reason_name[reason], !!(w & W_RESTART),
++		   up_name[(w >> 24) & 7], cp0_ok);
++	if (cp0_ok)
++		seq_printf(m, " uptime_s_mod=%u", boot.entryhi >> 13);
++	seq_printf(m, "\n");
++	if (is_oops) {
++		u32 epc = cp0_ok ? boot.epc : dec_epc23(w & 0xffffff);
 +
-+		seq_printf(m, "epc=0x%08x ra=0x%08x sp=0x%08x\n", boot.epc, ra, sp);
-+		seq_printf(m, "epc %pS\nra %pS\n", (void *)boot.epc, (void *)ra);
-+	} else if (reason == R_REBOOT || reason == R_RESTART) {
-+		char c[8] = "";
-+
-+		get_chars(c, boot.epc, 4);
-+		get_chars(c, boot.elo0 & 0xffffff, 3);
-+		seq_printf(m, "comm=\"%s\" pid=%u ppid=%u\n", c,
-+			   rtcw ? rtcw & 0xffff : boot.elo1 & 0x7fffff, rtcw >> 16);
++		seq_printf(m, "epc=0x%08x", epc);
++		if (cp0_ok)
++			seq_printf(m, " ra=0x%08x sp=0x%08x", dec_addr(boot.elo0), dec_sp(boot.elo1));
++		seq_printf(m, "\nepc %pS\n", (void *)epc);
++		if (cp0_ok)
++			seq_printf(m, "ra %pS\n", (void *)dec_addr(boot.elo0));
 +	} else {
-+		char t[8] = "", c[8] = "";
++		char c[8] = "", t[8] = "";
 +
-+		get_chars(t, boot.epc, 4);
-+		get_chars(t, boot.elo0 & 0xffffff, 3);
-+		if (rtcw)
-+			get_chars(c, rtcw, 4);
-+		else
++		if (cp0_ok && (reason == R_REBOOT || reason == R_RESTART)) {
++			get_chars(c, boot.epc, 4);
++			get_chars(c, boot.elo0 & 0xffffff, 3);
++			seq_printf(m, "comm=\"%s\" pid=%u\n", c, boot.elo1 & 0x7fffff);
++		} else if (cp0_ok) {
++			get_chars(t, boot.epc, 4);
++			get_chars(t, boot.elo0 & 0xffffff, 3);
 +			get_chars(c, boot.elo1 & 0xffffff, 3);
-+		seq_printf(m, "msg=\"%s\" comm=\"%s\"\n", t, c);
++			seq_printf(m, "msg=\"%s\" comm=\"%s\"\n", t, c);
++		} else {
++			get_chars(c, w & 0xffffff, 3);
++			seq_printf(m, "comm=\"%s\"\n", c);
++		}
 +	}
 +	return 0;
 +}
@@ -435,14 +429,15 @@ diff -urN a/arch/mips/xburst/common/diag_lastpanic.c b/arch/mips/xburst/common/d
 +	} else if (!strncmp(b, "selftest", 8)) {
 +		rec.reason = R_SELFTEST;
 +		rec.up_s = uptime_s();
++		rec.word = 0;
++		make_word(enc_epc23(0x8012345c));
 +		rec.epc = 0xd1a9e9c0;
 +		rec.elo0 = enc_addr(0x8012345c);
 +		rec.elo1 = enc_sp(0x8123abc8);
-+		rec.rtc = 0x8123abc8;
 +		rec.valid = 1;
-+		store_mmio();	/* CP0 follows in jz_wdt_restart() */
-+		pr_info("diag_lastpanic: selftest stored cpspr=0x%08x (readback 0x%08x) rtcsar readback 0x%08x; now reboot -f\n",
-+			rec.cps, DREG(D_CPSPR), DREG(D_RTCSAR));
++		store_rtc();	/* CP0 follows in jz_wdt_restart() */
++		pr_info("diag_lastpanic: selftest word 0x%08x, rtcsar readback 0x%08x; now reboot -f\n",
++			rec.word, DREG(D_RTCSAR));
 +	} else {
 +		return -EINVAL;
 +	}
@@ -459,18 +454,15 @@ diff -urN a/arch/mips/xburst/common/diag_lastpanic.c b/arch/mips/xburst/common/d
 +
 +static int __init diag_lastpanic_init(void)
 +{
-+	/* consume the previous record so a later plain reset is not misread */
-+	if ((boot.cpspr & 0xff008000) == (CPS_MAGIC | CPS_ONE)) {
-+		cpspr_write(0);
-+		if ((boot.cpspr & CPS_RTC) && !(DREG(D_RTCCR) & RTCCR_AE))
-+			rtc_write(D_RTCSAR, 0);
-+	}
++	/* consume the previous record so a later reset without one reads 0 */
++	if (boot.rtcsar && !(DREG(D_RTCCR) & RTCCR_AE))
++		rtc_write(D_RTCSAR, 0);
 +	register_die_notifier(&diag_die_nb);
 +	atomic_notifier_chain_register(&panic_notifier_list, &diag_panic_nb);
 +	register_reboot_notifier(&diag_reboot_nb);
 +	proc_create("diag_lastpanic", 0600, NULL, &diag_fops);
-+	pr_info("diag_lastpanic: prev cpspr=0x%08x c0_epc=0x%08x entrylo0=0x%08x entrylo1=0x%08x entryhi=0x%08x rtcsar=0x%08x\n",
-+		boot.cpspr, boot.epc, boot.elo0, boot.elo1, boot.entryhi, boot.rtcsar);
++	pr_info("diag_lastpanic: prev rtcsar=0x%08x rtccr=0x%08x c0_epc=0x%08x entrylo0=0x%08x entrylo1=0x%08x entryhi=0x%08x\n",
++		boot.rtcsar, boot.rtccr, boot.epc, boot.elo0, boot.elo1, boot.entryhi);
 +	return 0;
 +}
 +core_initcall(diag_lastpanic_init);
@@ -484,7 +476,7 @@ diff -urN a/arch/mips/xburst/common/Makefile b/arch/mips/xburst/common/Makefile
 +obj-$(CONFIG_JZ_DIAG_LASTPANIC) += diag_lastpanic.o
 diff -urN a/arch/mips/xburst/Kconfig b/arch/mips/xburst/Kconfig
 --- a/arch/mips/xburst/Kconfig	2026-10-31 13:42:48.500830676 +0100
-+++ b/arch/mips/xburst/Kconfig	2026-10-31 13:44:42.318989399 +0100
++++ b/arch/mips/xburst/Kconfig	2026-10-31 14:03:00.938416767 +0100
 @@ -136,6 +136,17 @@
  	bool "use hibernate reset instead watch dog reset"
  	default n
@@ -494,9 +486,9 @@ diff -urN a/arch/mips/xburst/Kconfig b/arch/mips/xburst/Kconfig
 +	bool "keep the last panic/oops/restart location over the WDT reset (diagnostics)"
 +	default n
 +	help
-+	  Stores reason, uptime, epc/ra/sp (oops) or panic text/comm (panic,
-+	  restart) in CPM CPSPR, RTC RTCSAR and CP0 EPC/EntryLo0/EntryLo1/EntryHi
-+	  when the kernel dies, and shows the previous record in
++	  Stores reason, uptime bucket and epc (oops) or comm (panic, restart)
++	  in RTC RTCSAR, which survives the WDT reset, plus an unproven second
++	  copy with ra/sp in CP0 EPC/EntryLo0/EntryLo1/EntryHi, and shows the
 +	  /proc/diag_lastpanic. Writing "oops", "panic" or "selftest" to that
 +	  file triggers a test. Local diagnostics builds only.
 +

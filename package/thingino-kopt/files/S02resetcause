@@ -1,11 +1,12 @@
 #!/bin/sh
 # Reset diagnostics (BR2_THINGINO_DIAG): log why the last boot happened.
 #  /proc/diag_lastpanic (kernel JZ_DIAG_LASTPANIC): record of the previous kernel death/restart,
-#  kept in registers that survive the WDT reset (CPM CPSPR, RTC RTCSAR, CP0 EPC/EntryLo0/1/EntryHi).
+#  kept in RTC RTCSAR (survives the WDT reset, measured on T31L) + optional CP0 copy (unproven, cp0_ok=1
+#  when its checksum matches; then also ra/sp/full text).
 #  Summary line in syslog (tag resetcause):
-#   PANIC reason=oops epc=0x... <func+off/size> ra=0x... <func+off/size> sp=0x... up_min=N
-#   PANIC reason=hung_task|lockup|panic msg="..." comm="..." up_min=N
-#   RESTART reason=reboot|restart comm="..." pid=N ppid=N up_min=N   (clean kernel restart, no panic)
+#   PANIC reason=oops epc=0x... <func+off/size> [ra=0x... <func+off/size> sp=0x...] up=<bucket>
+#   PANIC reason=hung_task|lockup|panic comm="..." [msg="..."] up=<bucket>
+#   RESTART reason=reboot|restart comm="..." up=<bucket>   (clean kernel restart, no panic)
 #   NORECORD rsr=0x...   (no kernel restart before the reset: WDT bite / power loss / hard hang)
 #  rsr = CPM RSR 0x10000008: bit0 power-on, bit1 WDT, bit3 hibernate (T21 PM; same CPM on T23/T31).
 # The same lines are logged again after 120 s (remote syslog is reachable then, module symbols loaded).
@@ -31,8 +32,8 @@ summary() {
 		return
 	fi
 	reason=$(echo "$rec" | sed -n 's/.* reason=\([a-z_]*\).*/\1/p')
-	up=$(echo "$rec" | sed -n 's/.* uptime_min=\([0-9+]*\).*/\1/p')
-	ok=$(echo "$rec" | sed -n 's/record \(cpspr_ok=[01] cp0_ok=[01] rtcsar_used=[01]\).*/\1/p')
+	up=$(echo "$rec" | sed -n 's/.* uptime=\([^ ]*\).*/\1/p')
+	ok=$(echo "$rec" | sed -n 's/.*\(reached_restart=[01]\).*\(cp0_ok=[01]\).*/\1 \2/p')
 	case "$reason" in
 	reboot|restart) kind=RESTART ;;
 	selftest) kind=SELFTEST ;;
@@ -43,9 +44,13 @@ summary() {
 		esym=$(sed -n 's/^epc \(.*\)/\1/p' "$f")
 		rsym=$(sed -n 's/^ra \(.*\)/\1/p' "$f")
 		set -- $regs
-		echo "$kind reason=$reason $1 <$esym> $2 <$rsym> $3 up_min=$up rsr=$rsr $ok"
+		if [ -n "$2" ]; then
+			echo "$kind reason=$reason $1 <$esym> $2 <$rsym> $3 up=$up rsr=$rsr $ok"
+		else
+			echo "$kind reason=$reason $1 <$esym> up=$up rsr=$rsr $ok"
+		fi
 	else
-		echo "$kind reason=$reason $(grep -E '^(msg|comm)=' "$f") up_min=$up rsr=$rsr $ok"
+		echo "$kind reason=$reason $(grep -E '^(msg|comm)=' "$f") up=$up rsr=$rsr $ok"
 	fi
 }
 
@@ -57,9 +62,8 @@ report() {
 		while IFS= read -r l; do logger -t resetcause "$tag$l"; done < $f
 		logger -p user.crit -t resetcause "$tag$(summary $f)"
 	else
-		CPPSR=$(devmem 0x10000034 32 2>/dev/null)
 		RSR=$(devmem 0x10000008 32 2>/dev/null)
-		logger -t resetcause "${tag}no $P (kernel without JZ_DIAG_LASTPANIC) cpspr=$CPPSR rsr=$RSR ($(rsr_txt ${RSR:-0}))"
+		logger -t resetcause "${tag}no $P (kernel without JZ_DIAG_LASTPANIC) rsr=$RSR ($(rsr_txt ${RSR:-0}))"
 	fi
 }
 
@@ -69,7 +73,7 @@ start)
 	logger -t resetcause "boot up=$(cut -d' ' -f1 /proc/uptime)"
 	report ""
 	# keep the record over the next reboot (only when there is one; rare flash write)
-	if [ -w /opt ] && grep -q '^record cpspr' $D/lastpanic 2>/dev/null; then
+	if [ -w /opt ] && grep -q '^record reason' $D/lastpanic 2>/dev/null; then
 		mkdir -p /opt/diag-lastreset && cp $D/lastpanic /opt/diag-lastreset/lastpanic-$(date +%Y%m%d%H%M%S 2>/dev/null) 2>/dev/null
 		ls -1t /opt/diag-lastreset/lastpanic-* 2>/dev/null | tail -n +6 | xargs -r rm -f
 	fi

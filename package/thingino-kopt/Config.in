@@ -499,9 +499,9 @@ config BR2_THINGINO_DIAG_LASTPANIC
 	depends on BR2_THINGINO_DIAG
 	help
 	  Kernel option JZ_DIAG_LASTPANIC (T23/T31): on oops/panic/restart the
-	  reason, uptime and epc/ra/sp (or panic text/comm) go to CPM CPSPR,
-	  RTC RTCSAR and CP0 EPC/EntryLo0/EntryLo1/EntryHi, which survive the
-	  WDT reset (DRAM does not). /proc/diag_lastpanic shows the previous
+	  reason, uptime bucket and epc (or comm) go to RTC RTCSAR, which
+	  survives the WDT reset (DRAM and CPM CPSPR do not), plus an unproven
+	  CP0 copy with ra/sp. /proc/diag_lastpanic shows the previous
 	  record; S02resetcause logs it. Also enables KALLSYMS so the record
 	  is resolved to function+offset on the camera. Local test builds only.
 

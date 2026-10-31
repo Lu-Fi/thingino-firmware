@@ -5,6 +5,10 @@
 ::sysinit:/bin/mkdir -p /dev/pts
 ::sysinit:/bin/mkdir -p /dev/shm
 ::sysinit:/bin/mount -a
+# /tmp is tmpfs = RAM. The 50 % default (15 MB on a ~30 MB T41 board with ~7 MB
+# available) lets one big file starve the box into a silent watchdog reset
+# (Lu-Fi/openimp#96). Cap it to 4 MB on boards with less than 48 MB RAM.
+::sysinit:/bin/sh -c 'kb=$(sed -n "s/^MemTotal: *\([0-9]*\) kB.*/\1/p" /proc/meminfo); [ "${kb:-99999999}" -lt 49152 ] && /bin/mount -o remount,size=4m /tmp; true'
 ::sysinit:/bin/mkdir -p /run/lock/subsys
 ::sysinit:/bin/mkdir -p /run/dropbear
 ::sysinit:/bin/mkdir -p /mnt/nfs

@@ -1,0 +1,7 @@
+# reset-diagnostics build 6 (local, T23): diag5 + reset-PC (ErrorEPC) sled record
+# + ramoops in a low RAM hole at 28 MB (below U-Boot's zeroed malloc arena)
+BR2_THINGINO_RAMOOPS=y
+BR2_THINGINO_RAMOOPS_KB=256
+BR2_THINGINO_RAMOOPS_LOW_MB=28
+BR2_THINGINO_DIAG=y
+BR2_THINGINO_DIAG_LASTPANIC=y

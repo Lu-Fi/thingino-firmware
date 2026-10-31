@@ -484,6 +484,16 @@ config BR2_THINGINO_RAMOOPS_KB
 	  Taken from the end of osmem; must be a multiple of 8 KB
 	  (half console log, quarter per oops record).
 
+config BR2_THINGINO_RAMOOPS_LOW_MB
+	int "ramoops region placed at this MB inside Linux RAM (0 = end of osmem)"
+	depends on BR2_THINGINO_RAMOOPS
+	default 0
+	help
+	  T23/T31 with U-Boot 2013.07: U-Boot zeroes its 32 MB malloc arena
+	  (top of the first 64 MB) on every boot, so a region at the end of
+	  osmem is cleared. 28 puts it at 0x1c00000 as a hole between two
+	  mem= ranges (plus a 64 KB test window). Diagnostics only.
+
 config BR2_THINGINO_DIAG
 	bool "reset diagnostics (kernel panic/hung-task options, reset-cause log, sampler)"
 	depends on BR2_PACKAGE_THINGINO_KOPT && KERNEL_VERSION_3

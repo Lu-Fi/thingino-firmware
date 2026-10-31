@@ -8,6 +8,7 @@
 #   PANIC reason=hung_task|lockup|panic comm="..." [msg="..."] up=<bucket>
 #   RESTART reason=reboot|restart comm="..." up=<bucket>   (clean kernel restart, no panic)
 #   NORECORD rsr=0x...   (no kernel restart before the reset: WDT bite / power loss / hard hang)
+#   SLED class=... (reset-PC record, T23: ErrorEPC 0xa0xxxxxx; loc = code address)
 #  rsr = CPM RSR 0x10000008: bit0 power-on, bit1 WDT, bit3 hibernate (T21 PM; same CPM on T23/T31).
 # The same lines are logged again after 120 s (remote syslog is reachable then, module symbols loaded).
 P=/proc/diag_lastpanic
@@ -61,6 +62,11 @@ report() {
 		cat $P > $f 2>/dev/null
 		while IFS= read -r l; do logger -t resetcause "$tag$l"; done < $f
 		logger -p user.crit -t resetcause "$tag$(summary $f)"
+		# reset-PC channel (JZ_DIAG_EPC_SLED, T23): one line, e.g.
+		# SLED class=kernel_oops loc=0x80123458 <func+0x../0x..> | SLED class=other reason=reboot ...
+		if grep -q '^sled class=' $f; then
+			logger -p user.crit -t resetcause "${tag}SLED $(sed -n 's/^sled class=/class=/p' $f | head -1) <$(sed -n 's/^sled loc //p' $f)>"
+		fi
 	else
 		RSR=$(devmem 0x10000008 32 2>/dev/null)
 		logger -t resetcause "${tag}no $P (kernel without JZ_DIAG_LASTPANIC) rsr=$RSR ($(rsr_txt ${RSR:-0}))"

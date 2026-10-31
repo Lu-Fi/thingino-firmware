@@ -1,0 +1,358 @@
+Diagnostics (CONFIG_JZ_DIAG_EPC_SLED, needs JZ_DIAG_LASTPANIC): on SoCs without a
+reset-surviving register (T23) encode the last-panic record in the reset PC: after
+the WDT is armed, spin in a 'b .; nop' loop at an uncached RAM address that encodes
+the oops/lockup epc or reason+comm; the next boot reads it from CP0 ErrorEPC.
+Also: skip RTC accesses when the RTC is absent, keep the hung task's comm.
+
+diff -urN a/arch/mips/xburst/common/diag_lastpanic.c b/arch/mips/xburst/common/diag_lastpanic.c
+--- a/arch/mips/xburst/common/diag_lastpanic.c	2026-10-31 20:30:42.719423282 +0100
++++ b/arch/mips/xburst/common/diag_lastpanic.c	2026-10-31 20:33:32.598052718 +0100
+@@ -22,6 +22,26 @@
+  *
+  * /proc/diag_lastpanic: read = decoded previous record; write "oops",
+  * "panic", "selftest" (store a known record, no reset; then reboot -f).
++ *
++ * Reset-PC channel (CONFIG_JZ_DIAG_EPC_SLED, for the T23, which has no RTC
++ * at 0x10003000 and no other reset-surviving register): the WDT reset
++ * stores the PC of the interrupted instruction in CP0 ErrorEPC, and the
++ * next boot prints it ("CPU0 RESET ERROR PC", cpu_probe_ingenic; proven by
++ * the __delay and user-space values seen after field resets). After the
++ * WDT is armed in jz_wdt_restart(), the CPU jumps to an uncached (kseg1)
++ * RAM address A where "b . ; nop" was written; ErrorEPC = A (the branch,
++ * also when the reset hits the delay slot). A encodes the record, phys:
++ *   0x0000000-0x03fffff  kernel oops,  epc = 0x80000000 | phys
++ *   0x0400000-0x07fffff  kernel lockup (epc of the interrupted context)
++ *   0x0800000-0x0ffffff  module oops,  epc = 0xc0000000 | (phys - 0x0800000)
++ *   0x1000000-0x17fffff  module lockup
++ *   0x1800000-0x1bffffc  other: Q = (phys - 0x1800000) >> 2,
++ *                        Q[19:16] reason, [15:14] uptime <10m <1h <24h >=24h,
++ *                        [13:7] [6:0] first two chars of comm (hung: the
++ *                        blocked task, else current)
++ * Everything stays below 0x1c00000, where the low ramoops window starts,
++ * and below U-Boot's malloc arena (U-Boot memsets 32 MB under its
++ * relocation address on every boot).
+  */
+ #include <linux/kernel.h>
+ #include <linux/init.h>
+@@ -36,8 +56,12 @@
+ #include <linux/string.h>
+ #include <linux/uaccess.h>
+ #include <linux/irqflags.h>
++#include <linux/bootmem.h>
++#include <linux/pfn.h>
+ #include <asm/mipsregs.h>
+ #include <asm/ptrace.h>
++#include <asm/irq_regs.h>
++#include <asm/io.h>
+ 
+ #define DREG(a)		(*(volatile u32 *)(0xa0000000 | (a)))
+ #define D_RSR		0x10000008
+@@ -69,8 +93,13 @@
+ 	u32 reason, up_s;
+ 	u32 word;			/* RTCSAR */
+ 	u32 epc, elo0, elo1;		/* CP0 (optional channel) */
++	u32 loc;			/* reset-PC channel: code address or 0 */
++	u32 lkind;			/* 0 oops epc, 1 interrupted context (lockup) */
++	char cm[2];			/* reset-PC channel: comm chars */
+ };
+ static struct diag_rec rec;
++static int rtc_present;			/* RTCCR.WRDY seen at boot (T31 yes, T23 no) */
++static char hung_comm[TASK_COMM_LEN];
+ 
+ static struct {
+ 	int done;
+@@ -235,11 +264,19 @@
+ {
+ 	/* no AE gate: RTCCR.AE is set at boot on some cameras (0xc5); the alarm IRQ is unused
+ 	 * (no RTC_CLASS) and a match needs RTCSR == RTCSAR, so a record word is harmless */
++	if (!rtc_present)
++		return;		/* T23: no RTC block, every wait would time out */
+ 	if (DREG(D_RTCCR) & RTCCR_AE)
+ 		lw.skip_ae++;	/* counts: AE was set, write done anyway */
+ 	rtc_write(D_RTCSAR, rec.word);
+ }
+ 
++static void set_cm(const char *s)
++{
++	rec.cm[0] = s[0];
++	rec.cm[1] = s[0] ? s[1] : 0;
++}
++
+ /* optional channel: only with IRQs off on a path that never returns */
+ static void store_cp0(void)
+ {
+@@ -260,6 +297,8 @@
+ 	rec.epc = pack4(p->comm);
+ 	rec.elo0 = (strlen(p->comm) > 4 ? pack3(p->comm + 4) : 0) | ELO_MARK;
+ 	rec.elo1 = (task_pid_nr(p) & 0x7fffff) | ELO_MARK;
++	rec.loc = 0;
++	set_cm(p->comm);
+ 	rec.valid = 1;
+ }
+ 
+@@ -289,6 +328,9 @@
+ 	rec.epc = regs->cp0_epc;
+ 	rec.elo0 = enc_addr(regs->regs[31]);
+ 	rec.elo1 = enc_sp(regs->regs[29]);
++	rec.loc = regs->cp0_epc;
++	rec.lkind = 0;
++	set_cm(current->comm);
+ 	rec.valid = 1;
+ 	/* CP0 only from panic/restart: die() may still sleep with IRQs on */
+ 	store_rtc();
+@@ -311,6 +353,20 @@
+ 		rec.epc = pack4(msg);
+ 		rec.elo0 = (strlen(msg) > 4 ? pack3(msg + 4) : 0) | ELO_MARK;
+ 		rec.elo1 = pack3(current->comm) | ELO_MARK;
++		if (r == R_HUNG && hung_comm[0]) {
++			make_word(pack3(hung_comm));
++			set_cm(hung_comm);
++		}
++		/* panic from hard IRQ (softlockup hrtimer): the interrupted
++		 * kernel context is where the CPU was stuck */
++		if (in_irq()) {
++			struct pt_regs *regs = get_irq_regs();
++
++			if (regs && !user_mode(regs)) {
++				rec.loc = regs->cp0_epc;
++				rec.lkind = 1;
++			}
++		}
+ 	}
+ 	store_rtc();
+ 	store_cp0();
+@@ -326,7 +382,111 @@
+ 	return NOTIFY_DONE;
+ }
+ 
+-static struct notifier_block diag_die_nb = { .notifier_call = diag_die, .priority = INT_MAX };
++/* kernel/hung_task.c, right before its panic(): remember the blocked task */
++void diag_lastpanic_hung(struct task_struct *t)
++{
++	strlcpy(hung_comm, t->comm, sizeof(hung_comm));
++}
++
++#ifdef CONFIG_JZ_DIAG_EPC_SLED
++#define SL_KOOPS	0x0000000
++#define SL_KLOCK	0x0400000
++#define SL_MOOPS	0x0800000
++#define SL_MLOCK	0x1000000
++#define SL_OTHER	0x1800000
++#define SL_END		0x1c00000	/* low ramoops window starts here */
++#define SL_INSN_B	0x1000ffff	/* b . (beq $0,$0,-1) */
++
++static u32 sled_phys(void)
++{
++	u32 a = rec.loc, q, up, c0, c1;
++
++	if (rec.valid && a >= 0x80000000 && a < 0x80400000)
++		return (rec.lkind ? SL_KLOCK : SL_KOOPS) + (a & 0x3ffffc);
++	if (rec.valid && a >= 0xc0000000 && a < 0xc0800000)
++		return (rec.lkind ? SL_MLOCK : SL_MOOPS) + (a & 0x7ffffc);
++	up = rec.up_s < 600 ? 0 : rec.up_s < 3600 ? 1 : rec.up_s < 86400 ? 2 : 3;
++	c0 = rec.cm[0] & 0x7f;
++	c1 = rec.cm[1] & 0x7f;
++	q = ((rec.reason & 0xf) << 16) | (up << 14) | (c0 << 7) | c1;
++	return SL_OTHER + (q << 2);
++}
++
++/* never returns: the CPU spins at kseg1 | phys until the armed WDT resets it */
++static noinline void sled_jump(u32 phys)
++{
++	u32 k1 = 0xa0000000 | phys;
++
++	/* no dirty kseg0 line may be written back over the loop */
++	dma_cache_wback_inv(0x80000000 | phys, 8);
++	__asm__ __volatile__(
++		".set push\n\t.set noreorder\n\t"
++		"sw	%1, 0(%0)\n\t"
++		"sw	$0, 4(%0)\n\t"
++		"sync\n\t"
++		"lw	$0, 4(%0)\n\t"	/* uncached read-back drains the write buffer */
++		"jr	%0\n\t"
++		"nop\n\t"
++		".set pop"
++		: : "r"(k1), "r"(SL_INSN_B) : "memory");
++	for (;;)
++		;
++}
++
++/* called from jz_wdt_restart() after wdt_start_count(); IRQs are off */
++void diag_lastpanic_sled(void)
++{
++	u32 phys = sled_phys();
++	u32 self = (u32)sled_jump & 0x1fffffff;
++
++	local_irq_disable();
++	if (phys >= SL_END || phys + 8 > PFN_PHYS(max_low_pfn))
++		return;		/* not inside Linux RAM: keep the stock mdelay path */
++	if (phys + 8 > self - 64 && phys < self + 256)
++		return;		/* would overwrite the jump code itself */
++	sled_jump(phys);
++}
++
++static const char *sled_class(u32 p)
++{
++	if (p < SL_KLOCK) return "kernel_oops";
++	if (p < SL_MOOPS) return "kernel_lockup";
++	if (p < SL_MLOCK) return "module_oops";
++	if (p < SL_OTHER) return "module_lockup";
++	return "other";
++}
++
++static void sled_show(struct seq_file *m, u32 errorepc)
++{
++	static const char *const upq[4] = { "<10m", "10m-1h", "1h-24h", ">=24h" };
++	u32 p = errorepc & 0x1fffffff, a, q;
++	char c[3];
++
++	if ((errorepc & 0xe0000000) != 0xa0000000 || p >= SL_END || (p & 3)) {
++		seq_printf(m, "sled none (errorepc not a sled address: stock restart, WDT bite or power-on)\n");
++		return;
++	}
++	if (p < SL_OTHER) {
++		if (p < SL_MOOPS)
++			a = 0x80000000 | (p & 0x3fffff);
++		else
++			a = 0xc0000000 | ((p - (p < SL_MLOCK ? SL_MOOPS : SL_MLOCK)) & 0x7fffff);
++		seq_printf(m, "sled class=%s loc=0x%08x\nsled loc %pS\n", sled_class(p), a, (void *)a);
++		return;
++	}
++	q = (p - SL_OTHER) >> 2;
++	c[0] = (q >> 7) & 0x7f;
++	c[1] = q & 0x7f;
++	c[2] = 0;
++	if (c[0] && (c[0] < 0x20 || c[0] == '"' || c[0] == 0x7f)) c[0] = '.';
++	if (c[1] && (c[1] < 0x20 || c[1] == '"' || c[1] == 0x7f)) c[1] = '.';
++	seq_printf(m, "sled class=other reason=%s uptime=%s comm2=\"%s\"\n",
++		   reason_name[(q >> 16) & 0xf] ? reason_name[(q >> 16) & 0xf] : "?",
++		   upq[(q >> 14) & 3], c);
++}
++#endif
++
++static struct notifier_block diag_die_nb ={ .notifier_call = diag_die, .priority = INT_MAX };
+ static struct notifier_block diag_panic_nb = { .notifier_call = diag_panic, .priority = INT_MAX };
+ static struct notifier_block diag_reboot_nb = { .notifier_call = diag_reboot, .priority = INT_MAX };
+ 
+@@ -343,6 +503,7 @@
+ 	boot.entryhi = read_c0_entryhi();
+ 	boot.rtccr_early = DREG(D_RTCCR);
+ 	boot.wrdy_early = rtc_ready();	/* bounded wait: RTC reads may need WRDY after a reset */
++	rtc_present = boot.wrdy_early;
+ 	boot.rtcsar_early = DREG(D_RTCSAR);
+ 	boot.rtcsar = boot.rtcsar_early;
+ 	boot.rtccr = DREG(D_RTCCR);
+@@ -390,6 +551,9 @@
+ 		   lw.n, lw.ok, lw.fail, lw.skip_ae, lw.stage, lw.rc, lw.reg, lw.val,
+ 		   lw.rb, lw.rtccr0, lw.rtccr1, lw.wenr, DREG(D_RTCSAR), DREG(D_RTCCR));
+ 	seq_printf(m, "errorepc %pS\n", (void *)boot.errorepc);
++#ifdef CONFIG_JZ_DIAG_EPC_SLED
++	sled_show(m, boot.errorepc);
++#endif
+ 	if (!valid) {
+ 		seq_printf(m, "record none\n");
+ 		return 0;
+@@ -462,6 +626,9 @@
+ 		rec.epc = 0xd1a9e9c0;
+ 		rec.elo0 = enc_addr(0x8012345c);
+ 		rec.elo1 = enc_sp(0x8123abc8);
++		rec.loc = 0x8012345c;	/* reset-PC channel: expect ErrorEPC 0xa012345c */
++		rec.lkind = 0;
++		set_cm("st");
+ 		rec.valid = 1;
+ 		store_rtc();	/* CP0 follows in jz_wdt_restart() */
+ 		pr_info("diag_lastpanic: selftest word 0x%08x, rtcsar readback 0x%08x stage=%u rc=%d cr0=0x%08x cr1=0x%08x wenr=0x%08x skip_ae=%u; now reboot -f\n",
+@@ -487,7 +654,7 @@
+ 	boot.rtcsar_late = DREG(D_RTCSAR);
+ 	if (boot.rtcsar_late != boot.rtcsar_early)
+ 		boot.rtcsar = boot.rtcsar_late;	/* early read was not valid: decode the late one */
+-	if (boot.rtcsar_late) {
++	if (rtc_present && boot.rtcsar_late) {
+ 		boot.clr_rc = rtc_write(D_RTCSAR, 0);
+ 		boot.clr_rb = DREG(D_RTCSAR);
+ 	}
+diff -urN a/arch/mips/xburst/Kconfig b/arch/mips/xburst/Kconfig
+--- a/arch/mips/xburst/Kconfig	2026-10-31 20:30:42.755423627 +0100
++++ b/arch/mips/xburst/Kconfig	2026-10-31 20:32:17.179329319 +0100
+@@ -147,6 +147,18 @@
+ 	  /proc/diag_lastpanic. Writing "oops", "panic" or "selftest" to that
+ 	  file triggers a test. Local diagnostics builds only.
+ 
++config JZ_DIAG_EPC_SLED
++	depends on JZ_DIAG_LASTPANIC
++	bool "encode the last-panic record in the reset PC (CP0 ErrorEPC)"
++	default y
++	help
++	  In jz_wdt_restart(), after the WDT is armed, the CPU spins in a
++	  two-instruction loop written to an uncached (kseg1) RAM address
++	  that encodes the record (oops/lockup epc, or reason + comm). The
++	  WDT reset stores that PC in ErrorEPC, which the next boot reads
++	  (the existing "CPU0 RESET ERROR PC" value). For SoCs without a
++	  reset-surviving register (T23). Diagnostics builds only.
++
+ config TRAPS_USE_TCSM_CHECK
+ 	depends on TRAPS_USE_TCSM
+ 	bool "check tcsm when power resume"
+diff -urN a/arch/mips/xburst/soc-t23/common/reset.c b/arch/mips/xburst/soc-t23/common/reset.c
+--- a/arch/mips/xburst/soc-t23/common/reset.c	2026-10-31 20:30:42.725423339 +0100
++++ b/arch/mips/xburst/soc-t23/common/reset.c	2026-10-31 20:32:17.145328993 +0100
+@@ -126,6 +126,9 @@
+ #ifdef CONFIG_JZ_DIAG_LASTPANIC
+ extern void diag_lastpanic_commit(void);
+ #endif
++#ifdef CONFIG_JZ_DIAG_EPC_SLED
++extern void diag_lastpanic_sled(void);
++#endif
+ 
+ void jz_wdt_restart(char *command)
+ {
+@@ -152,6 +155,9 @@
+ 	diag_lastpanic_commit();
+ #endif
+ 	wdt_start_count(4);
++#ifdef CONFIG_JZ_DIAG_EPC_SLED
++	diag_lastpanic_sled();	/* returns only without a safe target */
++#endif
+ 	mdelay(200);
+ 	while(1)
+ 		printk("check wdt.\n");
+diff -urN a/arch/mips/xburst/soc-t31/common/reset.c b/arch/mips/xburst/soc-t31/common/reset.c
+--- a/arch/mips/xburst/soc-t31/common/reset.c	2026-10-31 20:30:42.742423502 +0100
++++ b/arch/mips/xburst/soc-t31/common/reset.c	2026-10-31 20:32:17.162329156 +0100
+@@ -126,6 +126,9 @@
+ #ifdef CONFIG_JZ_DIAG_LASTPANIC
+ extern void diag_lastpanic_commit(void);
+ #endif
++#ifdef CONFIG_JZ_DIAG_EPC_SLED
++extern void diag_lastpanic_sled(void);
++#endif
+ 
+ void jz_wdt_restart(char *command)
+ {
+@@ -152,6 +155,9 @@
+ 	diag_lastpanic_commit();
+ #endif
+ 	wdt_start_count(4);
++#ifdef CONFIG_JZ_DIAG_EPC_SLED
++	diag_lastpanic_sled();	/* returns only without a safe target */
++#endif
+ 	mdelay(200);
+ 	while(1)
+ 		printk("check wdt.\n");
+diff -urN a/kernel/hung_task.c b/kernel/hung_task.c
+--- a/kernel/hung_task.c	2026-10-31 20:30:42.749423569 +0100
++++ b/kernel/hung_task.c	2026-10-31 20:32:07.248234062 +0100
+@@ -109,6 +109,13 @@
+ 	touch_nmi_watchdog();
+ 
+ 	if (sysctl_hung_task_panic) {
++#ifdef CONFIG_JZ_DIAG_LASTPANIC
++		{
++			extern void diag_lastpanic_hung(struct task_struct *t);
++
++			diag_lastpanic_hung(t);
++		}
++#endif
+ 		trigger_all_cpu_backtrace();
+ 		panic("hung_task: blocked tasks");
+ 	}

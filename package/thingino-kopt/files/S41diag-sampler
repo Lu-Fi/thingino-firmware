@@ -1,0 +1,40 @@
+#!/bin/sh
+# Reset diagnostics (BR2_THINGINO_DIAG): one line every 10 s to syslog (remote syslog host if
+# configured), every 60 s also to /dev/kmsg so the last sample lands in the pstore console log.
+PIDFILE=/run/diag-sampler.pid
+
+sample() {
+	i=0
+	while :; do
+		L=$(awk '
+			FILENAME=="/proc/uptime"   { up=$1 }
+			FILENAME=="/proc/loadavg"  { la=$1" "$2" "$3 }
+			FILENAME=="/proc/meminfo"  { if ($1=="MemFree:") mf=$2; else if ($1=="Cached:") ca=$2; else if ($1=="Slab:") sl=$2; else if ($1=="Shmem:") sh=$2 }
+			FILENAME=="/proc/vmstat"   { if ($1=="pgmajfault") mj=$2 }
+			FILENAME=="/proc/interrupts" { n=$NF; c=0; for (k=2;k<=NF-1;k++) if ($k ~ /^[0-9]+$/) c+=$k; if (c>0) irq=irq" "n"="c }
+			END { printf "up=%s la=%s free=%s cached=%s slab=%s shmem=%s majfault=%s irq:%s", up, la, mf, ca, sl, sh, mj, irq }
+		' /proc/uptime /proc/loadavg /proc/meminfo /proc/vmstat /proc/interrupts 2>/dev/null)
+		T=$(df -k /tmp 2>/dev/null | awk 'NR==2{print $3}')
+		D=$(grep -l '^State:.D' /proc/[0-9]*/status 2>/dev/null | wc -l)
+		S=$(awk 'NR>2{print $1"="$3*$4/1024}' /proc/slabinfo 2>/dev/null | sort -t= -k2 -n -r | head -3 | tr '\n' ' ')
+		P=$(for p in $(pidof timpsd) ; do awk '{printf "timps_cpu=%s ", $14+$15}' /proc/$p/stat; done 2>/dev/null)
+		M="$L tmp_kb=$T dstate=$D slab_top=${S}$P"
+		logger -t diagsample "$M"
+		i=$((i+1))
+		if [ $i -ge 6 ]; then i=0; echo "<6>diagsample: $M" > /dev/kmsg 2>/dev/null; fi
+		sleep 10
+	done
+}
+
+case "$1" in
+start)
+	if [ -f "$PIDFILE" ] && kill -0 "$(cat $PIDFILE)" 2>/dev/null; then exit 0; fi
+	nice -n -20 "$0" run >/dev/null 2>&1 &
+	echo $! > "$PIDFILE"
+	;;
+run) sample ;;
+stop) [ -f "$PIDFILE" ] && kill "$(cat $PIDFILE)" 2>/dev/null; rm -f "$PIDFILE" ;;
+restart) "$0" stop; "$0" start ;;
+*) echo "Usage: $0 {start|stop|restart}"; exit 1 ;;
+esac
+exit 0

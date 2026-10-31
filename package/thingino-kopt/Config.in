@@ -468,4 +468,30 @@ config BR2_PACKAGE_THINGINO_KOPT_SLUB_DEBUG
 	  detection). Boots with slub_debug on by default to catch heap
 	  corruption at the point of the bad write/free.
 
+config BR2_THINGINO_RAMOOPS
+	bool "pstore/ramoops (kernel log kept over a reset)"
+	depends on BR2_PACKAGE_THINGINO_KOPT && KERNEL_VERSION_3
+	help
+	  Enables PSTORE/PSTORE_CONSOLE/PSTORE_RAM, mounts /sys/fs/pstore at boot
+	  and reserves a RAM region between osmem and rmem (ramoops-env.sh).
+	  Diagnostics only, default off. Needs a full OTA (new U-Boot env).
+
+config BR2_THINGINO_RAMOOPS_KB
+	int "ramoops region size (KB)"
+	depends on BR2_THINGINO_RAMOOPS
+	default 256
+	help
+	  Taken from the end of osmem; must be a multiple of 8 KB
+	  (half console log, quarter per oops record).
+
+config BR2_THINGINO_DIAG
+	bool "reset diagnostics (kernel panic/hung-task options, reset-cause log, sampler)"
+	depends on BR2_THINGINO_RAMOOPS
+	help
+	  Reboot-class diagnostics image: PANIC_ON_OOPS, hung-task panic,
+	  DEBUG_PREEMPT, DEBUG_STACK_USAGE, SLUB_DEBUG (slabinfo only),
+	  128 KB log buffer, S02resetcause (CPM reset registers + pstore dump
+	  to syslog) and S41diag-sampler (10 s memory/IRQ line to syslog).
+	  Local test builds only.
+
 endmenu

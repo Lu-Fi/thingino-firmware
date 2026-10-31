@@ -22,3 +22,15 @@ Whether the SoC's DRAM keeps its content across a watchdog reset is not document
 
 An existing device keeps its old U-Boot environment; a full OTA that rewrites the env, or
 `fw_setenv`, is needed to get the new `osmem` and bootargs.
+
+## Reset diagnostics image (BR2_THINGINO_DIAG)
+
+`BR2_THINGINO_DIAG=y` (needs `BR2_THINGINO_RAMOOPS=y`, local test builds only) adds
+`PANIC_ON_OOPS`, hung-task panic (120 s), `DEBUG_PREEMPT`, `DEBUG_STACK_USAGE`, `SLUB_DEBUG`
+(slabinfo only) and a 128 KB log buffer, plus:
+
+* `S02resetcause` logs `CPM_CPPSR` (0x10000034, 0x3535 = kernel-initiated restart) and `CPM_RSR`
+  (0x10000008) via syslog, saves the pstore files to `/tmp/diag-lastreset` (and `/opt/diag-lastreset`
+  when `/opt` is writable) and logs their tail.
+* `S41diag-sampler` writes one memory/IRQ/load line every 10 s to syslog and every 60 s to `/dev/kmsg`
+  (so the last sample is in the pstore console log).

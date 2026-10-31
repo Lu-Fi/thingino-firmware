@@ -1,0 +1,41 @@
+#!/bin/sh
+# Reset diagnostics (BR2_THINGINO_DIAG): log why the last boot happened.
+#  cppsr 0x3535 = kernel-initiated restart (reboot or panic); 0 = no kernel restart before reset
+#  (WDT bite, hard stall, power cycle). rsr = CPM reset status register (raw).
+# Then save and log what pstore kept (dmesg-ramoops-*, console-ramoops-*).
+case "$1" in
+start)
+	CPPSR=$(devmem 0x10000034 32 2>/dev/null)
+	RSR=$(devmem 0x10000008 32 2>/dev/null)
+	logger -t resetcause "cppsr=$CPPSR rsr=$RSR up=$(cut -d' ' -f1 /proc/uptime)"
+	# clear the kernel-restart signature so the next boot sees only its own predecessor
+	devmem 0x10000038 32 0x5a5a; devmem 0x10000034 32 0; devmem 0x10000038 32 0
+	D=/tmp/diag-lastreset
+	mkdir -p $D
+	echo "cppsr=$CPPSR rsr=$RSR" > $D/regs
+	if [ -d /sys/fs/pstore ]; then
+		[ -e /sys/fs/pstore/console-ramoops-0 ] || mount -t pstore pstore /sys/fs/pstore 2>/dev/null
+		for f in /sys/fs/pstore/*; do
+			[ -f "$f" ] || continue
+			cp "$f" "$D/" 2>/dev/null
+			logger -t resetcause "pstore $(basename "$f") $(wc -c < "$f") bytes"
+		done
+		if [ -f "$D/console-ramoops-0" ]; then
+			tail -n 60 "$D/console-ramoops-0" | while IFS= read -r l; do logger -t pstore-console "$l"; done
+		fi
+		for f in "$D"/dmesg-ramoops-*; do
+			[ -f "$f" ] || continue
+			head -n 80 "$f" | while IFS= read -r l; do logger -t pstore-dmesg "$l"; done
+		done
+		# keep a copy over the next reboot (flash, written only after a reset that left data, max ~300 KB)
+		if [ -w /opt ] && ls "$D"/*-ramoops-* >/dev/null 2>&1; then
+			rm -rf /opt/diag-lastreset; mkdir -p /opt/diag-lastreset && cp "$D"/* /opt/diag-lastreset/ 2>/dev/null
+		fi
+	else
+		logger -t resetcause "no /sys/fs/pstore (kernel without pstore)"
+	fi
+	;;
+stop|restart|reload) ;;
+*) echo "Usage: $0 {start|stop|restart}"; exit 1 ;;
+esac
+exit 0

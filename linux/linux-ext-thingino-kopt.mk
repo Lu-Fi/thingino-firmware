@@ -1,9 +1,8 @@
 LINUX_EXTENSIONS += thingino-kopt
 
-# Run LED header/patch after patches too - the cumulative thingino patch
-# ships its own board_base.c which overwrites the PRE_PATCH changes.
-# (upstream 651710404; 94867f9ac dropped this line as collateral damage
-# while restructuring the dts handling, so we keep it here.)
+# Run the LED header/patch hook after patches: the cumulative thingino
+# kernel patch ships its own board_base.c, which overwrites the changes
+# made by the PRE_PATCH hook.
 LINUX_POST_PATCH_HOOKS += THINGINO_KOPT_PREPARE_KERNEL
 
 THINGINO_LED_CONFIG = $(BR2_CONFIG)

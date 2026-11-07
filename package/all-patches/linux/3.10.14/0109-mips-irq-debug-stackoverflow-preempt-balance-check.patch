@@ -1,0 +1,79 @@
+From: Lu-Fi <lu-fi@users.noreply.github.com>
+Subject: [PATCH] mips: irq: real DEBUG_STACKOVERFLOW check and per-IRQ preempt balance check
+
+arch/mips/kernel/irq.c tested the undefined macro DEBUG_STACKOVERFLOW, so
+CONFIG_DEBUG_STACKOVERFLOW never enabled check_stack_overflow(). Test the
+Kconfig symbol, and with it also check after every hard IRQ handler that
+preempt_count is unchanged and that the stack end magic of the current
+task is intact; on a mismatch print the IRQ number and handler name with
+a stack dump and repair the value.
+
+Debug only (BR2_THINGINO_DIAG_KDEBUG); without CONFIG_DEBUG_STACKOVERFLOW
+the code compiles to nothing. Used in the agg67k debug images (T31 atomic
+audit 2026-10-17, issues #94/#108).
+---
+--- a/arch/mips/kernel/irq.c	2026-10-17 14:01:29.522962005 +0200
++++ b/arch/mips/kernel/irq.c	2026-10-17 14:01:29.584962619 +0200
+@@ -13,6 +13,7 @@
+ #include <linux/init.h>
+ #include <linux/interrupt.h>
+ #include <linux/kernel_stat.h>
++#include <linux/magic.h>
+ #include <linux/proc_fs.h>
+ #include <linux/mm.h>
+ #include <linux/random.h>
+@@ -110,7 +111,7 @@
+ #endif
+ }
+ 
+-#ifdef DEBUG_STACKOVERFLOW
++#ifdef CONFIG_DEBUG_STACKOVERFLOW
+ static inline void check_stack_overflow(void)
+ {
+ 	unsigned long sp;
+@@ -138,12 +139,45 @@
+  * SMP cross-CPU interrupts have their own specific
+  * handlers).
+  */
++#ifdef CONFIG_DEBUG_STACKOVERFLOW
++/*
++ * Debug only (T31 atomic audit 2026-10-17): catch a hard-IRQ handler that
++ * leaves preempt_count changed, and a kernel stack that ran into
++ * thread_info. Names the IRQ so the driver can be identified.
++ */
++static void check_irq_balance(unsigned int irq, int before)
++{
++	int after = preempt_count();
++	unsigned long *end = end_of_stack(current);
++
++	if (unlikely(after != before)) {
++		struct irq_desc *desc = irq_to_desc(irq);
++		printk(KERN_ERR "do_IRQ: irq %u (%s) changed preempt_count %#x -> %#x\n",
++		       irq, desc && desc->action ? desc->action->name : "?",
++		       before, after);
++		dump_stack();
++		preempt_count() = before;
++	}
++	if (unlikely(*end != STACK_END_MAGIC)) {
++		printk(KERN_ERR "do_IRQ: irq %u: stack end magic of %s/%d overwritten\n",
++		       irq, current->comm, current->pid);
++		dump_stack();
++		*end = STACK_END_MAGIC;
++	}
++}
++#else
++static inline void check_irq_balance(unsigned int irq, int before) {}
++#endif
++
+ void __irq_entry do_IRQ(unsigned int irq)
+ {
++	int pc = preempt_count();
++
+ 	irq_enter();
+ 	check_stack_overflow();
+ 	if (!smtc_handle_on_other_cpu(irq))
+ 		generic_handle_irq(irq);
++	check_irq_balance(irq, pc + HARDIRQ_OFFSET);
+ 	irq_exit();
+ }
+ 

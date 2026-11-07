@@ -1,5 +1,5 @@
 #!/bin/sh
-# Reset diagnostics (BR2_THINGINO_DIAG): one line every 10 s to syslog (remote syslog host if
+# Reset diagnostics (BR2_THINGINO_DIAG_SAMPLER): one line every 10 s to syslog (remote syslog host if
 # configured), every 60 s also to /dev/kmsg so the last sample lands in the pstore console log.
 PIDFILE=/run/diag-sampler.pid
 

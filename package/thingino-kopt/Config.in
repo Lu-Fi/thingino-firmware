@@ -468,52 +468,111 @@ config BR2_PACKAGE_THINGINO_KOPT_SLUB_DEBUG
 	  detection). Boots with slub_debug on by default to catch heap
 	  corruption at the point of the bad write/free.
 
-config BR2_THINGINO_RAMOOPS
-	bool "pstore/ramoops (kernel log kept over a reset)"
-	depends on BR2_PACKAGE_THINGINO_KOPT && KERNEL_VERSION_3
-	help
-	  Enables PSTORE/PSTORE_CONSOLE/PSTORE_RAM, mounts /sys/fs/pstore at boot
-	  and reserves a RAM region between osmem and rmem (ramoops-env.sh).
-	  Diagnostics only, default off. Needs a full OTA (new U-Boot env).
+menu "Diagnostics (reset / crash analysis)"
+	depends on BR2_PACKAGE_THINGINO_KOPT
 
-config BR2_THINGINO_RAMOOPS_KB
+comment "Reset/crash diagnostics need kernel 3.10"
+	depends on !KERNEL_VERSION_3
+
+config BR2_THINGINO_DIAG_RESETCAUSE
+	bool "Reset cause log, panic on oops and hung task"
+	depends on KERNEL_VERSION_3
+	help
+	  Makes every kernel death end in a defined restart and logs why
+	  the previous boot ended:
+	  PANIC_ON_OOPS, hung-task detection (120 s) with panic, 128 KB
+	  kernel log buffer (LOG_BUF_SHIFT=17), and S02resetcause, which
+	  writes the CPM reset status (RSR) and, if present, the record of
+	  /proc/diag_lastpanic and /sys/fs/pstore to syslog (tag
+	  "resetcause"; again after 120 s for the remote syslog host).
+
+	  Cheap: no runtime cost, a few hundred bytes of kernel. An oops
+	  restarts the camera instead of leaving it half-dead.
+
+config BR2_THINGINO_DIAG_LASTPANIC
+	bool "Last panic record in reset-surviving registers"
+	depends on BR2_THINGINO_DIAG_RESETCAUSE
+	depends on BR2_SOC_FAMILY = "t23" || BR2_SOC_FAMILY = "t31"
+	help
+	  Kernel option JZ_DIAG_LASTPANIC (T23 and T31, proven on T31L
+	  and T23N): on oops, panic, hung task, lockup or restart the
+	  reason, uptime bucket and epc (or task name) are written to RTC
+	  RTCSAR, which survives the watchdog reset (DRAM and CPM CPSPR
+	  do not). /proc/diag_lastpanic shows the record of the previous
+	  boot; S02resetcause logs it.
+
+	  KALLSYMS stays off (it changes sizeof(struct module) and breaks
+	  every prebuilt module). Resolve the logged addresses on the host
+	  with nm of the build's vmlinux / System.map.
+
+config BR2_THINGINO_DIAG_RESET_SLED
+	bool "Reset PC sled (T23)"
+	depends on BR2_THINGINO_DIAG_LASTPANIC
+	depends on BR2_SOC_FAMILY = "t23"
+	help
+	  Kernel option JZ_DIAG_EPC_SLED. Before the restart the kernel
+	  jumps into a branch-to-self "sled" at an uncached address that
+	  encodes the panic class and location. The watchdog reset then
+	  prints that PC as "CPU0 RESET ERROR PC:A0xxxxxx" in the boot log,
+	  so the cause survives even a reset that clears the RTC record.
+	  S02resetcause logs the decoded line (SLED class=... loc=...).
+	  Proven on T23N (Galayou Y4, 2026-10-31). The kernel code also
+	  exists for T31 but is not tested there.
+
+config BR2_THINGINO_DIAG_RAMOOPS
+	bool "pstore/ramoops (kernel log kept over a reset)"
+	depends on KERNEL_VERSION_3
+	depends on BR2_SOC_FAMILY = "t20" || BR2_SOC_FAMILY = "t21" || \
+		BR2_SOC_FAMILY = "t23" || BR2_SOC_FAMILY = "t31"
+	help
+	  Enables PSTORE, PSTORE_CONSOLE and PSTORE_RAM, mounts
+	  /sys/fs/pstore at boot (S01pstore) and reserves a RAM region
+	  between osmem and rmem (thingino-uboot ramoops-env.sh, adds the
+	  ramoops.* boot arguments). Needs a full OTA (new U-Boot env).
+
+	  Measured: DRAM does NOT survive the watchdog reset on T10, T23
+	  and T31 (U-Boot 2013.07 zeroes its malloc arena, the reset
+	  clears the rest), so the log is only kept over a warm restart.
+	  Use BR2_THINGINO_DIAG_LASTPANIC for watchdog resets.
+
+config BR2_THINGINO_DIAG_RAMOOPS_KB
 	int "ramoops region size (KB)"
-	depends on BR2_THINGINO_RAMOOPS
+	depends on BR2_THINGINO_DIAG_RAMOOPS
 	default 256
 	help
 	  Taken from the end of osmem; must be a multiple of 8 KB
-	  (half console log, quarter per oops record).
+	  (half console log, a quarter per oops record).
 
-config BR2_THINGINO_RAMOOPS_LOW_MB
-	int "ramoops region placed at this MB inside Linux RAM (0 = end of osmem)"
-	depends on BR2_THINGINO_RAMOOPS
+config BR2_THINGINO_DIAG_RAMOOPS_LOW_MB
+	int "ramoops region at this MB inside Linux RAM (0 = end of osmem)"
+	depends on BR2_THINGINO_DIAG_RAMOOPS
 	default 0
 	help
 	  T23/T31 with U-Boot 2013.07: U-Boot zeroes its 32 MB malloc arena
 	  (top of the first 64 MB) on every boot, so a region at the end of
 	  osmem is cleared. 28 puts it at 0x1c00000 as a hole between two
-	  mem= ranges (plus a 64 KB test window). Diagnostics only.
+	  mem= ranges (plus a 64 KB test window). Maximum 28.
 
-config BR2_THINGINO_DIAG
-	bool "reset diagnostics (kernel panic/hung-task options, reset-cause log, sampler)"
-	depends on BR2_PACKAGE_THINGINO_KOPT && KERNEL_VERSION_3
+config BR2_THINGINO_DIAG_SAMPLER
+	bool "System sampler to syslog (every 10 s)"
 	help
-	  Reboot-class diagnostics image: PANIC_ON_OOPS, hung-task panic,
-	  DEBUG_PREEMPT, DEBUG_STACK_USAGE, SLUB_DEBUG (slabinfo only),
-	  128 KB log buffer, S02resetcause (CPM reset registers + pstore dump
-	  to syslog) and S41diag-sampler (10 s memory/IRQ line to syslog).
-	  Local test builds only.
+	  S41diag-sampler: one line every 10 s to syslog (uptime, load,
+	  free/cached/slab/shmem, major faults, IRQ counts, /tmp use,
+	  D-state tasks, top slabs, timpsd CPU), every 60 s also to
+	  /dev/kmsg. Shows the trend before an unexplained reset on the
+	  remote syslog host. Adds syslog traffic; for investigations.
 
-config BR2_THINGINO_DIAG_LASTPANIC
-	bool "last panic/oops/restart location kept over the WDT reset"
-	depends on BR2_THINGINO_DIAG
+config BR2_THINGINO_DIAG_KDEBUG
+	bool "Kernel debug checks (heavy)"
+	depends on KERNEL_VERSION_3
 	help
-	  Kernel option JZ_DIAG_LASTPANIC (T23/T31): on oops/panic/restart the
-	  reason, uptime bucket and epc (or comm) go to RTC RTCSAR, which
-	  survives the WDT reset (DRAM and CPM CPSPR do not), plus an unproven
-	  CP0 copy with ra/sp. /proc/diag_lastpanic shows the previous
-	  record; S02resetcause logs it. KALLSYMS stays off (it changes sizeof(struct
-	  module) and breaks every prebuilt module); resolve the logged addresses
-	  on the host with nm of the build's vmlinux. Local test builds only.
+	  Debug kernel for hunting preempt/atomic/stack bugs:
+	  DEBUG_PREEMPT, DEBUG_ATOMIC_SLEEP, DEBUG_STACKOVERFLOW (plus a
+	  per-IRQ preempt_count and stack-end check in do_IRQ that names
+	  the IRQ), DEBUG_STACK_USAGE and SLUB_DEBUG (slabinfo, no
+	  slub_debug at boot). Costs CPU on every preempt/IRQ and kernel
+	  size. Test images only.
+
+endmenu
 
 endmenu

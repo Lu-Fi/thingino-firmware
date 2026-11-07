@@ -1,7 +1,7 @@
 #!/bin/sh
 # Reserve a ramoops (pstore) region between the end of Linux RAM and rmem and add
 # the matching ramoops.* arguments to bootcmd. Called from thingino-uboot.mk when
-# BR2_THINGINO_RAMOOPS=y, after osmem/rmem were written to the uenv file.
+# BR2_THINGINO_DIAG_RAMOOPS=y, after osmem/rmem were written to the uenv file.
 #   usage: ramoops-env.sh UENV_TXT SOC_FAMILY SOC_RAM_MB RMEM_MB ISPMEM_MB RAMOOPS_KB [LOW_MB]
 # LOW_MB > 0: put the region (plus a 64 KB untouched test window behind it) at LOW_MB
 # inside Linux RAM, as a hole between two mem= ranges. Needed because U-Boot 2013.07

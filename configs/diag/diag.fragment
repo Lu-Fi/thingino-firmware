@@ -1,4 +1,0 @@
-# reset-diagnostics build (local): pstore/ramoops + panic/hung-task kernel options + resetcause/sampler scripts
-BR2_THINGINO_RAMOOPS=y
-BR2_THINGINO_RAMOOPS_KB=256
-BR2_THINGINO_DIAG=y

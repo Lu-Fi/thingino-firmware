@@ -1,5 +1,0 @@
-# reset-diagnostics build 2 (local): no ramoops (DRAM does not survive the WDT reset on T23/T31),
-# panic/hung-task kernel options + last-panic record in reset-surviving registers, resetcause/sampler scripts
-# BR2_THINGINO_RAMOOPS is not set
-BR2_THINGINO_DIAG=y
-BR2_THINGINO_DIAG_LASTPANIC=y

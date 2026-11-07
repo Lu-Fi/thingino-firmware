@@ -1,5 +1,5 @@
 #!/bin/sh
-# Reset diagnostics (BR2_THINGINO_DIAG): log why the last boot happened.
+# Reset diagnostics (BR2_THINGINO_DIAG_RESETCAUSE): log why the last boot happened.
 #  /proc/diag_lastpanic (kernel JZ_DIAG_LASTPANIC): record of the previous kernel death/restart,
 #  kept in RTC RTCSAR (survives the WDT reset, measured on T31L) + optional CP0 copy (unproven, cp0_ok=1
 #  when its checksum matches; then also ra/sp/full text).

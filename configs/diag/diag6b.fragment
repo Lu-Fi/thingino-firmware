@@ -1,5 +1,0 @@
-# reset-diagnostics build 6b (local, T23): diag5 options + reset-PC (ErrorEPC) sled record ONLY.
-# No ramoops, no low-memory env change (u-boot env identical to diag5).
-# BR2_THINGINO_RAMOOPS is not set
-BR2_THINGINO_DIAG=y
-BR2_THINGINO_DIAG_LASTPANIC=y

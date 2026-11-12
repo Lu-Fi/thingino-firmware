@@ -803,7 +803,9 @@
 			reg = <0x134b0000 0x2000>;
 			interrupt-parent = <0x04>;
 			interrupts = <0x37>;
-			status = "okay";
+			/* Wi-Fi only board: the RMII MAC claims PB6/PB11/PB13 (ir850, ircut), which
+			 * makes pinctrl-ingenic dump_stack on the later gpio request */
+			status = "disabled";
 			ingenic,rst-ms = <0x0a>;
 			pinctrl-names = "default", "reset";
 			pinctrl-0 = <0x14 0x15>;

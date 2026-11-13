@@ -29,8 +29,14 @@ OPENIMP_TOOLCHAIN_PREFIX = $(patsubst %-,%,$(TARGET_CROSS))
 OPENIMP_OUTPUT_DIR = $(@D)/build/$(OPENIMP_PLATFORM_LOWER)
 OPENIMP_BUILT_LIB = $(BUILD_DIR)/openimp-$(OPENIMP_VERSION)/build/$(OPENIMP_PLATFORM_LOWER)/libimp.so
 
-ifneq ($(filter t40 t41,$(SOC_FAMILY)),)
+ifneq ($(filter t33 t40 t41,$(SOC_FAMILY)),)
 OPENIMP_DEPENDENCIES += thingino-raptor-hal
+endif
+# T33: libimp for the 2.0.2.1 API line, built against the vendor public headers
+# that raptor-hal carries (ingenic-headers/T33/2.0.2.1/en). Nothing else is
+# built or installed: there is no tuning daemon on T32/T33 yet.
+ifeq ($(SOC_FAMILY),t33)
+OPENIMP_T33_HEADERS = $(THINGINO_RAPTOR_HAL_DIR)/ingenic-headers/T33/2.0.2.1/en
 endif
 ifeq ($(SOC_FAMILY),t40)
 OPENIMP_T40_HEADERS = $(THINGINO_RAPTOR_HAL_DIR)/ingenic-headers/T40/1.3.1/en
@@ -39,6 +45,17 @@ ifeq ($(SOC_FAMILY),t41)
 OPENIMP_T41_HEADERS = $(THINGINO_RAPTOR_HAL_DIR)/ingenic-headers/T41/1.2.0/zh
 endif
 
+ifeq ($(SOC_FAMILY),t33)
+define OPENIMP_BUILD_CMDS
+	$(TARGET_MAKE_ENV) \
+		LC_ALL=C \
+		THINGINO_DIR=$(BR2_EXTERNAL_THINGINO_PATH) \
+		TOOLCHAIN_PREFIX=$(OPENIMP_TOOLCHAIN_PREFIX) \
+		T33_OUTPUT_DIR=$(OPENIMP_OUTPUT_DIR) \
+		T33_HEADERS=$(OPENIMP_T33_HEADERS) \
+		$(@D)/build-t33.sh
+endef
+else
 define OPENIMP_BUILD_CMDS
 	$(TARGET_MAKE_ENV) \
 		LC_ALL=C \
@@ -59,6 +76,7 @@ define OPENIMP_BUILD_CMDS
 		T41_HEADERS=$(OPENIMP_T41_HEADERS) \
 		$(@D)/build-for-device.sh $(OPENIMP_PLATFORM)
 endef
+endif
 
 define OPENIMP_INSTALL_STAGING_CMDS
 	$(INSTALL) -D -m 0755 $(OPENIMP_OUTPUT_DIR)/libimp.so \
@@ -71,6 +89,12 @@ define OPENIMP_INSTALL_STAGING_CMDS
 		$(@D)/include/openimp/*.h
 endef
 
+ifeq ($(SOC_FAMILY),t33)
+define OPENIMP_INSTALL_TARGET_CMDS
+	$(INSTALL) -D -m 0755 $(OPENIMP_OUTPUT_DIR)/libimp.so \
+		$(TARGET_DIR)/usr/lib/libimp.so
+endef
+else
 define OPENIMP_INSTALL_TARGET_CMDS
 	$(INSTALL) -D -m 0755 $(OPENIMP_OUTPUT_DIR)/libimp.so \
 		$(TARGET_DIR)/usr/lib/libimp.so
@@ -81,6 +105,7 @@ define OPENIMP_INSTALL_TARGET_CMDS
 	$(INSTALL) -D -m 0644 $(OPENIMP_PKGDIR)/files/openimp-tuning.conf \
 		$(TARGET_DIR)/etc/openimp-tuning.conf
 endef
+endif
 
 define OPENIMP_FINALIZE_TARGET
 	$(INSTALL) -D -m 0755 $(OPENIMP_BUILT_LIB) \

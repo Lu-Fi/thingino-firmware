@@ -28,9 +28,14 @@ OPEN_TX_ISP_MODULE_MAKE_OPTS = \
 # module probes, otherwise "unknown") is taken from the package version.
 OPEN_TX_ISP_MODULE_MAKE_OPTS += OTX_BUILD_ID=$(OPEN_TX_ISP_VERSION)
 
-# Add XBurst platform include paths for soc headers
+# Add XBurst platform include paths for soc headers. The T33 vendor tree names
+# its SoC directory after the project code (soc-PRJ008), not the family.
+OPEN_TX_ISP_SOC_DIR = soc-$(SOC_FAMILY)
+ifeq ($(SOC_FAMILY),t33)
+OPEN_TX_ISP_SOC_DIR = soc-PRJ008
+endif
 OPEN_TX_ISP_MODULE_MAKE_OPTS += \
-	EXTRA_CFLAGS="-I$(LINUX_DIR)/arch/mips/xburst/soc-$(SOC_FAMILY)/include \
+	EXTRA_CFLAGS="-I$(LINUX_DIR)/arch/mips/xburst/$(OPEN_TX_ISP_SOC_DIR)/include \
 	-I$(LINUX_DIR)/arch/mips/xburst/core/include \
 	-I$(LINUX_DIR)/arch/mips/xburst/common/include"
 

@@ -6,6 +6,7 @@ config BR2_PACKAGE_OPEN_TX_ISP_SUPPORTED
 	default y if BR2_SOC_FAMILY = "t23" && KERNEL_VERSION_3
 	default y if BR2_SOC_FAMILY = "t30" && KERNEL_VERSION_3
 	default y if BR2_SOC_FAMILY = "t31" && BR2_INGENIC_SOC_MODEL != "c100" && KERNEL_VERSION_3
+	default y if BR2_SOC_FAMILY = "t33" && KERNEL_VERSION_3
 	default y if BR2_SOC_FAMILY = "t40" && KERNEL_VERSION_4
 	default y if BR2_SOC_FAMILY = "t41" && KERNEL_VERSION_4
 
@@ -18,11 +19,12 @@ config BR2_PACKAGE_OPEN_TX_ISP
 	help
 	  Open-source replacement for the proprietary Ingenic TX-ISP
 	  kernel driver. Builds the driver for the selected T10, T20,
-	  T21, T23, T30, T31, T40, or T41 SoC and installs it under the
+	  T21, T23, T30, T31, T33, T40, or T41 SoC and installs it under the
 	  canonical tx-isp-<soc>.ko module name.
 
 	  The active upstream targets are the vendor Linux 3.10.14 trees
-	  for T10/T20/T21/T23/T30/T31 and Linux 4.4.94 trees for T40/T41.
+	  for T10/T20/T21/T23/T30/T31/T33 and Linux 4.4.94 trees for T40/T41.
+	  T33 (PRJ008) is QEMU-tested only so far, no camera has run it.
 	  The recovered drivers are experimental and image quality is not
 	  yet OEM-equivalent on every sensor.
 

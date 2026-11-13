@@ -1,0 +1,28 @@
+From 8386e898c004ac5714893be4b345708a9e515485 Mon Sep 17 00:00:00 2001
+From: Lu-Fi <lutz@fiebach.de>
+Date: Fri, 13 Nov 2026 11:42:08 +0100
+Subject: [PATCH] log2: drop const from ____ilog2_NaN (gcc 16 attribute
+ conflict)
+
+gcc 16 rejects const together with noreturn on the same declaration and the
+tree builds with -Werror=attributes.
+---
+ include/linux/log2.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/include/linux/log2.h b/include/linux/log2.h
+index fd7ff3d9..5fc109f9 100644
+--- a/include/linux/log2.h
++++ b/include/linux/log2.h
+@@ -18,7 +18,7 @@
+ /*
+  * deal with unrepresentable constant logarithms
+  */
+-extern __attribute__((const, noreturn))
++extern __attribute__((noreturn))
+ int ____ilog2_NaN(void);
+ 
+ /*
+-- 
+2.56.0
+

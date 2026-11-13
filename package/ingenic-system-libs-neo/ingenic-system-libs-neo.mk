@@ -5,9 +5,9 @@
 ################################################################################
 
 INGENIC_SYSTEM_LIBS_NEO_SITE_METHOD = git
-INGENIC_SYSTEM_LIBS_NEO_SITE = https://github.com/gtxaspec/ingenic-system-libs-neo
-INGENIC_SYSTEM_LIBS_NEO_SITE_BRANCH = main
-INGENIC_SYSTEM_LIBS_NEO_VERSION = 3e1189021e4f273b701b5d8bb8a07b19699333d6
+INGENIC_SYSTEM_LIBS_NEO_SITE = https://github.com/Lu-Fi/ingenic-system-libs-neo
+INGENIC_SYSTEM_LIBS_NEO_SITE_BRANCH = aperto
+INGENIC_SYSTEM_LIBS_NEO_VERSION = 7171f2060c4b398fe766cd8b44cfaeee9ff81a6f
 INGENIC_SYSTEM_LIBS_NEO_INSTALL_STAGING = YES
 
 # Upstream documents the project as MIT but does not currently ship a

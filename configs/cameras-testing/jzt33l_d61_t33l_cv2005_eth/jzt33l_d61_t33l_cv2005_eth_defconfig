@@ -18,8 +18,10 @@ BR2_PACKAGE_THINGINO_RAPTOR_CONF_SENSOR_MCLK="0"
 # Sensor is a CV2005 (I2C0, 0x35); "none" because the SDK has no T33 sensor module or
 # IQ bin. The vendor ko and PRJ008 bins come from a local overlay (README.md).
 BR2_SENSOR_1_NAME="none"
-# Vendor reserves 12704K at 0x3398000; thingino works in whole MB, 13 MB covers it.
-BR2_THINGINO_RMEM_MB=13
+# Vendor reserves 12704K at 0x3398000, but its main channel runs over IVDC (direct_mode=1,
+# no frame buffers). Until direct mode works here (openimp #509) the buffered path needs
+# 2 x 3 MiB main + sub stream + JPEG + a 3 MiB GetFrame copy (raw snapshot): 20 MiB (#516).
+BR2_THINGINO_RMEM_MB=20
 FLASH_SIZE_MB=16
 KERNEL_VERSION_3=y
 # Full thingino boot: the 2026.07 tree has the T33 SoC (isvp_t33_sfcnor = SOC_UBOOT,

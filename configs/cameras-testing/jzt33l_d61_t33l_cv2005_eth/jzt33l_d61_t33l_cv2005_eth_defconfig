@@ -4,9 +4,14 @@ BR2_ETHERNET=y
 # The T33 (PRJ008) MAC is the V13 one (vendor kernel config); the kopt default V12 does not build.
 BR2_PACKAGE_THINGINO_KOPT_JZ_MAC_V13=y
 BR2_INGENIC_SOC_MODEL="t33l"
-# The open-stack streamer of the fleet (OpenIMP libimp); sensor model/address come from
-# the local timps.conf overlay (README.md), the open sinfo leaves /proc/jz/sensor empty.
-BR2_PACKAGE_THINGINO_STREAMER_TIMPS=y
+# Streamer: raptor (has a T33 HAL). timps, the fleet's open-stack streamer, does not
+# build for T32/T33 yet (encoder API alias in its HAL, openimp #515). The open sinfo
+# leaves /proc/jz/sensor empty (#513): sensor name/address set here.
+BR2_PACKAGE_THINGINO_STREAMER_RAPTOR=y
+BR2_PACKAGE_THINGINO_RAPTOR_CONF_SENSOR_NAME="cv2005"
+BR2_PACKAGE_THINGINO_RAPTOR_CONF_SENSOR_I2C_ADDR="0x35"
+BR2_PACKAGE_THINGINO_RAPTOR_CONF_SENSOR_I2C_ADAPTER="0"
+BR2_PACKAGE_THINGINO_RAPTOR_CONF_SENSOR_FPS="25"
 # Sensor is a CV2005 (I2C0, 0x35); "none" because the SDK has no T33 sensor module or
 # IQ bin. The vendor ko and PRJ008 bins come from a local overlay (README.md).
 BR2_SENSOR_1_NAME="none"
@@ -20,3 +25,10 @@ KERNEL_VERSION_3=y
 BR2_THINGINO_UBOOT_VERSION_2026_07=y
 BR2_PACKAGE_THINGINO_UBOOT_FLASH_CONTROLLER_JZ_SFC=n
 BR2_PACKAGE_THINGINO_UBOOT_FLASH_CONTROLLER_SFC0_NOR=y
+# Raptor daemons: video capture, RTSP, HTTP snapshot only (no audio, no OSD / IR-cut /
+# motion / WebRTC on this bring-up module yet).
+# BR2_PACKAGE_THINGINO_RAPTOR_FULL is not set
+BR2_PACKAGE_THINGINO_RAPTOR_RVD=y
+BR2_PACKAGE_THINGINO_RAPTOR_RSD=y
+BR2_PACKAGE_THINGINO_RAPTOR_RHD=y
+# BR2_PACKAGE_THINGINO_RAPTOR_WEBRTC is not set

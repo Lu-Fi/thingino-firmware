@@ -56,7 +56,8 @@ release tags):
 - ISP module arguments of the vendor `loadko.sh` for T33L:
   `clk_name=mpll isp_clk=325000000 clkv_name=mpll isp_clkv=325000000
   direct_mode=1 ivdc_mem_line=1080 ivdc_threshold_line=800` (the thingino
-  Kconfig has no 325 MHz ISP clock; pass them via `/etc/modules.d/20-isp`).
+  Kconfig has no 325 MHz ISP clock; pass them via `/etc/modules.d/20-isp`;
+  the open driver runs with `direct_mode=0` until #509 is fixed).
 - IR cut: GPIO 66 / 67 (PC2 / PC3), outputs (vendor HAL `IniteIrcut`).
 - IR LEDs: PWM driven by the vendor (PWM channel 2 on GPIO 73 / PC9, second
   channel on GPIO 72 / PC8); `ir850` = 73 as a plain GPIO is a guess.
@@ -73,5 +74,11 @@ What is deliberately empty or open:
 - Sensor module and IQ bins: the pinned `ingenic-sdk` has no T33 tree and the
   PRJ008 IQ bins are vendor files. The vendor `sensor_cv2005_t33.ko` and the
   `cv2005-PRJ008-*.bin` files must come from a local user overlay.
-- No streamer (`THINGINO_STREAMER_NONE`): the first module run is the ISP +
-  OpenIMP bring-up, not a camera image.
+- Streamer: timps (the fleet's open-stack streamer) since 2026-11-14 (#511).
+  The local overlay supplies `/etc/timps.conf` with `sensor.model = cv2005`,
+  `sensor.i2c_addr = 0x35`, 1920x1080@25 (the open sinfo does not fill
+  `/proc/jz/sensor/sensor0/name`, so timps cannot detect the sensor), the
+  `/etc/sensor -> /usr/share/sensor` link (OpenIMP T33 reads
+  `/etc/sensor/cv2005-PRJ008-<mode>.bin`; with sensor "none" the SDK package
+  does not create the link) and `20-isp` with `direct_mode=0`
+  (direct_mode=1 hangs the T33L, openimp #509).

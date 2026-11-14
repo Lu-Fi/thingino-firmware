@@ -4,7 +4,9 @@ BR2_ETHERNET=y
 # The T33 (PRJ008) MAC is the V13 one (vendor kernel config); the kopt default V12 does not build.
 BR2_PACKAGE_THINGINO_KOPT_JZ_MAC_V13=y
 BR2_INGENIC_SOC_MODEL="t33l"
-BR2_PACKAGE_THINGINO_STREAMER_NONE=y
+# The open-stack streamer of the fleet (OpenIMP libimp); sensor model/address come from
+# the local timps.conf overlay (README.md), the open sinfo leaves /proc/jz/sensor empty.
+BR2_PACKAGE_THINGINO_STREAMER_TIMPS=y
 # Sensor is a CV2005 (I2C0, 0x35); "none" because the SDK has no T33 sensor module or
 # IQ bin. The vendor ko and PRJ008 bins come from a local overlay (README.md).
 BR2_SENSOR_1_NAME="none"

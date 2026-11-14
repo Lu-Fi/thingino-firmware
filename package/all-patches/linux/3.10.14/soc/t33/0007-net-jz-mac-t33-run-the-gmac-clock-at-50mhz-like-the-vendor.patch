@@ -1,0 +1,30 @@
+From: Lu-Fi <lu-fi@users.noreply.github.com>
+Date: Sat, 14 Nov 2026 12:30:00 +0100
+Subject: [PATCH] net: jz_mac: T33 runs the GMAC clock at 50 MHz like the vendor
+
+The T33 vendor kernel (3.10.14 isvp_goat H20250916a, jz_mii_bus_probe)
+calls clk_set_rate(div_gmac, 50000000) (CPM MACCDR); this tree set 25 MHz.
+On the JZT33L D61 module (TI DP83825 RMII PHY at address 0) eth0 passed no
+traffic at 25 MHz (udhcpc: no lease on a known-good port).
+
+---
+ drivers/net/ethernet/ingenic/jz_mac_v13.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/net/ethernet/ingenic/jz_mac_v13.c b/drivers/net/ethernet/ingenic/jz_mac_v13.c
+--- a/drivers/net/ethernet/ingenic/jz_mac_v13.c
++++ b/drivers/net/ethernet/ingenic/jz_mac_v13.c
+@@ -2267,7 +2267,12 @@
+ 		clk_put(clk_gate);
+ 		goto out_err_alloc;
+ 	}
+-#ifdef CONFIG_FPGA_TEST
++#if defined(CONFIG_FPGA_TEST) || defined(CONFIG_SOC_PRJ008)
++	/*
++	 * T33 (PRJ008) RMII boards: the vendor kernel runs the GMAC divider
++	 * (CPM MACCDR) at 50 MHz, the RMII reference clock. With 25 MHz
++	 * eth0 passes no traffic on the JZT33L module.
++	 */
+ 	clk_set_rate(clk_div, 50000000);
+ #else
+ 	clk_set_rate(clk_div, 25000000);

@@ -33,6 +33,10 @@ U-Boot details for this board:
 - Memory: `BR2_THINGINO_RMEM_MB=13` (mem=51M rmem=13M@0x3300000); the vendor
   uses mem=52832K rmem=12704K@0x3398000, thingino works in whole MB, 13 MB
   covers the vendor reservation.
+- Ethernet: TI DP83825 RMII PHY at MDIO address 0 (id 0x2000/0xa140, reset
+  PB26 active low). The GMAC clock (CPM MACCDR) must run at 50 MHz like the
+  vendor kernel (kernel patch soc/t33/0007); with the generic 25 MHz the
+  first hardware boot got no DHCP lease on a known-good port.
 - MAC: keep the module's factory MAC by setting `ethaddr` (local.uenv.txt) and
   `eth.mac` (thingino.json) in the user dir; S03mac otherwise generates one.
 

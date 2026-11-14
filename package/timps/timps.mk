@@ -213,15 +213,6 @@ endif
 # a plain make-variable override on the invocation, e.g.:
 #   make CAMERA=... IP=... TIMPS_TRACE=1 rebuild-timps
 # Default (TIMPS_TRACE unset) is USE_TRACE=0, identical to every other build.
-# T32 / T33: OpenIMP there is a vendor-ABI 2.x build without the OpenIMP extension
-# exports timps's libimp check looks for (OpenIMP_P0_GetState / AVC_Create /
-# Tuning_Create), so timps builds its vendor flavour against it (openimp #511).
-ifeq ($(BR2_PACKAGE_OPENIMP),y)
-TIMPS_USE_OPENIMP = $(if $(filter t32 t33,$(SOC_FAMILY)),0,1)
-else
-TIMPS_USE_OPENIMP = 0
-endif
-
 define TIMPS_BUILD_CMDS
 	$(MAKE) \
 		CROSS_COMPILE=$(TARGET_CROSS) \
@@ -234,7 +225,7 @@ define TIMPS_BUILD_CMDS
 		LDFLAGS="$(TARGET_LDFLAGS) -Wl,--gc-sections -L$(STAGING_DIR)/usr/lib -L$(TARGET_DIR)/usr/lib" \
 		LIBS="$(TIMPS_LIBS)" \
 		USE_FAAC=$(if $(BR2_PACKAGE_TIMPS_FAAC),1,0) \
-		USE_OPENIMP=$(TIMPS_USE_OPENIMP) \
+		USE_OPENIMP=$(if $(BR2_PACKAGE_OPENIMP),1,0) \
 		USE_TRACE=$(if $(filter 1,$(TIMPS_TRACE)),1,0) \
 		USE_CONTROL=$(if $(BR2_PACKAGE_TIMPS_CONTROL),1,0) \
 		USE_DAYNIGHT=$(if $(BR2_PACKAGE_TIMPS_DAYNIGHT),1,0) \

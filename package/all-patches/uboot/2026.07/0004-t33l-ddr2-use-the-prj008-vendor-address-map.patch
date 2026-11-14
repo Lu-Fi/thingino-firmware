@@ -1,0 +1,29 @@
+Subject: [PATCH] t33: T33L DDR2 650 profile uses the PRJ008 vendor address map
+
+The vendor U-Boot 2013.07-H20260203a SPL on a T33L PRJ008 module
+(JZT33L_D61, M14D5121632A DDR2, 650 MHz) programs the same uMCTL2
+timing, refresh, DFI and ODT words as this profile, but a different
+address map: bank bits at HIF 10/11 (ADDRMAP1 0x003f0808) and the row
+bits shifted up by two (ADDRMAP5 0x06060606, ADDRMAP6 0x0f0f0f06).
+Both maps cover 64 MB; use the one proven on the hardware.
+
+---
+diff --git a/arch/mips/mach-xburst/include/mach/t33-ddr.h b/arch/mips/mach-xburst/include/mach/t33-ddr.h
+--- a/arch/mips/mach-xburst/include/mach/t33-ddr.h
++++ b/arch/mips/mach-xburst/include/mach/t33-ddr.h
+@@ -517,12 +517,12 @@
+ #define DDRC_TIMING7           0x00000101
+ #define DDRC_TIMING8           0x00000402
+ #define DDRC_TIMING14          0x00000000
+-#define DDRC_ADDRMAP1          0x003f1515
++#define DDRC_ADDRMAP1          0x003f0808
+ #define DDRC_ADDRMAP2          0x00000000
+ #define DDRC_ADDRMAP3          0x00000000
+ #define DDRC_ADDRMAP4          0x00001f1f
+-#define DDRC_ADDRMAP5          0x04040404
+-#define DDRC_ADDRMAP6          0x0f0f0f04
++#define DDRC_ADDRMAP5          0x06060606
++#define DDRC_ADDRMAP6          0x0f0f0f06
+ #define DDRC_RFSHCTL3          0x00000002
+ #define DDRC_RFSHTMG           0x004f0023
+ #define DDRC_ODTCFG            0x07020708

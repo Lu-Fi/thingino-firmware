@@ -8,13 +8,13 @@ BR2_PACKAGE_THINGINO_STREAMER_NONE=y
 # Sensor is a CV2005 (I2C0, 0x35); "none" because the SDK has no T33 sensor module or
 # IQ bin. The vendor ko and PRJ008 bins come from a local overlay (README.md).
 BR2_SENSOR_1_NAME="none"
-BR2_THINGINO_RMEM_MB=12
+# Vendor reserves 12704K at 0x3398000; thingino works in whole MB, 13 MB covers it.
+BR2_THINGINO_RMEM_MB=13
 FLASH_SIZE_MB=16
 KERNEL_VERSION_3=y
-# No open T33 U-Boot exists. The module keeps its vendor U-Boot (flash 0x0-0x40000);
-# this placeholder board only lets the image pack. Never flash thingino-*.bin of this
-# profile as a whole: its first 256 KiB are NOT a T33 boot loader (see README.md).
-BR2_TARGET_UBOOT_BOARDNAME="isvp_t31_sfcnor"
-# Vendor U-Boot passes a fixed bootargs for its own layout; the kernel carries the
-# command line for the vendor-boot layout instead (README.md, vendorboot.kernel.config).
-BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES="$(BR2_EXTERNAL_THINGINO_PATH)/configs/cameras-testing/jzt33l_d61_t33l_cv2005_eth/vendorboot.kernel.config"
+# Full thingino boot: the 2026.07 tree has the T33 SoC (isvp_t33_sfcnor = SOC_UBOOT,
+# DDR2 650 MHz T33L profile, PY25Q128HA in the SPI NOR id table). The vendor kernel
+# 3.10 SFC driver registers its MTD as sfc0_nor.
+BR2_THINGINO_UBOOT_VERSION_2026_07=y
+BR2_PACKAGE_THINGINO_UBOOT_FLASH_CONTROLLER_JZ_SFC=n
+BR2_PACKAGE_THINGINO_UBOOT_FLASH_CONTROLLER_SFC0_NOR=y

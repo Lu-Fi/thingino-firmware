@@ -6,45 +6,35 @@ Bring-up profile for the T33L test module, board code `JZT33L_D61_Q38_P2P_BL`
 TI DP83825 PHY), 3.10.14 vendor kernel. Planned, not a release gate
 (openimp #392, #393, umbrella #98 / #99).
 
-## Boot: vendor U-Boot, vendor-boot layout
+## Boot: thingino U-Boot, standard thingino layout
 
-No open T33 U-Boot exists. The module keeps its vendor U-Boot
-(`U-Boot 2013.07-H20260203a`, board PRJ008). That U-Boot has no saved
-environment (it prints "bad CRC, using default environment") and always runs
+The module runs fully on thingino (user decision 2026-11-14): U-Boot 2026.07
+(`BR2_THINGINO_UBOOT_VERSION_2026_07`, board `isvp_t33_sfcnor` = SOC_UBOOT of
+`soc/ingenic/t33.mk`) and the standard 16 MiB NOR layout:
 
-    sf0 probe; sf0 read 0x80600000 0x250000 0x200000; bootm 0x80600000
+| mtd | name    | offset   | size    |
+|-----|---------|----------|---------|
+| 0   | boot    | 0x000000 | 320k    |
+| 1   | env     | 0x050000 | 64k     |
+| 2   | backup  | 0x060000 | 64k     |
+| 3   | kernel  | 0x070000 | 1600k   |
+| 4   | rootfs  | 0x200000 | 2752k   |
+| 5   | data    | 0x4b0000 | 11584k  |
 
-with bootargs for the vendor partition table. This profile therefore builds
-the kernel with a built-in command line that overrides the firmware one
-(`vendorboot.kernel.config`): vendor memory split (`mem=52832K@0x0
-rmem=12704K@0x3398000`) and this partition table:
+U-Boot details for this board:
 
-| mtd | name    | offset   | size  | content                                   |
-|-----|---------|----------|-------|-------------------------------------------|
-| 0   | boot    | 0x000000 | 256k  | vendor U-Boot, never written               |
-| 1   | env     | 0x450000 | 64k   | thingino env (`/dev/mtd1 0x0 0x8000`)     |
-| 2   | kernel  | 0x250000 | 2048k | uImage, where the vendor U-Boot reads it  |
-| 3   | rootfs  | 0x460000 | 6080k | squashfs (`root=/dev/mtdblock3`)          |
-| 4   | data    | 0xa50000 | 5824k | jffs2 overlay                             |
-| 5   | all     | 0x000000 | 16M   |                                           |
-| 6   | factory | 0x040000 | 64k   | vendor licence block, read-only           |
-| 7   | config  | 0x050000 | 2048k | vendor config jffs2, read-only (rollback) |
-
-Everything thingino writes lies at or above 0x250000, i.e. inside the vendor
-kernel/rootfs/media/appfs partitions; U-Boot, factory and config stay as they
-are, so the vendor firmware can be restored by rewriting 0x250000-0xffffff
-only.
-
-Consequences:
-
-- `thingino-jzt33l_d61_t33l_cv2005_eth.bin` from `make` is NOT flashable: its
-  first 256 KiB come from a placeholder U-Boot board (`isvp_t31_sfcnor`, only
-  so the image packs) and its layout is the thingino one. The flashable image
-  is composed from the build output and the module's own flash backup (kernel
-  at 0x250000, env at 0x450000, rootfs at 0x460000, data at 0xa50000).
-- `sysupgrade` / OTA from the camera write the thingino layout including the
-  boot partition and must not be used on this module.
-- The rootfs must stay below 6080 KiB and the uImage below 2 MiB.
+- T33L DDR2 650 MHz profile (APLL 950 / MPLL 1300, as the vendor log). The
+  uMCTL2 timing/refresh/DFI/ODT words equal the vendor SPL; the address map is
+  taken from the vendor SPL (patch 0004).
+- SPL console UART clock gate is CLKGR0 bit 11 + n on T33 (patch 0005; without
+  it the SPL hangs on its first character).
+- PY25Q128HA (0x852018) is in the SPI NOR id table; U-Boot has no Ethernet on
+  T33 (no tftp from U-Boot), recovery is the SPI clip.
+- Memory: `BR2_THINGINO_RMEM_MB=13` (mem=51M rmem=13M@0x3300000); the vendor
+  uses mem=52832K rmem=12704K@0x3398000, thingino works in whole MB, 13 MB
+  covers the vendor reservation.
+- MAC: keep the module's factory MAC by setting `ethaddr` (local.uenv.txt) and
+  `eth.mac` (thingino.json) in the user dir; S03mac otherwise generates one.
 
 ## Build
 

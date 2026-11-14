@@ -34,6 +34,9 @@ OPEN_TX_ISP_SOC_DIR = soc-$(SOC_FAMILY)
 ifeq ($(SOC_FAMILY),t33)
 OPEN_TX_ISP_SOC_DIR = soc-PRJ008
 endif
+ifeq ($(SOC_FAMILY)-$(KERNEL_VERSION),t32-3.10.14)
+OPEN_TX_ISP_SOC_DIR = soc-PRJ007
+endif
 OPEN_TX_ISP_MODULE_MAKE_OPTS += \
 	EXTRA_CFLAGS="-I$(LINUX_DIR)/arch/mips/xburst/$(OPEN_TX_ISP_SOC_DIR)/include \
 	-I$(LINUX_DIR)/arch/mips/xburst/core/include \

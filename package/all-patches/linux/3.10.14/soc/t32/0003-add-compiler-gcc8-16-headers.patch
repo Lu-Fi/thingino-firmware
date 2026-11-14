@@ -1,0 +1,101 @@
+From 3f10047fd53a0fdc663dbe5944311e70cfe59dfb Mon Sep 17 00:00:00 2001
+From: Lu-Fi <lutz@fiebach.de>
+Date: Fri, 13 Nov 2026 11:39:47 +0100
+Subject: [PATCH] include/linux: compiler-gcc8..16.h for the T33 vendor tree
+
+---
+ include/linux/compiler-gcc10.h | 2 ++
+ include/linux/compiler-gcc11.h | 2 ++
+ include/linux/compiler-gcc12.h | 2 ++
+ include/linux/compiler-gcc13.h | 2 ++
+ include/linux/compiler-gcc14.h | 2 ++
+ include/linux/compiler-gcc15.h | 2 ++
+ include/linux/compiler-gcc16.h | 2 ++
+ include/linux/compiler-gcc8.h  | 2 ++
+ include/linux/compiler-gcc9.h  | 2 ++
+ 9 files changed, 18 insertions(+)
+ create mode 100644 include/linux/compiler-gcc10.h
+ create mode 100644 include/linux/compiler-gcc11.h
+ create mode 100644 include/linux/compiler-gcc12.h
+ create mode 100644 include/linux/compiler-gcc13.h
+ create mode 100644 include/linux/compiler-gcc14.h
+ create mode 100644 include/linux/compiler-gcc15.h
+ create mode 100644 include/linux/compiler-gcc16.h
+ create mode 100644 include/linux/compiler-gcc8.h
+ create mode 100644 include/linux/compiler-gcc9.h
+
+diff --git a/include/linux/compiler-gcc10.h b/include/linux/compiler-gcc10.h
+new file mode 100644
+index 0000000..46c1170
+--- /dev/null
++++ b/include/linux/compiler-gcc10.h
+@@ -0,0 +1,2 @@
++/* GCC 10: same attributes and builtins as the gcc7 header (T33 vendor tree) */
++#include <linux/compiler-gcc7.h>
+diff --git a/include/linux/compiler-gcc11.h b/include/linux/compiler-gcc11.h
+new file mode 100644
+index 0000000..e79df34
+--- /dev/null
++++ b/include/linux/compiler-gcc11.h
+@@ -0,0 +1,2 @@
++/* GCC 11: same attributes and builtins as the gcc7 header (T33 vendor tree) */
++#include <linux/compiler-gcc7.h>
+diff --git a/include/linux/compiler-gcc12.h b/include/linux/compiler-gcc12.h
+new file mode 100644
+index 0000000..9eff155
+--- /dev/null
++++ b/include/linux/compiler-gcc12.h
+@@ -0,0 +1,2 @@
++/* GCC 12: same attributes and builtins as the gcc7 header (T33 vendor tree) */
++#include <linux/compiler-gcc7.h>
+diff --git a/include/linux/compiler-gcc13.h b/include/linux/compiler-gcc13.h
+new file mode 100644
+index 0000000..d7ecb62
+--- /dev/null
++++ b/include/linux/compiler-gcc13.h
+@@ -0,0 +1,2 @@
++/* GCC 13: same attributes and builtins as the gcc7 header (T33 vendor tree) */
++#include <linux/compiler-gcc7.h>
+diff --git a/include/linux/compiler-gcc14.h b/include/linux/compiler-gcc14.h
+new file mode 100644
+index 0000000..68a20ee
+--- /dev/null
++++ b/include/linux/compiler-gcc14.h
+@@ -0,0 +1,2 @@
++/* GCC 14: same attributes and builtins as the gcc7 header (T33 vendor tree) */
++#include <linux/compiler-gcc7.h>
+diff --git a/include/linux/compiler-gcc15.h b/include/linux/compiler-gcc15.h
+new file mode 100644
+index 0000000..bf28cf8
+--- /dev/null
++++ b/include/linux/compiler-gcc15.h
+@@ -0,0 +1,2 @@
++/* GCC 15: same attributes and builtins as the gcc7 header (T33 vendor tree) */
++#include <linux/compiler-gcc7.h>
+diff --git a/include/linux/compiler-gcc16.h b/include/linux/compiler-gcc16.h
+new file mode 100644
+index 0000000..71b5c37
+--- /dev/null
++++ b/include/linux/compiler-gcc16.h
+@@ -0,0 +1,2 @@
++/* GCC 16: same attributes and builtins as the gcc7 header (T33 vendor tree) */
++#include <linux/compiler-gcc7.h>
+diff --git a/include/linux/compiler-gcc8.h b/include/linux/compiler-gcc8.h
+new file mode 100644
+index 0000000..4d13eb4
+--- /dev/null
++++ b/include/linux/compiler-gcc8.h
+@@ -0,0 +1,2 @@
++/* GCC 8: same attributes and builtins as the gcc7 header (T33 vendor tree) */
++#include <linux/compiler-gcc7.h>
+diff --git a/include/linux/compiler-gcc9.h b/include/linux/compiler-gcc9.h
+new file mode 100644
+index 0000000..958e15e
+--- /dev/null
++++ b/include/linux/compiler-gcc9.h
+@@ -0,0 +1,2 @@
++/* GCC 9: same attributes and builtins as the gcc7 header (T33 vendor tree) */
++#include <linux/compiler-gcc7.h>
+-- 
+2.56.0
+

@@ -286,6 +286,13 @@ define INSTALL_AUDIO_SUPPORT
 	$(INSTALL) -D -m 0755 $(INGENIC_SDK_PKGDIR)/files/speaker-ctrl $(TARGET_DIR)/usr/sbin/speaker-ctrl
 endef
 
+# T32 on the 3.10.14 vendor tree: the SDK has no T32 sensor or IQ tree (see
+# 0010-t32-3.10-build-no-sdk-modules.patch). The IQ bins (<sensor>-PRJ007-*.bin)
+# are vendor files and come from the camera's user overlay.
+ifeq ($(SOC_FAMILY)-$(KERNEL_VERSION),t32-3.10.14)
+INGENIC_SDK_NO_SOC_TREE = y
+endif
+
 define INGENIC_SDK_INSTALL_TARGET_CMDS
 	krel="$$( $(MAKE) -s -C $(LINUX_DIR) kernelrelease 2>/dev/null )"; \
 	if [ -z "$$krel" ]; then krel="$(LINUX_VERSION_PROBED)"; fi; \
@@ -299,7 +306,11 @@ define INGENIC_SDK_INSTALL_TARGET_CMDS
 		touch "$$libdir/modules/$$krel/modules.builtin.modinfo"; \
 	done
 
-	if [ -n "$(SENSOR_1_MODEL)" ]; then \
+	if [ -n "$(SENSOR_1_MODEL)" ] && [ "$(INGENIC_SDK_NO_SOC_TREE)" = "y" ]; then \
+		ln -sf /usr/share/sensor $(TARGET_DIR)/etc/sensor; \
+		$(INSTALL) -d -m 0755 $(TARGET_DIR)/usr/share/sensor; \
+		echo $(SENSOR_1_MODEL) > $(TARGET_DIR)/usr/share/sensor/model; \
+	elif [ -n "$(SENSOR_1_MODEL)" ]; then \
 		$(call INSTALL_SENSOR_BIN,$(SENSOR_1_MODEL),$(SENSOR_1_BIN_NAME),$(SENSOR_1_CONFIG_NAME),$(SENSOR_1_IQ_OVERRIDE)); \
 		$(call INSTALL_SENSOR_BIN,$(SENSOR_2_MODEL),$(SENSOR_2_BIN_NAME),$(SENSOR_2_CONFIG_NAME),$(SENSOR_2_IQ_OVERRIDE)); \
 	fi

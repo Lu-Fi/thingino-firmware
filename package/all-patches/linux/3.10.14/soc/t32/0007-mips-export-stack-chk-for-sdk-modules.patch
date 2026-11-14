@@ -1,0 +1,28 @@
+MIPS: export __stack_chk_guard/__stack_chk_fail for Ingenic SDK modules
+
+The PRJ007 vendor kernel exports both; SDK sensor modules import them.
+
+--- a/arch/mips/kernel/mips_ksyms.c
++++ b/arch/mips/kernel/mips_ksyms.c
+@@ -88,3 +88,21 @@
+ /* _mcount is defined in arch/mips/kernel/mcount.S */
+ EXPORT_SYMBOL(_mcount);
+ #endif
++
++/*
++ * Ingenic SDK modules (sensor drivers, vendor misc modules) are built with
++ * -fstack-protector and import __stack_chk_guard / __stack_chk_fail; the
++ * vendor PRJ007 1.0 kernel exports both. MIPS 3.10 has no
++ * CC_STACKPROTECTOR, so provide the two symbols here for those modules.
++ */
++#ifndef CONFIG_CC_STACKPROTECTOR
++unsigned long __stack_chk_guard __read_mostly = 0x5a17c0deUL;
++EXPORT_SYMBOL(__stack_chk_guard);
++
++void __stack_chk_fail(void)
++{
++	panic("stack-protector: kernel stack is corrupted in: %pS\n",
++	      __builtin_return_address(0));
++}
++EXPORT_SYMBOL(__stack_chk_fail);
++#endif

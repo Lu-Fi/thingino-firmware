@@ -29,12 +29,16 @@ OPENIMP_TOOLCHAIN_PREFIX = $(patsubst %-,%,$(TARGET_CROSS))
 OPENIMP_OUTPUT_DIR = $(@D)/build/$(OPENIMP_PLATFORM_LOWER)
 OPENIMP_BUILT_LIB = $(BUILD_DIR)/openimp-$(OPENIMP_VERSION)/build/$(OPENIMP_PLATFORM_LOWER)/libimp.so
 
-ifneq ($(filter t33 t40 t41,$(SOC_FAMILY)),)
+ifneq ($(filter t32 t33 t40 t41,$(SOC_FAMILY)),)
 OPENIMP_DEPENDENCIES += thingino-raptor-hal
 endif
 # T33: libimp for the 2.0.2.1 API line, built against the vendor public headers
 # that raptor-hal carries (ingenic-headers/T33/2.0.2.1/en). Nothing else is
 # built or installed: there is no tuning daemon on T32/T33 yet.
+# T32: libimp for the 2.x ABI of open-tx-isp driver/t32 (vendor 2.2.0 headers).
+ifeq ($(SOC_FAMILY),t32)
+OPENIMP_T32_HEADERS = $(THINGINO_RAPTOR_HAL_DIR)/ingenic-headers/T32/2.2.0/en
+endif
 ifeq ($(SOC_FAMILY),t33)
 OPENIMP_T33_HEADERS = $(THINGINO_RAPTOR_HAL_DIR)/ingenic-headers/T33/2.0.2.1/en
 endif
@@ -45,7 +49,17 @@ ifeq ($(SOC_FAMILY),t41)
 OPENIMP_T41_HEADERS = $(THINGINO_RAPTOR_HAL_DIR)/ingenic-headers/T41/1.2.0/zh
 endif
 
-ifeq ($(SOC_FAMILY),t33)
+ifeq ($(SOC_FAMILY),t32)
+define OPENIMP_BUILD_CMDS
+	$(TARGET_MAKE_ENV) \
+		LC_ALL=C \
+		THINGINO_DIR=$(BR2_EXTERNAL_THINGINO_PATH) \
+		TOOLCHAIN_PREFIX=$(OPENIMP_TOOLCHAIN_PREFIX) \
+		T32_OUTPUT_DIR=$(OPENIMP_OUTPUT_DIR) \
+		T32_HEADERS=$(OPENIMP_T32_HEADERS) \
+		$(@D)/build-t32.sh
+endef
+else ifeq ($(SOC_FAMILY),t33)
 define OPENIMP_BUILD_CMDS
 	$(TARGET_MAKE_ENV) \
 		LC_ALL=C \
@@ -89,7 +103,7 @@ define OPENIMP_INSTALL_STAGING_CMDS
 		$(@D)/include/openimp/*.h
 endef
 
-ifeq ($(SOC_FAMILY),t33)
+ifneq ($(filter t32 t33,$(SOC_FAMILY)),)
 define OPENIMP_INSTALL_TARGET_CMDS
 	$(INSTALL) -D -m 0755 $(OPENIMP_OUTPUT_DIR)/libimp.so \
 		$(TARGET_DIR)/usr/lib/libimp.so

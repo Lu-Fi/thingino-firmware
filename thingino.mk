@@ -154,7 +154,9 @@ ifeq ($(KERNEL_VERSION),3.10.14)
 # The T33 (PRJ008) has no vanilla-based tree: its 3.10.14 comes from the
 # vendor tree in thingino-linux (branch T33-2.0.2.1-3.10.14), patched under
 # package/all-patches/linux/3.10.14/soc/t33/.
-ifneq ($(SOC_FAMILY),t33)
+# The T32 (PRJ007) 3.10.14 likewise comes from its vendor tree
+# (T32-2.1.0-3.10.14, the 2.x ISP ABI that open-tx-isp driver/t32 implements).
+ifeq ($(filter t32 t33,$(SOC_FAMILY)),)
 KERNEL_OFFICIAL_TARBALL := y
 endif
 else ifeq ($(KERNEL_VERSION),4.4.94)
@@ -190,7 +192,12 @@ else ifeq ($(SOC_FAMILY),t40)
 else ifeq ($(SOC_FAMILY),t31)
 	KERNEL_BRANCH := ingenic-t31
 else ifeq ($(SOC_FAMILY),t32)
+	ifeq ($(KERNEL_VERSION),3.10.14)
+	KERNEL_BRANCH := T32-2.1.0-3.10.14
+	KERNEL_SOC := t32
+	else
 	KERNEL_BRANCH := ingenic-t32
+	endif
 else ifeq ($(SOC_FAMILY),t33)
 	KERNEL_BRANCH := T33-2.0.2.1-3.10.14
 	KERNEL_SOC := t33
@@ -212,6 +219,8 @@ else ifeq ($(KERNEL_BRANCH),ingenic-t40)
 	KERNEL_HASH := e7f9a7439d40a539fad1525bd46a75bcdabffb17
 else ifeq ($(KERNEL_BRANCH),ingenic-t32)
 	KERNEL_HASH := 26fca510ab2dd6cfb9383ecc1b8932647556e6f1
+else ifeq ($(KERNEL_BRANCH),T32-2.1.0-3.10.14)
+	KERNEL_HASH := 4c73af83866e0c76f363a45349933deb67f7a3e6
 else ifeq ($(KERNEL_BRANCH),T33-2.0.2.1-3.10.14)
 	KERNEL_HASH := e10b0f77fae67147a24176716d43e991a401caa1
 endif

@@ -1,6 +1,19 @@
 # This is a configuration-only package that doesn't download source
 THINGINO_KOPT_SOURCE =
 
+################ CMDLINE (vendor boot loader) ####
+KOPT_CMDLINE = $(call qstrip,$(BR2_PACKAGE_THINGINO_KOPT_CMDLINE))
+# Passed by reference: the command line contains commas (mtdparts), which
+# would split the $(call) arguments if written out literally.
+KOPT_CMDLINE_QUOTED = "$(KOPT_CMDLINE)"
+ifneq ($(KOPT_CMDLINE),)
+define THINGINO_KOPT_LINUX_CONFIG_FIXUPS_CMDLINE
+	$(call KCONFIG_ENABLE_OPT,CONFIG_CMDLINE_BOOL)
+	$(call KCONFIG_SET_OPT,CONFIG_CMDLINE,$(KOPT_CMDLINE_QUOTED))
+	$(call KCONFIG_ENABLE_OPT,CONFIG_CMDLINE_OVERRIDE)
+endef
+endif
+
 ################ JZ_MAC #########################
 ifeq ($(BR2_PACKAGE_THINGINO_KOPT_JZ_MAC_V12),y)
 define THINGINO_KOPT_LINUX_CONFIG_FIXUPS_JZ_MAC_V12
@@ -887,6 +900,7 @@ define THINGINO_KOPT_LINUX_CONFIG_FIXUPS
 	$(call THINGINO_KOPT_LINUX_CONFIG_FIXUPS_DIAG_RESET_SLED)
 	$(call THINGINO_KOPT_LINUX_CONFIG_FIXUPS_DIAG_RAMOOPS)
 	$(call THINGINO_KOPT_LINUX_CONFIG_FIXUPS_DIAG_KDEBUG)
+	$(call THINGINO_KOPT_LINUX_CONFIG_FIXUPS_CMDLINE)
 endef
 
 define THINGINO_KOPT_INSTALL_TARGET_CMDS

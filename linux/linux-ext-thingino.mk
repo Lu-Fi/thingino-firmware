@@ -45,8 +45,8 @@ define LINUX_THINGINO_RESTORE_BINARY_ASSETS
 		if [ -n "$(KERNEL_SOC)" ] && [ -d "$(LINUX_THINGINO_BINARY_ASSETS_DIR)/$(KERNEL_SOC)" ]; then \
 			cp -a "$(LINUX_THINGINO_BINARY_ASSETS_DIR)/$(KERNEL_SOC)/." "$(@D)/"; \
 		fi; \
-	elif [ "$(KERNEL_SOC)" = "t33" ]; then \
-		echo ">>> Thingino: t33 vendor tree keeps its own binary assets"; \
+	elif [ "$(KERNEL_VERSION)" = "3.10.14" ] && [ "$(KERNEL_SOC)" = "t32" -o "$(KERNEL_SOC)" = "t33" ]; then \
+		echo ">>> Thingino: $(KERNEL_SOC) vendor tree keeps its own binary assets"; \
 	elif [ -d "$(LINUX_THINGINO_BINARY_ASSETS_DIR)" ]; then \
 		echo ">>> Thingino: restoring binary assets for Linux $(KERNEL_VERSION)"; \
 		cp -a "$(LINUX_THINGINO_BINARY_ASSETS_DIR)/." "$(@D)/"; \

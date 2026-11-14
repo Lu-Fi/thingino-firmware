@@ -1,9 +1,20 @@
 # NAME: JZT33L D61 test module (T33L, CV2005, ETH)
 # FRAG: soc-xburst1 core
 BR2_ETHERNET=y
+# The T33 (PRJ008) MAC is the V13 one (vendor kernel config); the kopt default V12 does not build.
+BR2_PACKAGE_THINGINO_KOPT_JZ_MAC_V13=y
 BR2_INGENIC_SOC_MODEL="t33l"
 BR2_PACKAGE_THINGINO_STREAMER_NONE=y
-BR2_SENSOR_1_NAME="cv2005"
+# Sensor is a CV2005 (I2C0, 0x35); "none" because the SDK has no T33 sensor module or
+# IQ bin. The vendor ko and PRJ008 bins come from a local overlay (README.md).
+BR2_SENSOR_1_NAME="none"
 BR2_THINGINO_RMEM_MB=12
 FLASH_SIZE_MB=16
 KERNEL_VERSION_3=y
+# No open T33 U-Boot exists. The module keeps its vendor U-Boot (flash 0x0-0x40000);
+# this placeholder board only lets the image pack. Never flash thingino-*.bin of this
+# profile as a whole: its first 256 KiB are NOT a T33 boot loader (see README.md).
+BR2_TARGET_UBOOT_BOARDNAME="isvp_t31_sfcnor"
+# Vendor U-Boot passes a fixed bootargs for its own layout; the kernel carries the
+# command line for the vendor-boot layout instead (README.md, vendorboot.kernel.config).
+BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES="$(BR2_EXTERNAL_THINGINO_PATH)/configs/cameras-testing/jzt33l_d61_t33l_cv2005_eth/vendorboot.kernel.config"

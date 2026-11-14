@@ -7,6 +7,11 @@
 TIMPS_SITE_METHOD = git
 TIMPS_SITE = https://github.com/Lu-Fi/timps
 TIMPS_VERSION = v1.12.1
+# T32 / T33 builds exist from timps main e56ae34 on (ingenic-headers 5bacc0f with
+# the T32 2.2.0 / T33 2.0.2.1 headers); no release tag carries them yet.
+ifneq ($(filter t32 t33,$(SOC_FAMILY)),)
+TIMPS_VERSION = e56ae345b29a08c305b32ff1574733751c3cae9b
+endif
 TIMPS_LICENSE = MIT
 TIMPS_CAMERA_CONF = $(BR2_EXTERNAL_THINGINO_PATH)/$(CAMERA_SUBDIR)/$(CAMERA)/timps.conf
 # Upstream ships no LICENSE file yet; add one and set TIMPS_LICENSE_FILES = LICENSE

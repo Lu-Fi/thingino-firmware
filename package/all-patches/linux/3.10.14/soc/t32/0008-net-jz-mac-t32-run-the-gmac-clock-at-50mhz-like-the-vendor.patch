@@ -1,0 +1,30 @@
+From: Lu-Fi <lu-fi@users.noreply.github.com>
+Date: Sat, 14 Nov 2026 13:20:00 +0100
+Subject: [PATCH] net: jz_mac: T32 runs the GMAC clock at 50 MHz like the vendor
+
+The T32 vendor kernel (PRJ007 module, 3.10.14) jz_mii_bus_probe calls
+clk_set_rate(div_gmac, 50000000) unconditionally (its 25 MHz branch sits
+behind a PHY check that always returns 0); this tree set 25 MHz. The same
+mismatch left the T33 (PRJ008) module without traffic on its RMII PHY.
+
+---
+ drivers/net/ethernet/ingenic/jz_mac_v13.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/net/ethernet/ingenic/jz_mac_v13.c b/drivers/net/ethernet/ingenic/jz_mac_v13.c
+--- a/drivers/net/ethernet/ingenic/jz_mac_v13.c
++++ b/drivers/net/ethernet/ingenic/jz_mac_v13.c
+@@ -2267,7 +2267,12 @@
+ 		clk_put(clk_gate);
+ 		goto out_err_alloc;
+ 	}
+-#ifdef CONFIG_FPGA_TEST
++#if defined(CONFIG_FPGA_TEST) || defined(CONFIG_SOC_PRJ007)
++	/*
++	 * T32 (PRJ007) RMII boards: the vendor kernel runs the GMAC divider
++	 * (CPM MACCDR) at 50 MHz, the RMII reference clock. With 25 MHz
++	 * RMII has no valid reference clock (seen on T33).
++	 */
+ 	clk_set_rate(clk_div, 50000000);
+ #else
+ 	clk_set_rate(clk_div, 25000000);

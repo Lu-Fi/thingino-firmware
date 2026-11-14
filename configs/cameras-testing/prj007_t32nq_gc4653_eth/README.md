@@ -6,44 +6,39 @@ Bring-up profile for the T32 test module: board PRJ007 (vendor hardware string
 DP83825 or SZ18201), secure boot off. Planned, not a release gate
 (openimp #99). Nothing in this profile has run on the module yet.
 
-QEMU (2026-11-14, `-M ingenic-t32`, t32nq, gc4653 model, the assembled 16 MiB
-vendor-layout flash): boots to login with this layout (overlay on mtd3,
-squashfs root on mtd5, `fw_printenv` from mtd1), Ethernet gets DHCP,
-`tx-isp-t32.ko` with the vendor clock arguments and the local gc4653 module
-load, and the OpenIMP T32 sample runs AddSensor .. H.264 5/5 streams ..
-teardown without an oops.
+Full thingino boot (2026-11-14, user decision): thingino U-Boot 2026.07
+(`isvp_t32nq_sfcnor`, TPL + SPL + U-Boot) and the standard thingino 16 MiB
+layout replace the vendor U-Boot and layout. The module is flashed with a
+CH341A clip (whole chip); recovery is the clip and the module's flash backup.
 
-## Vendor U-Boot stays
+## U-Boot
 
-The module keeps its vendor U-Boot 2013.07 (Sep 04 2025). Its default
-environment is compiled in and never saved:
+- Clocks and DDR3 from the vendor SPL (U-Boot 2013.07-H20250211a, flash
+  0x0-0x8000) and the register state it leaves (QEMU run of the vendor
+  flash): CPU 1000 MHz, MPLL 800 MHz, DDR CK 400 MHz, AHB 200 / PCLK 100 MHz,
+  CL 11 / CWL 8 (uboot patch 0006). The T32NQ preset (1200 / 450 MHz, CL 13)
+  was never run on T32 silicon. Address map was already equal.
+- Console UART1 ungated at CLKGR0 bit 12 (vendor SPL clears bit 11 + n,
+  same as thingino's T32 code).
+- Flash PY25Q128HA (JEDEC 0x852018, vendor U-Boot on the module prints
+  "Detected PY25Q128HA"), in the thingino id table, CONFIG_SPI_FLASH_PUYA.
+- Environment at 0x50000 (64 KiB). bootargs mem=72M@0x0 rmem=56M@0x4800000
+  (= vendor mem=73728K rmem=57344K@0x4800000).
 
-    bootcmd=sf0 probe;sf0 read 0x81000000 0x280000 0x300000;bootm 0x81000000
+## Layout (standard thingino 16 MiB NOR, mtdparts=sfc0_nor)
 
-So the kernel must sit at 0x280000 and be at most 3 MiB. The vendor
-`bootargs` (initramfs, vendor mtdparts) do not describe thingino, so the
-kernel is built with `BR2_PACKAGE_THINGINO_KOPT_CMDLINE` (CONFIG_CMDLINE +
-CMDLINE_OVERRIDE) and ignores them. Partition layout (mtd numbers matter:
-`fw_env.config` uses `/dev/mtd1`, root is `mtdblock5`):
+boot 0x000000 320k | env 0x050000 64k | backup 0x060000 64k | kernel
+0x070000 1600k | rootfs 2816k | data (jffs2 overlay) rest | all 16M.
+The vendor factory (licence) block at 0x40000 and the vendor config/app
+partitions are overwritten; they exist only in the flash backup.
 
-| mtd | offset   | size   | name   | content                                        |
-|-----|----------|--------|--------|------------------------------------------------|
-| 0   | 0x000000 | 320k   | boot   | vendor U-Boot (256k) + vendor `factory` (64k), read-only |
-| 1   | 0x050000 | 64k    | env    | thingino `u-boot-env.bin` (userspace only)      |
-| 2   | 0x060000 | 64k    | backup | erased                                          |
-| 3   | 0x070000 | 2112k  | data   | jffs2 overlay (user overlays, 32 KiB erase blocks) |
-| 4   | 0x280000 | 3072k  | kernel | uImage                                          |
-| 5   | 0x580000 | 10752k | rootfs | squashfs                                        |
-| 6   | 0x000000 | 16384k | all    | read-only                                       |
+## Ethernet
 
-The vendor U-Boot erases 4 KiB at 0x4f000 (inside `factory`) on every boot;
-that sector is part of the read-only mtd0 and holds nothing of ours.
-
-`mkvendorimage.sh` assembles the flash image from the module's flash backup
-(first 0x50000 bytes kept) and the build's `uImage`, `rootfs.squashfs` and
-`u-boot-env.bin`. The thingino full image (`thingino-<camera>.bin`, with a
-thingino U-Boot and the standard layout) must NOT be flashed on this module,
-and sysupgrade must stay disabled (the local overlay replaces it with a stub).
+The vendor kernel always runs the GMAC divider at 50 MHz (RMII reference);
+this tree set 25 MHz (kernel patch soc/t32/0008). PHY at MDIO address 0,
+DP83825 (id 0x282000) or SZ18201 per the vendor driver checks; not measured.
+The vendor firmware sets no fixed MAC (NetWork.json has none; its script
+falls back to a random one). The local overlay sets ethaddr / eth.mac.
 
 ## Kernel and open stack
 
@@ -81,4 +76,4 @@ built against the vendor 2.x driver headers (NDA). The module's own vendor
 `sensor_gc4653_t32.ko` cannot be used: it is built for the 1.0.x ISP ABI
 (`struct tx_isp_sensor` without `fsync_flag`, scalar again/dgain/integration
 fields) while open-tx-isp `driver/t32` implements 2.x. The user overlay lands
-in the data partition, so `mkvendorimage.sh` packs it into mtd3.
+in the data partition.

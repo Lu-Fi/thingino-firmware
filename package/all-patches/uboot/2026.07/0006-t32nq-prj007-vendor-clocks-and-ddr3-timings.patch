@@ -1,0 +1,71 @@
+Subject: [PATCH] t32nq: PRJ007 vendor clocks and DDR3 timings
+
+The T32NQ preset ran the CPU at 1200 MHz and DDR3 at 450 MHz CK (CL 13,
+CWL 9). Neither was ever run on T32 silicon. The PRJ007 module's vendor
+U-Boot 2013.07-H20250211a SPL configures CPU 1000 MHz (APLL), MPLL
+800 MHz, DDR CK 400 MHz (MPLL / 2), AHB 200 MHz, PCLK 100 MHz and the
+matching uMCTL2 / Innophy words (CL 11, CWL 8, tRFC 44, tREFI 3120).
+Take those values (from the SPL code and the register state it leaves).
+Address map, MSTR, DFIUPD0 and DRAMTMG8 were already equal. DRAMTMG7 is
+not written by the vendor SPL, so use the uMCTL2 reset value 0x202.
+CP0 timer follows the CPU clock (1000 MHz).
+
+---
+--- a/arch/mips/dts/t32nq-isvp.dts
++++ b/arch/mips/dts/t32nq-isvp.dts
+@@ -1,6 +1,6 @@
+ // SPDX-License-Identifier: GPL-2.0+
+ /*
+- * Ingenic ISVP-T32NQ (DDR3 128 MB W631GU6NG @900, CPU 1200 MHz), SFC-NOR.
++ * Ingenic ISVP-T32NQ (DDR3 128 MB, DDR 800 MT/s, CPU 1000 MHz: PRJ007 vendor values), SFC-NOR.
+  */
+ 
+ /dts-v1/;
+@@ -12,18 +12,27 @@
+ };
+ 
+ &ddr {
++	/*
++	 * PRJ007 T32NQ module values, read from its vendor U-Boot
++	 * 2013.07-H20250211a SPL (flash 0x0-0x8000) and its register state
++	 * after the vendor SPL ran: CPU 1000 MHz (APLL), MPLL 800 MHz,
++	 * DDR3 CK 400 MHz (MPLL / 2), AHB 200 / PCLK 100 MHz, CL 11 / CWL 8.
++	 * The previous 1200 / 450 MHz (CL 13) set was never run on this
++	 * silicon. DRAMTMG7 is not written by the vendor SPL: uMCTL2 reset
++	 * value 0x202.
++	 */
+ 	ingenic,sdram-params = <
+-		1 0x08000000 450000000	/* type size ddr_ck_hz */
+-		0x06405101 0x04b05101 0x55752210 0x9a052210	/* cpapcr cpmpcr cpccr_div cpccr_sel */
++		1 0x08000000 400000000	/* type size ddr_ck_hz */
++		0x07d05901 0x06405901 0x55773310 0x9a073310	/* cpapcr cpmpcr cpccr_div cpccr_sel */
+ 		0x00040001	/* mstr */
+-		0x000100dc 0x00580000 0x1f140000 0x00200000 0x00080000	/* init0 init1 init3 init4 init5 */
+-		0x0d101e0f 0x00030315 0x0000050a 0x00002007 0x06020307	/* timing0..4 */
+-		0x05050303 0x00000000 0x00000505 0x00000802 0x00000000	/* timing5 timing6 timing7 timing8 timing14 */
++		0x000100c4 0x004f0000 0x1d700000 0x00180000 0x00080000	/* init0 init1 init3 init4 init5 */
++		0x0c0e1a0d 0x00030313 0x00000509 0x00002006 0x06020306	/* timing0..4 */
++		0x04040302 0x00000000 0x00000202 0x00000802 0x00000000	/* timing5 timing6 timing7 timing8 timing14 */
+ 		0x00151515 0x00000000 0x00000000 0x00001f1f 0x04040404 0x0f0f0f04	/* addrmap1..6 */
+-		0x00000002 0x006d0032 0x06000610	/* rfshctl3 rfshtmg odtcfg */
+-		0x06050003 0x00080307 0x80400003	/* dfitmg0 dfitmg1 dfiupd0 */
+-		0x00000003 0x00000009 0x0000000d 0x00000000	/* phy: channel_en cwl cl al */
+-		0x00000032 0x00000db7 0x00000002	/* phy: trfc trefi mem_sel */
++		0x00000002 0x0061002c 0x06000610	/* rfshctl3 rfshtmg odtcfg (odtcfg: DDR2 only) */
++		0x06040002 0x00080307 0x80400003	/* dfitmg0 dfitmg1 dfiupd0 */
++		0x00000003 0x00000008 0x0000000b 0x00000000	/* phy: channel_en cwl cl al */
++		0x0000002c 0x00000c30 0x00000002	/* phy: trfc trefi mem_sel */
+ 		0x00000000 0x00000000	/* phy: pllpostdiven pllpostdiv */
+ 	>;
+ };
+--- a/configs/isvp_t32nq_sfcnor_defconfig
++++ b/configs/isvp_t32nq_sfcnor_defconfig
+@@ -32,7 +32,7 @@
+ CONFIG_TPL_MAX_SIZE=0x6800
+ CONFIG_SPL_PAYLOAD="u-boot.bin"
+ CONFIG_BUILD_TARGET="u-boot-lzma.img"
+-CONFIG_SYS_MIPS_TIMER_FREQ=1200000000
++CONFIG_SYS_MIPS_TIMER_FREQ=1000000000
+ CONFIG_BUTTON_CMD=y
+ # CONFIG_BOOTSTD is not set
+ CONFIG_BOOTDELAY=1

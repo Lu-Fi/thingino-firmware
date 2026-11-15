@@ -8,7 +8,7 @@ SDIO WiFi card streams. Add the MSC1 request types 0x1d (RX) and 0x1c
 (TX), taken from the vendor jzdma_req_type enum (MSC0 0x1a/0x1b, MSC1
 0x1c/0x1d).
 
-Signed-off-by: Lu-Fi <noreply@github.com>
+Signed-off-by: Lu-Fi <lutz@fiebach.de>
 ---
 diff --git a/arch/mips/boot/dts/ingenic/t31.dtsi b/arch/mips/boot/dts/ingenic/t31.dtsi
 index 76db50bb1..82b39ee83 100644

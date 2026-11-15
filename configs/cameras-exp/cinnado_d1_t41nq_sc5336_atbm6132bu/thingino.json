@@ -14,7 +14,8 @@
     "wlan": {
       "pin": 57,
       "active_low": true,
-      "toggle": true
+      "toggle": true,
+      "usb_reset": false
     }
   },
   "motors": {

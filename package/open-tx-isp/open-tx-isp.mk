@@ -10,7 +10,7 @@ OPEN_TX_ISP_SITE_METHOD = git
 # by the 0042-0044 patches in this directory.
 OPEN_TX_ISP_SITE = https://github.com/Lu-Fi/open-tx-isp
 OPEN_TX_ISP_SITE_BRANCH = next
-OPEN_TX_ISP_VERSION = b0716513384d79ce03cf2d1da9172f74bcaad616
+OPEN_TX_ISP_VERSION = 91fec5399cba709b3e0878eec8c0a4de250f0858
 # external/ingenic-sdk carries the per-SoC sensor IQ tuning blobs
 # (sensor-iq/<soc>/<model>.bin) installed by the open path; see the sensor IQ
 # section below.

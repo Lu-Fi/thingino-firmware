@@ -9,7 +9,7 @@ Subject: [PATCH] dt: thingino-t20: use the T20 I2S divider and the T20 codec
   so the old card (masters = <&aic>) failed to parse. Drop the unused
   12 MHz aic stub and name the link "t20-aic".
 
-Signed-off-by: Lu-Fi <noreply@github.com>
+Signed-off-by: Lu-Fi <lutz@fiebach.de>
 ---
  arch/mips/boot/dts/ingenic/t20.dtsi         | 14 ++++++++++++++
  arch/mips/boot/dts/ingenic/thingino-t20.dts | 12 +++---------

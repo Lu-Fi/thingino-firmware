@@ -19,7 +19,7 @@ Register it at T31_CLK_I2S_SPK in the T20 table copy and leave the
 T31_CLK_I2S_MIC slot empty; the T20 DT points both AIC clock inputs at
 the one clock so the clock framework keeps a single rate for it.
 
-Signed-off-by: Lu-Fi <noreply@github.com>
+Signed-off-by: Lu-Fi <lutz@fiebach.de>
 ---
  drivers/clk/ingenic/t31-cgu.c | 146 +++++++++++++++++++++++++++++++++++++++++-
  1 file changed, 144 insertions(+), 2 deletions(-)

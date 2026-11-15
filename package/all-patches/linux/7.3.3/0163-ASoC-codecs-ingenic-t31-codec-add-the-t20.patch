@@ -22,7 +22,7 @@ move into a per-compatible info struct. The mixer control dispatch no
 longer switches on T31 register offsets, because the T20 CACR2 is at
 the T31 CMICCR offset. The T31 behaviour is unchanged.
 
-Signed-off-by: Lu-Fi <noreply@github.com>
+Signed-off-by: Lu-Fi <lutz@fiebach.de>
 ---
  sound/soc/codecs/Kconfig             |   6 +-
  sound/soc/codecs/ingenic-t31-codec.c | 248 ++++++++++++++++++++++++++---------

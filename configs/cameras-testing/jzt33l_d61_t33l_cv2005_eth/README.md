@@ -58,9 +58,10 @@ release tags):
   direct_mode=1 ivdc_mem_line=1080 ivdc_threshold_line=800` (the thingino
   Kconfig has no 325 MHz ISP clock; pass them via `/etc/modules.d/20-isp`;
   the open driver runs with `direct_mode=0` until #509 is fixed).
-- IR cut: GPIO 66 / 67 (PC2 / PC3), outputs (vendor HAL `IniteIrcut`).
-- IR LEDs: PWM driven by the vendor (PWM channel 2 on GPIO 73 / PC9, second
-  channel on GPIO 72 / PC8); `ir850` = 73 as a plain GPIO is a guess.
+- IR cut: none fitted. The lens holder has no IR-cut wires (checked by hand 2026-11-15) and 200 ms pulses on GPIO 66 / 67 give no click;
+  the vendor HAL (`IniteIrcut` / `setIrCut`) drives 66 / 67 generically for its board family. No `ircut` entry here.
+- IR LEDs: none on this module (no `ir850` entry). The vendor HAL also initialises PWM "IrLight" pins
+  GPIO 73 / 72; nothing is fitted there.
 - Day/night photo sensor input: GPIO 57 (PB25).
 - Factory-reset button: GPIO 22 (PA22), input (`gpio_button`).
 - Alarm in: GPIO 68 (PC4); alarm out: GPIO 70 / 71 (PC6 / PC7); one more

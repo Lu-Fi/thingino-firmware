@@ -23,3 +23,10 @@ KERNEL_VERSION_3=y
 BR2_THINGINO_UBOOT_VERSION_2026_07=y
 BR2_PACKAGE_THINGINO_UBOOT_FLASH_CONTROLLER_JZ_SFC=n
 BR2_PACKAGE_THINGINO_UBOOT_FLASH_CONTROLLER_SFC0_NOR=y
+# Audio: in-SoC codec (AMIC) on the kernel's jzsound oss3 audio.ko, loaded like the vendor
+# (loadko.sh: insmod audio.ko spk_gpio=-1 fragment_time=4; no speaker amp GPIO), openimp #674.
+BR2_THINGINO_AUDIO=y
+BR2_THINGINO_AUDIO_PARAMS="fragment_time=4"
+# Bench module: no boot / portal sounds (no audio playback without the user's OK).
+BR2_PACKAGE_THINGINO_SOUNDS_STARTUP=n
+BR2_PACKAGE_THINGINO_SOUNDS_CHIMES=n

@@ -62,6 +62,14 @@ release tags):
   the vendor HAL (`IniteIrcut` / `setIrCut`) drives 66 / 67 generically for its board family. No `ircut` entry here.
 - IR LEDs: none on this module (no `ir850` entry). The vendor HAL also initialises PWM "IrLight" pins
   GPIO 73 / 72; nothing is fitted there.
+- Audio: in-SoC codec (analog mic in, DAC out), no speaker amp GPIO. The vendor
+  `loadko.sh` loads `audio.ko spk_gpio=-1 fragment_time=4` (jzsound oss3,
+  H20250929a). Here the same driver is built from the kernel's `sound/oss3`
+  (PRJ008 host + inner codec) as `audio.ko` (thingino-kopt T33 branch:
+  `CONFIG_SOUND_OSS3=m`); kernel patch soc/t33/0008 brings those sources to the
+  vendor module's release (T33 SDK 2.0.0 GPL oss3, string/symbol-equal build).
+  `BR2_THINGINO_AUDIO=y` + `fragment_time=4` write `/etc/modules.d/40-audio`;
+  startup / chime sounds are off on this bench module (openimp #674).
 - Day/night photo sensor input: GPIO 57 (PB25).
 - Factory-reset button: GPIO 22 (PA22), input (`gpio_button`).
 - Alarm in: GPIO 68 (PC4); alarm out: GPIO 70 / 71 (PC6 / PC7); one more

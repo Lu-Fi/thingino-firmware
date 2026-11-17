@@ -1,0 +1,1093 @@
+From: Lu-Fi <lutz@fiebach.de>
+Date: Tue, 17 Nov 2026 18:45:00 +0100
+Subject: [PATCH] sound: oss3: T33 (PRJ008) audio driver at the vendor module's release
+
+The T33 vendor stack loads audio.ko (jzsound oss3, AUDIO_DRIVER_VERSION
+H20250929a) built from the PRJ008 host (AIC) + inner codec sources. This tree
+carries the same version string but an older/other variant of those files
+(codec "fast init" path without the codec power-up delays, no mpll parent for
+the spk/mic clocks on 3.10, no Ref-Loop FIFO pop after the playback stop).
+
+Bring audio_dsp.c, include/audio_{dsp,common}.h, host/PRJ008/audio_aic.c and
+inner_codecs/PRJ008/codec.c to the GPL oss3 sources of the Ingenic T33 SDK
+2.0.0 (Tassadar 20260804, opensource/drivers/audio/oss3). A PRJ008 build of
+them is string- and symbol-identical to the vendor audio.ko of the JZT33L
+module (only compiler-generated .isra/.constprop suffixes differ).
+Only PRJ008 is built on T33 (sound/oss3/Makefile).
+
+Signed-off-by: Lu-Fi <lutz@fiebach.de>
+---
+diff -ruN a/sound/oss3/audio_dsp.c b/sound/oss3/audio_dsp.c
+--- a/sound/oss3/audio_dsp.c
++++ b/sound/oss3/audio_dsp.c
+@@ -26,19 +26,22 @@
+ #elif defined(CONFIG_SOC_PRJ007)
+ #include "host/PRJ007/audio_aic.h"
+ #include "host/PRJ007/dmic/as-dmic/as-dmic.h"
++#elif defined(CONFIG_SOC_PRJ009) || defined(CONFIG_SOC_PRJ010)
++#include "host/PRJ009/audio_aic.h"
++#include "host/PRJ009/dmic/as-dmic/as-dmic.h"
+ #endif
+ 
+ extern dma_addr_t ingenic_get_dma_current_trans_addr(struct dma_chan *chan,enum dma_transfer_direction direction);
+ extern struct audio_aic_device *globe_aic;
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ extern struct ingenic_dmic *globe_dmic;
+ #endif
+ 
+-static int fragment_time = 2; // the unit is 10ms.
++static int fragment_time = 20; // a frame of time
+ module_param(fragment_time, int, S_IRUGO);
+ MODULE_PARM_DESC(fragment_time, "The unit of the time of fragment is ms");
+ 
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ static int dmic_enable = 0; // disable dmic
+ module_param(dmic_enable, int, S_IRUGO);
+ MODULE_PARM_DESC(dmic_enable, "Enable or disable dmic");
+@@ -54,20 +57,20 @@
+ 
+ struct audio_dsp_debug mic_debug;
+ struct audio_dsp_debug spk_debug;
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ struct audio_dsp_debug dmic_debug;
+ #endif
+ int dump_time_stamp;
+ 
+ #ifndef CONFIG_KERNEL_5_15
+ static struct timeval amic_base_tv;
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ static struct timeval dmic_base_tv;
+ #endif
+ static struct timeval spk_base_tv;
+ #else
+ static struct __kernel_old_timeval amic_base_tv;
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ static struct __kernel_old_timeval dmic_base_tv;
+ #endif
+ static struct __kernel_old_timeval spk_base_tv;
+@@ -76,7 +79,7 @@
+ //extern void jzdma_dump(struct dma_chan *chan);
+ 
+ 
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ extern dma_addr_t ingenic_dmic_get_dma_current_trans_addr(void);
+ extern int ingenic_dmic_dma_init(dma_addr_t dma_addr, unsigned int fragment_size, unsigned int fragment_cnt);
+ extern int ingenic_dmic_dma_deinit(void);
+@@ -142,13 +145,13 @@
+ 	struct audio_dsp_device *dsp = container_of(work,
+ 			struct audio_dsp_device, workqueue);
+ 	struct audio_route *amic_route = NULL;
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ 	struct audio_route *dmic_route = NULL;
+ #endif
+ 	struct audio_route *aec_route = NULL;
+ 	struct audio_route *ao_route = NULL;
+ 	unsigned int amic_new_tracer = 0;
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ 	unsigned int dmic_new_tracer = 0;
+ #endif
+ 	unsigned int aec_new_tracer = 0;
+@@ -168,7 +171,7 @@
+ 	if(amic_route && amic_route->state == AUDIO_BUSY_STATE){
+ 		amic_new_tracer = amic_route->manage.new_dma_tracer;
+ 	}
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ 	/* dmic */
+ 	dmic_route = &(dsp->routes[AUDIO_ROUTE_DMIC_ID]);
+ 	if(dmic_route && dmic_route->state == AUDIO_BUSY_STATE){
+@@ -193,7 +196,7 @@
+ 		if(ao_route && ao_route->state == AUDIO_BUSY_STATE) {
+ 			printk("spk: index = %d, fragment->time_stamp.tv_sec=%ld, fragment->time_stamp.tv_usec = %ld\n",ao_route->manage.new_dma_tracer, spk_base_tv.tv_sec, spk_base_tv.tv_usec);
+ 		}
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ 		if(dmic_route && dmic_route->state == AUDIO_BUSY_STATE) {
+ 			printk("dmic: index = %d, fragment->time_stamp.tv_sec=%ld, fragment->time_stamp.tv_usec = %ld\n",dmic_route->manage.new_dma_tracer, dmic_base_tv.tv_sec, dmic_base_tv.tv_usec);
+ 		}
+@@ -225,7 +228,7 @@
+ 				if(amic_route->manage.fragments[index].state){
+ 					amic_route->manage.fragments[index].state = false;
+ 					amic_route->manage.fragments[index].priv = NULL;
+-					increase_frame_time_ms(&amic_base_tv, fragment_time * 10);
++					increase_frame_time_ms(&amic_base_tv, fragment_time);
+ 				}
+ 				if(index == amic_route->manage.io_tracer)
+ 					io_late = 1;
+@@ -252,7 +255,7 @@
+ 		mutex_unlock(&amic_route->mlock);
+ 	}
+ #endif
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ 	/* sync dmic and dmic's aec */
+ 	if(dmic_route->pipe){
+ 		mutex_lock(&dmic_route->mlock);
+@@ -292,7 +295,7 @@
+ 				if(dmic_route->manage.fragments[index].state){
+ 					dmic_route->manage.fragments[index].state = false;
+ 					dmic_route->manage.fragments[index].priv = NULL;
+-					increase_frame_time_ms(&dmic_base_tv, fragment_time * 10);
++					increase_frame_time_ms(&dmic_base_tv, fragment_time);
+ 				}
+ 				if(index == dmic_route->manage.io_tracer)
+ 					io_late = 1;
+@@ -347,7 +350,7 @@
+ 					index = (ao_new_tracer + cnt) % ao_route->manage.fragment_cnt;
+ 					if(ao_route->manage.fragments[index].state){
+ 						ao_route->manage.fragments[index].state = false;
+-						increase_frame_time_ms(&spk_base_tv, fragment_time * 10);
++						increase_frame_time_ms(&spk_base_tv, fragment_time);
+ 					}
+ 					if(index == ao_route->manage.io_tracer)
+ 						io_late = 1;
+@@ -420,8 +423,8 @@
+ 	uint64_t time_usec_2  = 0;
+ 
+ 	if (atomic_read(&dsp->timer_stopped))
+-		goto out;
+-	hrtimer_start(&dsp->hr_timer, dsp->expires, HRTIMER_MODE_REL);
++		return HRTIMER_NORESTART;
++	hrtimer_forward_now(&dsp->hr_timer, dsp->expires);
+ 
+ 	spin_lock_irqsave(&dsp->slock, lock_flags);
+ 
+@@ -429,7 +432,7 @@
+ 	for(id = 0; id < AUDIO_ROUTE_MAX_ID; id++){
+ 		route = &(dsp->routes[id]);
+ 		if(route && route->state == AUDIO_BUSY_STATE){
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ 			if(route->index != AUDIO_ROUTE_DMIC_ID){
+ #endif
+ 				pipe = route->pipe;
+@@ -484,7 +487,7 @@
+ 				}
+ //				printk("jz_audio_hrtimer_callback:id = %d dma_currentaddr = 0x%08x\n",id, dma_currentaddr);
+ //				printk("jz_audio_hrtimer_callback:id = %d index = %d\n", id,index);
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ 			}else {
+ 				pipe = route->pipe;
+ 				dma_currentaddr = ingenic_dmic_get_dma_current_trans_addr();
+@@ -538,8 +541,7 @@
+ 	spin_unlock_irqrestore(&dsp->slock, lock_flags);
+ 
+ 	schedule_work(&dsp->workqueue);
+-out:
+-	return HRTIMER_NORESTART;
++	return HRTIMER_RESTART;
+ }
+ 
+ static inline long dsp_ioctl_sync_ao_stream(struct audio_dsp_device *dsp)
+@@ -580,7 +582,7 @@
+ out:
+ 	mutex_unlock(&route->mlock);
+ 	if(wait_cnt){
+-		msleep((wait_cnt + 1)*10*fragment_time);
++		msleep((wait_cnt + 1)*fragment_time);
+ 	}
+ 	return ret;
+ }
+@@ -726,7 +728,7 @@
+ 	}else{
+ 		manage->sample_size = route->channel*format_to_bytes(route->format);
+ 	}
+-	manage->fragment_size = (route->rate / 100) * manage->sample_size * fragment_time;
++	manage->fragment_size = (route->rate * manage->sample_size * fragment_time) / 1000;
+ 	//	printk("manage->fragment_size=%d\n",manage->fragment_size);
+ 	if(route->index == AUDIO_ROUTE_AEC_ID){
+ 		parent = route->parent;
+@@ -755,7 +757,7 @@
+ 	}
+ 	manage->buffersize = manage->fragment_cnt * manage->fragment_size;
+ 	memset(pipe->vaddr, 0, manage->buffersize);
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ 	if(route->index == AUDIO_ROUTE_DMIC_ID){
+ 		dma_sync_single_for_device(globe_dmic->dev, pipe->paddr, manage->buffersize, pipe->dma_config.direction);
+ 		//??dma??
+@@ -789,7 +791,7 @@
+ 	}
+ 
+ 	dmaengine_submit(desc);
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ 	}
+ #endif
+ 
+@@ -808,7 +810,7 @@
+ 	/* deinit fragments manage and dma channel */
+ 	manage = &route->manage;
+ 	pipe = route->pipe;
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ 	if(route->index != AUDIO_ROUTE_DMIC_ID) {
+ 		dmaengine_terminate_all(pipe->dma_chan);
+ 		}
+@@ -816,7 +818,7 @@
+ 	dmaengine_terminate_all(pipe->dma_chan);
+ #endif
+ 
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ 	if(route->index == AUDIO_ROUTE_DMIC_ID) {
+ 		ingenic_dmic_dma_deinit();
+ 		}
+@@ -995,7 +997,7 @@
+ 	return ret;
+ }
+ 
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ static long dsp_enable_dmic_ai(struct audio_dsp_device *dsp)
+ {
+ 	unsigned long lock_flags;
+@@ -1354,7 +1356,7 @@
+ 	return ret;
+ }
+ 
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ static long dsp_disable_dmic_aec(struct audio_dsp_device *dsp)
+ {
+ 	unsigned long lock_flags;
+@@ -1469,7 +1471,7 @@
+ 	long ret = AUDIO_SUCCESS;
+ 
+ 	struct device *dev;
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ 	if (index == AUDIO_ROUTE_DMIC_ID) {
+ 		dev = globe_dmic->dev;
+ 	}else {
+@@ -1532,7 +1534,7 @@
+ 		}
+ 	}
+ 	//debug
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ 	if(index == AUDIO_ROUTE_DMIC_ID) {
+ 		dmic_debug.start_time = ktime_get();
+ 	}else {
+@@ -1548,7 +1550,7 @@
+ 	dma_tracer = manage->dma_tracer;
+ 	io_tracer = manage->io_tracer;
+ 	//debug
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ 	if(index == AUDIO_ROUTE_DMIC_ID) {
+ 		dmic_debug.dma_tracer_debug = dma_tracer;
+ 		dmic_debug.io_tracer_debug = io_tracer;
+@@ -1576,7 +1578,7 @@
+ 				ret = -EIO;
+ 				goto out;
+ 			}
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ 			if(index == AUDIO_ROUTE_DMIC_ID) {
+ 				++dmic_debug.copy_to_user_calls;
+ 				if(!time_before(jiffies, dmic_debug.start_jiffies + HZ)) {
+@@ -1616,7 +1618,7 @@
+ 					clear_user((stream.aec + i * aec_route->manage.fragment_size), aec_route->manage.fragment_size);
+ 			}
+ 			fragment->state = false;
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ 			if(index == AUDIO_ROUTE_DMIC_ID) {
+ 				if(i) {
+ 					dmic_debug.end_time = ktime_get();
+@@ -1649,7 +1651,7 @@
+ 		}
+ 		//printk("dsp_get_mic_stream: fragment->time_stamp.tv_sec=%ld,fragment->time_stamp.tv_usec = %ld\n",fragment->time_stamp.tv_sec,fragment->time_stamp.tv_usec);
+ #ifdef CONFIG_KERNEL_5_15
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ 		if(index == AUDIO_ROUTE_DMIC_ID) {
+ 			ret = copy_to_user((__user void*)(stream.timestamp), &dmic_base_tv,sizeof(struct __kernel_old_timeval));
+ 		}else {
+@@ -1664,7 +1666,7 @@
+ 			goto out;
+ 		}
+ #else
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ 		if(index == AUDIO_ROUTE_DMIC_ID) {
+ 			ret = copy_to_user((__user void*)(stream.timestamp), &dmic_base_tv,sizeof(struct timeval));
+ 		}else {
+@@ -1682,14 +1684,14 @@
+ 		fragment->priv = NULL;
+ 		i++;
+ 		io_tracer = (io_tracer + 1) % manage->fragment_cnt;
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ 		if(index == AUDIO_ROUTE_DMIC_ID) {
+-			increase_frame_time_ms(&dmic_base_tv, fragment_time * 10);
++			increase_frame_time_ms(&dmic_base_tv, fragment_time);
+ 		}else {
+-			increase_frame_time_ms(&amic_base_tv, fragment_time * 10);
++			increase_frame_time_ms(&amic_base_tv, fragment_time);
+ 		}
+ #elif defined(CONFIG_SOC_PRJ008)
+-		increase_frame_time_ms(&amic_base_tv, fragment_time * 10);
++		increase_frame_time_ms(&amic_base_tv, fragment_time);
+ #endif
+ 	}
+ 	manage->io_tracer = io_tracer;
+@@ -1799,7 +1801,7 @@
+ 		}
+ 		i++;
+ 		io_tracer = (io_tracer + 1) % manage->fragment_cnt;
+-		increase_frame_time_ms(&spk_base_tv, fragment_time * 10);
++		increase_frame_time_ms(&spk_base_tv, fragment_time);
+ 	}
+ 	manage->io_tracer = io_tracer;
+ 
+@@ -1833,14 +1835,14 @@
+ 	switch(route->index){
+ 		case AUDIO_ROUTE_AEC_ID:
+ 			ret = dsp_disable_amic_aec(route->priv);
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ 			ret = dsp_disable_dmic_aec(route->priv);
+ #endif
+ 			break;
+ 		case AUDIO_ROUTE_AMIC_ID:
+ 			ret = dsp_disable_amic_ai_and_aec(route->priv);
+ 			break;
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ 		case AUDIO_ROUTE_DMIC_ID:
+ 			ret = dsp_disable_dmic_ai(route->priv);
+ 			break;
+@@ -1871,7 +1873,7 @@
+ 	}
+ 
+ 	for(index = 0; index < AUDIO_ROUTE_MAX_ID; index++){
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ #if 0
+ 		if(index == AUDIO_ROUTE_DMIC_ID){
+ 			route = &(dsp->routes[index]);
+@@ -2005,7 +2007,7 @@
+ 	struct audio_parameter param;
+ 	struct volume vol;
+ 	struct alc_gain alc;
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ 	int dmic_vol = 0;
+ #endif
+ 	int codec = 0;
+@@ -2079,7 +2081,7 @@
+ 			}
+ 			mutex_unlock(&dsp->mlock);
+ 			break;
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ 		case DMIC_AI_SET_PARAM:
+ 			mutex_lock(&dsp->mlock);
+ 			ret = copy_from_user(&param, (__user void*)arg, sizeof(param));
+@@ -2114,7 +2116,7 @@
+ 		case AMIC_ENABLE_AEC:
+ 			ret = dsp_enable_amic_aec(dsp, arg);
+ 			break;
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ 		case DMIC_AI_ENABLE_STREAM:
+ 			ret = dsp_enable_dmic_ai(dsp);
+ 			break;
+@@ -2134,7 +2136,7 @@
+ 		case AMIC_DISABLE_AEC:
+ 			ret = dsp_disable_amic_aec(dsp);
+ 			break;
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ 		case DMIC_DISABLE_AEC:
+ 			ret = dsp_disable_dmic_aec(dsp);
+ 			break;
+@@ -2142,7 +2144,7 @@
+ 		case AMIC_AI_DISABLE_STREAM:
+ 			ret = dsp_disable_amic_ai_and_aec(dsp);
+ 			break;
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ 		case DMIC_AI_DISABLE_STREAM:
+ 			ret = dsp_disable_dmic_ai(dsp);
+ 			break;
+@@ -2153,7 +2155,7 @@
+ 		case AMIC_AI_GET_STREAM:
+ 			ret = dsp_get_mic_stream(dsp, AUDIO_ROUTE_AMIC_ID, arg);
+ 			break;
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ 		case DMIC_AI_GET_STREAM:
+ 			ret = dsp_get_mic_stream(dsp, AUDIO_ROUTE_DMIC_ID, arg);
+ 			break;
+@@ -2291,7 +2293,7 @@
+ 			}
+ 			ret = dsp_route_ioctl(dsp, AUDIO_ROUTE_SPK_ID, AUDIO_CMD_SET_MUTE, &channel);
+ 			break;
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ 		case DMIC_AI_SET_VOLUME:
+ 			if (get_user(dmic_vol, (int*)arg)){
+ 				ret = -EFAULT;
+@@ -2387,7 +2389,7 @@
+ }
+ 
+ extern struct platform_driver audio_aic_driver;
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ extern struct platform_driver ingenic_dmic_platform_driver;
+ #endif
+ 
+@@ -2522,7 +2524,7 @@
+     /* enable hrtimer */
+     hrtimer_init(&dsp->hr_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+     dsp->hr_timer.function = jz_audio_hrtimer_callback;
+-    dsp->expires = ns_to_ktime(1000*1000*fragment_time*10*2);   // the time section is default 40ms.
++    dsp->expires = ns_to_ktime(1000*1000*fragment_time*2);   // the time section is default 40ms.
+     INIT_WORK(&dsp->workqueue, dsp_workqueue_handle);
+ 
+     /* enable hrtimer */
+@@ -2563,7 +2565,7 @@
+ 	atomic_set(&dspdev->timer_stopped, 1);
+ 	hrtimer_init(&dspdev->hr_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+ 	dspdev->hr_timer.function = jz_audio_hrtimer_callback;
+-	dspdev->expires = ns_to_ktime(1000*1000*fragment_time*10*2);	// the time section is default 40ms.
++	dspdev->expires = ns_to_ktime(1000*1000*fragment_time*2);	// the time section is default 40ms.
+ 	INIT_WORK(&dspdev->workqueue, dsp_workqueue_handle);
+ 
+ 	globe_dspdev = dspdev;
+@@ -2574,7 +2576,7 @@
+ 		platform_device_register(subdevs[0]);
+ 	}
+ 
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ 	if(dmic_enable){
+ 		if(0 != platform_driver_register(&ingenic_dmic_platform_driver))
+ 		{
+@@ -2632,19 +2634,21 @@
+ 	struct platform_device **subdevs = NULL;
+ 
+ 	misc_deregister(&dspdev->miscdev);
+-	proc_remove(dspdev->proc);
+ 	subdevs = pdev->dev.platform_data;
+ 
+ 	if(aic_enable){
+ 		platform_device_unregister(subdevs[0]);
+ 		platform_driver_unregister(&audio_aic_driver);
+ 	}
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ 	if(dmic_enable){
+ 		platform_device_unregister(subdevs[1]);
+ 		platform_driver_unregister(&ingenic_dmic_platform_driver);
+ 	}
+ #endif
++	/* Child drivers remove proc entries below dspdev->proc. */
++	proc_remove(dspdev->proc);
++	dspdev->proc = NULL;
+ 	hrtimer_cancel(&dspdev->hr_timer);
+ 	cancel_work_sync(&dspdev->workqueue);
+ 	platform_set_drvdata(pdev, NULL);
+@@ -2690,7 +2694,7 @@
+ 	int ret = AUDIO_SUCCESS;
+ 	mic_debug.start_jiffies = jiffies;
+ 	spk_debug.start_jiffies = jiffies;
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ 	dmic_debug.start_jiffies = jiffies;
+ #endif
+ 	ret = platform_device_register(&audio_dsp_platform_device);
+diff -ruN a/sound/oss3/host/PRJ008/audio_aic.c b/sound/oss3/host/PRJ008/audio_aic.c
+--- a/sound/oss3/host/PRJ008/audio_aic.c
++++ b/sound/oss3/host/PRJ008/audio_aic.c
+@@ -87,13 +87,6 @@
+ 
+ int record_flag=0;
+ int play_flag=0;
+-
+-#ifdef codec_fast_init
+-extern int codec_fast_inited;
+-static struct work_struct delayed_work;
+-extern void codec_fast_start(struct work_struct *work);
+-#endif
+-
+ struct codec_sign_configure aic2codec_signs[4] = {
+ 	/* I2S LR MODE */
+ 	{
+@@ -672,6 +665,12 @@
+ #ifdef CONFIG_KERNEL_3_10
+ 		ret = clk_set_rate(aic->mic_clock, data_type.sample_rate*256);
+ 		if (ret != 0) {
++			ret = clk_set_parent(aic->spk_clock, clk_get(NULL, "mpll"));
++			if (ret != 0) {
++				clk_put(aic->spk_clock);
++				audio_err_print("[Audio] spk clock set parent error !\n");
++				return -1;
++			}
+ 			ret = clk_set_parent(aic->mic_clock, clk_get(NULL, "mpll"));
+ 			if (ret != 0) {
+ 				clk_put(aic->mic_clock);
+@@ -1247,10 +1246,6 @@
+ 
+ 	switch(cmd) {
+ 		case AUDIO_CMD_CONFIG_PARAM:
+-		#ifdef codec_fast_init
+-		    while(!codec_fast_inited)
+-				msleep(2);
+-		#endif
+ 			ret = set_codec_mic_datatype(aic, data);
+ 			break;
+ 
+@@ -1479,6 +1474,14 @@
+ 			audio_err_print("[Audio] spk clock set parent error !\n");
+ 			return -1;
+ 		}
++		if (CODEC_IS_INNER_MODULE == livingcodec->type) {
++			ret = clk_set_parent(aic->mic_clock, clk_get(NULL, "mpll"));
++			if (ret != 0) {
++				clk_put(aic->mic_clock);
++				audio_err_print("[Audio] mic clock set parent error !\n");
++				return -1;
++			}
++		}
+ 		ret = clk_set_rate(aic->spk_clock, data_type.sample_rate*256);
+ 		if (ret != 0) {
+ 			clk_put(aic->spk_clock);
+@@ -1713,6 +1716,14 @@
+ 		__i2s_enable_replay(aic);
+ 		msleep(2);
+ 		__i2s_disable_replay(aic);
++
++		if (record_flag) {
++			/* Pop the four CPU-injected samples from the Ref Loop FIFO. */
++			__i2s_read_loopdata(aic);
++			__i2s_read_loopdata(aic);
++			__i2s_read_loopdata(aic);
++			__i2s_read_loopdata(aic);
++		}
+ 	}
+ 
+ 	ret = livingcodec->playback->set_endpoint(CODEC_SPK_STOP);
+@@ -1744,10 +1755,6 @@
+ 	/*set parameters*/
+ 	switch(cmd) {
+ 		case AUDIO_CMD_CONFIG_PARAM:
+-	#ifdef codec_fast_init
+-		    while(!codec_fast_inited)
+-				msleep(2);
+-	#endif
+ 			ret = set_codec_spk_datatype(aic, data);
+ 			break;
+ 
+@@ -2531,12 +2538,7 @@
+ 		__i2s_select_i2s(aic);
+ 		printk("incodec use i2s mode\n");
+ 		aic->incodec->spk_gpio_request();
+-#ifdef codec_fast_init
+-		INIT_WORK(&delayed_work, codec_fast_start);
+-		schedule_work(&delayed_work);
+-#else
+ 		aic->incodec->set_power(CODEC_POWER_UP);
+-#endif
+ 		printk("@@@@@ inner codec power up@@@@@@\n");
+ 
+ 	}else if(codec_use == 1) {
+@@ -3001,7 +3003,7 @@
+ 		__i2s_select_share_clk(aic);
+ 		__i2s_select_i2s(aic);
+ 		printk("incodec use i2s mode\n");
+-		aic->incodec->spk_gpio_request();
++		//aic->incodec->spk_gpio_request();
+ 		aic->incodec->set_power(CODEC_POWER_UP);
+ 		printk("@@@@@ inner codec power up@@@@@@\n");
+ 	}
+diff -ruN a/sound/oss3/include/audio_common.h b/sound/oss3/include/audio_common.h
+--- a/sound/oss3/include/audio_common.h
++++ b/sound/oss3/include/audio_common.h
+@@ -30,7 +30,7 @@
+ 
+ enum auido_route_index {
+ 	AUDIO_ROUTE_AMIC_ID,
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ 	AUDIO_ROUTE_DMIC_ID,
+ #endif
+ 	AUDIO_ROUTE_SPK_ID,
+@@ -57,7 +57,7 @@
+ 
+ #define INNER_CODEC  0
+ #define EXTERNAL_CODEC 1
+-/* the size of one data fragment is 10ms */
++
+ struct dsp_data_fragment {
+ 	struct list_head	list;
+ 	bool 				state;
+diff -ruN a/sound/oss3/include/audio_dsp.h b/sound/oss3/include/audio_dsp.h
+--- a/sound/oss3/include/audio_dsp.h
++++ b/sound/oss3/include/audio_dsp.h
+@@ -42,7 +42,7 @@
+ 	unsigned short format;
+ 	unsigned short channel;
+ };
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ #define DMIC_AI_SET_PARAM			_SIOR ('P', 115, struct audio_parameter)
+ #define DMIC_AI_GET_PARAM			_SIOR ('P', 114, struct audio_parameter)
+ #endif
+@@ -50,7 +50,7 @@
+ #define AMIC_AI_GET_PARAM			_SIOR ('P', 112, struct audio_parameter)
+ #define AMIC_AO_SET_PARAM			_SIOR ('P', 111, struct audio_parameter)
+ #define AMIC_AO_GET_PARAM			_SIOR ('P', 110, struct audio_parameter)
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ #define DMIC_AI_DISABLE_STREAM		_SIOR ('P', 107, int)
+ #define DMIC_AI_ENABLE_STREAM		_SIOR ('P', 106, int)
+ #define DMIC_AI_GET_STREAM			_SIOR ('P', 105, struct audio_input_stream)
+@@ -72,14 +72,14 @@
+ #define AMIC_AI_SET_GAIN			_SIOR ('P', 90, struct volume)
+ #define AMIC_SPK_SET_VOLUME			_SIOR ('P', 89, struct volume)
+ #define AMIC_SPK_SET_GAIN			_SIOR ('P', 88, struct volume)
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ #define DMIC_AI_SET_VOLUME			_SIOR ('P', 87, int)
+ #endif
+ #define AMIC_AI_GET_VOLUME			_SIOR ('P', 86, struct volume)
+ #define AMIC_AI_GET_GAIN			_SIOR ('P', 85, struct volume)
+ #define AMIC_SPK_GET_VOLUME			_SIOR ('P', 84, struct volume)
+ #define AMIC_SPK_GET_GAIN			_SIOR ('P', 83, struct volume)
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ #define DMIC_AI_GET_VOLUME			_SIOR ('P', 82, int)
+ #endif
+ #define AMIC_AI_HPF_ENABLE	    	_SIOR ('P', 79, int)
+@@ -135,7 +135,7 @@
+ 
+ 	struct audio_route routes[AUDIO_ROUTE_MAX_ID];
+ 	bool amic_aec;
+-#ifdef CONFIG_SOC_PRJ007
++#if defined (CONFIG_SOC_PRJ007) || defined (CONFIG_SOC_PRJ009) || defined (CONFIG_SOC_PRJ010)
+ 	bool dmic_aec;
+ #endif
+ 	/* debug parameters */
+diff -ruN a/sound/oss3/inner_codecs/PRJ008/codec.c b/sound/oss3/inner_codecs/PRJ008/codec.c
+--- a/sound/oss3/inner_codecs/PRJ008/codec.c
++++ b/sound/oss3/inner_codecs/PRJ008/codec.c
+@@ -42,12 +42,6 @@
+ 
+ struct codec_device *g_codec_dev = NULL;
+ 
+-#ifdef codec_fast_init
+-int codec_fast_inited = 0;
+-static struct timer_list *timer;
+-static int time_status = 0;
+-static int value_cagr2 = 0;
+-#endif
+ static inline unsigned int codec_reg_read(struct codec_device * ope, int offset)
+ {
+ 	return readl(ope->iomem + offset);
+@@ -115,93 +109,6 @@
+ 	return 0;
+ }
+ 
+-#ifdef codec_fast_init
+-#ifdef CONFIG_KERNEL_5_15
+-static void CODEC_CAGR2_init(struct timer_list *t)
+-{
+-	if(time_status <= 7) {
+-        	value_cagr2 |= value_cagr2<<1 | 0x01;
+-		codec_reg_set(CODEC_CAGR2, 0, 7, value_cagr2);
+-		mod_timer(timer,jiffies + HZ/50);
+-	}else {
+-		codec_reg_set(CODEC_CAGR2, 0, 7, 0x02);
+-		mod_timer(timer,jiffies + HZ/50);
+-	}
+-	time_status++;
+-	return 0;
+-}
+-
+-static void CODEC_CAADCR1_init(struct timer_list *t)
+-{
+-	if(time_status == 0) {
+-		codec_reg_set(CODEC_CAADCR1, 0, 0, 0x1);
+-		mod_timer(timer,jiffies + HZ/100);
+-	}
+-	time_status++;
+-}
+-
+-static void CODEC_CADACR1_init(struct timer_list *t)
+-{
+-	if(time_status == 0) {
+-		codec_reg_set(CODEC_CADACR1, 0, 0, 0x1);
+-		mod_timer(timer,jiffies + HZ/100);
+-	}
+-	time_status++;
+-}
+-
+-static void CODEC_CAADCR2_init(struct timer_list *t)
+-{
+-	if(time_status == 0) {
+-	    codec_reg_set(CODEC_CAADCR2, 0, 0, 0x1);
+-		mod_timer(timer,jiffies + HZ/100);
+-	}
+-	time_status++;
+-}
+-#else
+-static int CODEC_CAGR2_init(void)
+-{
+-	if(time_status <= 7) {
+-        	value_cagr2 |= value_cagr2<<1 | 0x01;
+-		codec_reg_set(CODEC_CAGR2, 0, 7, value_cagr2);
+-		mod_timer(timer,jiffies + HZ/50);
+-	}else {
+-		codec_reg_set(CODEC_CAGR2, 0, 7, 0x02);
+-		mod_timer(timer,jiffies + HZ/50);
+-	}
+-	time_status++;
+-	return 0;
+-}
+-
+-static int CODEC_CAADCR1_init(void)
+-{
+-	if(time_status == 0) {
+-		codec_reg_set(CODEC_CAADCR1, 0, 0, 0x1);
+-		mod_timer(timer,jiffies + HZ/100);
+-	}
+-	time_status++;
+-	return 0;
+-}
+-
+-static int CODEC_CADACR1_init(void)
+-{
+-	if(time_status == 0) {
+-		codec_reg_set(CODEC_CADACR1, 0, 0, 0x1);
+-		mod_timer(timer,jiffies + HZ/100);
+-	}
+-	time_status++;
+-	return 0;
+-}
+-
+-static int CODEC_CAADCR2_init(void)
+-{
+-	if(time_status == 0) {
+-	    codec_reg_set(CODEC_CAADCR2, 0, 0, 0x1);
+-		mod_timer(timer,jiffies + HZ/100);
+-	}
+-	time_status++;
+-}
+-#endif
+-#endif
+ int codec_init(void)
+ {
+ 	int i = 0;
+@@ -209,54 +116,24 @@
+ 
+ 	/* step1. Supply the power of the digital part and reset the audio codec*/
+ 	codec_reg_set(CODEC_CDGR, 0, 7, 0xc0);
+-	//msleep(1);
++	msleep(1);
+ 	codec_reg_set(CODEC_CDGR, 0, 7, 0xf1);
+-	//msleep(1);
++	msleep(1);
+ 
+ 	/* step2. Configure the register POP_CTRL_DACL[1:0] 0x28[6:5] to 2’b01, to setup the output
+ 	   dc voltage of DAC left channel.*/
+ 	codec_reg_set(CODEC_CADACR1, 5, 6, 0x1);
+-	//msleep(1);
++	msleep(1);
+ 
+ 	/* Step3: Configure the register SEL_VREF[7:0] reg0x21[7:0] to 8’b000_0001. */
+ 	codec_reg_set(CODEC_CAGR2, 0, 7, 0x1);
+-	//msleep(1);
++	msleep(1);
+ 
+ 	/* step4. Configure the register EN_VREF reg0x20[0] to 1 to setup reference voltage.*/
+ 	codec_reg_set(CODEC_CAGR1, 0, 0, 0x1);
+-	//msleep(1);
++	msleep(1);
+ 
+ 	/* step5. Configure select current to pre-charge/dis-charge*/
+-
+-#ifdef codec_fast_init
+-	time_status = 0;
+-	timer = kzalloc(sizeof(struct timer_list), GFP_KERNEL);
+-	if (!timer )
+-	{
+-		printk("codec : init timer fail \n");
+-		return -1;
+-	}
+-#ifdef CONFIG_KERNEL_5_15
+-	timer_setup(timer,CODEC_CAGR2_init,0);
+-#else
+-	init_timer(timer );
+-	timer->function = CODEC_CAGR2_init;
+-#endif
+-	timer->expires = jiffies + (HZ/50);
+-	add_timer(timer);
+-	while(time_status <= 8){
+-		i++;
+-		if(i > 200) {
+-			del_timer(timer);
+-			printk("codec init outtime\n");
+-			return -1;
+-		}
+-		msleep(5);
+-	}
+-    i = 0;
+-	del_timer(timer);
+-
+-#else
+ 	for (i = 0; i <= 7; i++) {
+ 		value |= value<<1 | 0x01;
+ 		codec_reg_set(CODEC_CAGR2, 0, 7, value);
+@@ -266,7 +143,7 @@
+ 	/*step6.Set the min charge current for reduce power.*/
+ 	codec_reg_set(CODEC_CAGR2, 0, 7, 0x02);
+ 	msleep(10);
+-#endif
++
+ 	codec_reg_set(CODEC_CAGR1, 1, 1, 0x1);
+     codec_reg_set(CODEC_CADACR1, 2, 2, 0x1);
+     codec_reg_set(CODEC_CADACR1, 5, 6, 0x2);
+@@ -302,7 +179,6 @@
+ 
+ static int codec_enable_record(void)
+ {
+-    int i = 0;
+ 	/* Choose ADC I2S interface mode */
+ 	codec_reg_set(CODEC_CDADCR1, 2, 3, 0x2);
+ 	codec_reg_set(CODEC_CDADCR2, 7, 7, 0x0);
+@@ -329,37 +205,8 @@
+ 
+ 	/*Step4. Configure the register EN_ALCL 0x31[0] to 1, to enable the ALC module in ADC
+ 	  left channel.*/
+-#ifdef codec_fast_init
+-	time_status = 0;
+-	timer = kzalloc(sizeof(struct timer_list), GFP_KERNEL);
+-	if (!timer )
+-	{
+-		printk("codec : init timer fail \n");
+-		return -1;
+-	}
+-#ifdef CONFIG_KERNEL_5_15
+-	timer_setup(timer,CODEC_CAADCR2_init,0);
+-#else
+-	init_timer(timer );
+-	timer->function = CODEC_CAADCR2_init;
+-#endif
+-	timer->expires = jiffies + (HZ/100);
+-	add_timer(timer);
+-	while(time_status <=1){
+-		i++;
+-		if(i > 200) {
+-			del_timer(timer);
+-			printk("codec init outtime\n");
+-			return -1;
+-		}
+-		msleep(5);
+-	}
+-    i = 0;
+-	del_timer(timer);
+-#else
+ 	codec_reg_set(CODEC_CAADCR2, 0, 0, 0x1);
+ 	msleep(10);
+-#endif
+ 
+ 	/*Step5. Configure the register EN_CLK_ADCL 0x30[1] to 1, to enable the clock module in
+ 	  ADC left channel.*/
+@@ -367,37 +214,9 @@
+ 
+ 	/*Step6. Configure the register EN_ADCL 0x30[0] to 1, to enable the ADC module in ADC
+ 	  left channel.*/
+-#ifdef codec_fast_init
+-	time_status = 0;
+-	timer = kzalloc(sizeof(struct timer_list), GFP_KERNEL);
+-	if (!timer )
+-	{
+-		printk("codec : init timer fail \n");
+-		return -1;
+-	}
+-#ifdef CONFIG_KERNEL_5_15
+-	timer_setup(timer,CODEC_CAADCR1_init,0);
+-#else
+-	init_timer(timer );
+-	timer->function = CODEC_CAADCR1_init;
+-#endif
+-	timer->expires = jiffies + (HZ/100);
+-	add_timer(timer);
+-	while(time_status <=1){
+-		i++;
+-		if(i > 200) {
+-			del_timer(timer);
+-			printk("codec init outtime\n");
+-			return -1;
+-		}
+-		msleep(5);
+-	}
+-    i = 0;
+-	del_timer(timer);
+-#else
+ 	codec_reg_set(CODEC_CAADCR1, 0, 0, 0x1);
+ 	msleep(1);
+-#endif
++
+ 	/*Step7. Configure the register INITIAL_ADCL 0x30[4] to 1, to end the initialization of the
+ 	  ADCL module.*/
+ 	codec_reg_set(CODEC_CAADCR1, 4, 4, 0x1);
+@@ -427,7 +246,7 @@
+ 
+ 	codec_reg_set(CODEC_CAGR3, 4, 7, 0x3);
+ 	codec_reg_set(CODEC_CDADCR3, 2, 3, 0x3);
+-	//msleep(1);
++	msleep(1);
+ 
+ 	return 0;
+ }
+@@ -480,7 +299,6 @@
+ 
+ static int codec_enable_playback(void)
+ {
+-    int i = 0;
+     int val = -1;
+ 	/* Choose ADC I2S interface mode */
+     codec_reg_set(CODEC_CDDACR1, 2, 3, 0x2);
+@@ -491,6 +309,8 @@
+     codec_reg_set(CODEC_CADACR1, 2, 2, 0x1);
+     codec_reg_set(CODEC_CADACR1, 5, 6, 0x2);
+ 	*/
++	/* Disable DAC DSM. */
++	codec_reg_set(CODEC_CDDACR3, 2, 2, 0);
+     /*Step5: Set the register CHR[4] to 1, to enable the HPDRV module in the DAC channel. */
+     codec_reg_set(CODEC_CADACR2, 0, 0, 0x1);
+     /*Step6: Set the register CHR[5] to 1, to end the initialization of the HPDRV module in the DAC channel. */
+@@ -500,37 +320,8 @@
+     /*Step8: Set the register CANACR1[2] to 1, to enable the clock module of DAC module. */
+     codec_reg_set(CODEC_CADACR1, 1, 1, 0x1);
+     /*Step9: Set the register CANACR1[1] to 1, to enable the DAC module. */
+-#ifdef codec_fast_init
+-	time_status = 0;
+-	timer = kzalloc(sizeof(struct timer_list), GFP_KERNEL);
+-	if (!timer )
+-	{
+-		printk("codec : init timer fail \n");
+-		return -1;
+-	}
+-#ifdef CONFIG_KERNEL_5_15
+-	timer_setup(timer,CODEC_CADACR1_init,0);
+-#else
+-	init_timer(timer );
+-	timer->function = CODEC_CADACR1_init;
+-#endif
+-	timer->expires = jiffies + (HZ/100);
+-	add_timer(timer);
+-	while(time_status <= 1){
+-		i++;
+-		if(i > 200) {
+-			del_timer(timer);
+-			printk("codec init outtime\n");
+-			return -1;
+-		}
+-		msleep(5);
+-	}
+-    i = 0;
+-	del_timer(timer);
+-#else
+     codec_reg_set(CODEC_CADACR1, 0, 0, 0x1);
+ 	msleep(1);
+-#endif
+     /*Step10: Set the register CANACR1[0] to 1, to end the initialization of the DAC module in the left DAC channel. */
+     codec_reg_set(CODEC_CADACR1, 4, 4, 0x1);
+     /*Step11: Set the register CHR[6] to 1, to end the mute station of the DRV module in the DAC channel. */
+@@ -687,11 +478,11 @@
+ 
+ 	if(channel == MONO_LEFT){
+ 		codec_reg_set(CODEC_CAGCR9, 6, 6, 0);
+-		//msleep(1);
++		msleep(1);
+ 		codec_reg_set(CODEC_CDADCR4, 0, 0, 0);
+-		//msleep(1);
++		msleep(1);
+ 		codec_reg_set(CODEC_CAADCR3, 0, 4, analog_gain);
+-		//msleep(1);
++		msleep(1);
+ 	}else if(channel == MONO_RIGHT){
+ 		printk("T32 only support record MONO LEFT\n");
+ 	}
+@@ -710,7 +501,7 @@
+ 	digital_gain = gain > 0xFF ? 0xFF : gain;
+ 	if(channel == MONO_LEFT){
+ 		codec_reg_set(CODEC_CDADCR5, 0, 7, digital_gain);
+-		//msleep(1);
++		msleep(1);
+ 	}else if(channel == MONO_RIGHT){
+ 		printk("T32 only support record MONO LEFT\n");
+ 	}
+@@ -732,7 +523,7 @@
+ {
+ 	if(channel == MONO_LEFT){
+ 		codec_reg_set(CODEC_CDADCR5, 0, 7, 0);
+-		//msleep(1);
++		msleep(1);
+ 	}else if (channel == MONO_RIGHT){
+ 		printk("T32 only support record MONO LEFT\n");
+ 	}
+@@ -816,7 +607,7 @@
+ 	analog_gain = gain < 0 ? 0 : gain;
+ 	analog_gain = gain > 0x1f ? 0x1f : gain;
+ 	codec_reg_set(CODEC_CADACR4, 0, 4, analog_gain);
+-    //msleep(1);
++    msleep(1);
+ 
+ 	return 0;
+ }
+@@ -834,7 +625,7 @@
+ 	digital_gain = gain > 0xFF ? 0xFF : gain;
+ 
+ 	codec_reg_set(CODEC_CDDACR6, 0, 7, digital_gain);
+-    //msleep(1);
++    msleep(1);
+ 
+ 	return AUDIO_SUCCESS;
+ }
+@@ -842,7 +633,7 @@
+ static int codec_playback_set_mute(int channel)
+ {
+ 	codec_reg_set(CODEC_CDDACR6, 0, 7, 0);
+-    //msleep(1);
++    msleep(1);
+ 
+ 	return AUDIO_SUCCESS;
+ }
+@@ -915,12 +706,6 @@
+ 	return AUDIO_SUCCESS;
+ }
+ 
+-void codec_fast_start(struct work_struct *work)
+-{
+-    codec_init();
+-    codec_fast_inited = 1;
+-    printk("codec_fast_start is finish\n");
+-}
+ static int codec_set_power(int enable)
+ {
+ 	if(enable){
+@@ -938,7 +723,7 @@
+ 	.name = "inner_codec",
+ 	.mode = CODEC_IS_MASTER_MODE,
+ 	.type = CODEC_IS_INNER_MODULE,
+-	.pins = CODEC_IS_0_LINES,
++	.pins = CODEC_IS_6_LINES,
+ 	.set_sign = codec_set_sign,
+ 	.set_power = codec_set_power,
+ 	.record = &codec_record,

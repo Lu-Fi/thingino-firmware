@@ -330,14 +330,6 @@ the old SDK layout pinned here (common/misc/motor):
  	switch (cmd) {
  		case MOTOR_STOP:
  			motor_ops_stop(mdev);
-@@ -653,6 +818,7 @@
- }
- 
- static struct file_operations motor_fops = {
-+	.owner = THIS_MODULE,	/* an open /dev/motor pins the module */
- 	.open = motor_open,
- 	.release = motor_release,
- 	.unlocked_ioctl = motor_ioctl,
 @@ -691,6 +857,7 @@
  }
  

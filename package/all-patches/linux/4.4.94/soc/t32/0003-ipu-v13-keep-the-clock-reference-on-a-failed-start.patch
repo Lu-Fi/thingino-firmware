@@ -1,0 +1,29 @@
+From: Lu-Fi <lutz@fiebach.de>
+Subject: [PATCH] ipu v13: keep the clock reference on a failed start
+
+ipu_open() takes one gate_ipu reference (clk_prepare_enable) and
+ipu_release() drops it. ipu_start() does not take one, but its error path
+(a job that times out, or a bad route / buffer) called
+clk_disable_unprepare(): every failed job dropped a reference the opener
+still owns. After the first failure the IPU clock is gated (or the count
+underflows) and every following job of the same opener times out too,
+until the file is closed. Seen on the T33L (openimp #675: /proc clock tree
+read gate_ipu at 0 MHz after IPU_START timeouts); the same code
+is in this T32 tree (ingenic_ipu_v13.c:1006).
+
+Keep the reference on the error path; open/release stay balanced.
+
+Signed-off-by: Lu-Fi <lutz@fiebach.de>
+---
+--- a/drivers/video/ingenic_ipu/ingenic_ipu_v13.c	2026-11-20 22:21:02.479868404 +0100
++++ b/drivers/video/ingenic_ipu/ingenic_ipu_v13.c	2026-11-20 22:21:02.496868570 +0100
+@@ -1003,7 +1003,8 @@
+ err_ipu_set_bg_buffer:
+ err_ipu_set_osd_chx_route:
+ err_ipu_set_bg_route:
+-	clk_disable_unprepare(ipu->clk);
++	/* the clock reference belongs to the open file (ipu_open / ipu_release):
++	 * dropping it here gated the IPU for every later job of this opener */
+ err_cmd:
+ 	return ret;
+ }

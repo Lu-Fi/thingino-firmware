@@ -91,4 +91,4 @@ What is deliberately empty or open:
   `/etc/sensor -> /usr/share/sensor` link (OpenIMP T33 reads
   `/etc/sensor/cv2005-PRJ008-<mode>.bin`; with sensor "none" the SDK package
   does not create the link) and `20-isp` with `direct_mode=1 ivdc_mem_line=1080 ivdc_threshold_line=800`
-  (needs open-tx-isp >= 28a3e96dd, openimp #509; rmem=13M, #516).
+  (from BR2_ISP_PARAMS in the defconfig, no local overlay file; needs open-tx-isp >= 28a3e96dd, openimp #509; rmem=13M, #516).

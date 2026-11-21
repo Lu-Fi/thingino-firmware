@@ -12,8 +12,8 @@ BR2_PACKAGE_THINGINO_STREAMER_TIMPS=y
 # IQ bin. The vendor ko and PRJ008 bins come from a local overlay (README.md).
 BR2_SENSOR_1_NAME="none"
 # Vendor reserves 12704K at 0x3398000 and runs its main channel over IVDC (direct_mode=1,
-# no frame buffers). The open driver does the same since the #509 fix (20-isp in the user
-# overlay: direct_mode=1 ivdc_mem_line=1080 ivdc_threshold_line=800); OpenIMP peaks at
+# no frame buffers). The open driver does the same since the #509 fix (BR2_ISP_PARAMS below,
+# no user overlay needed: direct_mode=1 ivdc_mem_line=1080 ivdc_threshold_line=800); OpenIMP peaks at
 # 11428 KB (#516). rmem is whole MB here: 13 MB (13312K) is the next step above the vendor 12704K.
 BR2_THINGINO_RMEM_MB=13
 FLASH_SIZE_MB=16
@@ -31,3 +31,5 @@ BR2_THINGINO_AUDIO_PARAMS="fragment_time=4"
 # Bench module: no boot / portal sounds (no audio playback without the user's OK).
 BR2_PACKAGE_THINGINO_SOUNDS_STARTUP=n
 BR2_PACKAGE_THINGINO_SOUNDS_CHIMES=n
+# isp_memopt=1500 is the ko default; the generated line otherwise forces isp_memopt=1 (+1 MB ISP block).
+BR2_ISP_PARAMS="clk_name=mpll isp_clk=325000000 clkv_name=mpll isp_clkv=325000000 direct_mode=1 ivdc_mem_line=1080 ivdc_threshold_line=800 isp_memopt=1500"

@@ -1,0 +1,23 @@
+T33: build no SDK modules (the SDK has no T33 tree, open-tx-isp provides the ISP)
+
+---
+--- a/Kbuild
++++ b/Kbuild
+@@ -26,6 +26,11 @@
+ ccflags-y := -DRELEASE -DUSER_BIT_32 -DKERNEL_BIT_32 -Wno-date-time -D_GNU_SOURCE
+ ccflags-y += -I$(ISP_INCLUDE)
+ 
++# T33: this SDK has no ISP, audio or sensor tree for it and its misc modules
++# are written for the thingino-patched 3.10.14 kernels, not the T33 vendor
++# tree. open-tx-isp driver/t33 provides the ISP, so build nothing here.
++ifneq ($(SOC_FAMILY),t33)
++
+ #### ALL #####
+ 
+ ifneq ($(CONFIG_SOC_A1),y)
+@@ -132,3 +137,5 @@
+ include $(src)/common/video/a1/vdec/Kbuild
+ include $(src)/common/audio/$(SOC_FAMILY)/hdmi_audio/Kbuild
+ endif
++
++endif # SOC_FAMILY != t33

@@ -1,0 +1,42 @@
+Subject: [PATCH] t33: SPL ungates the console UART at CLKGR0 bit 11 + n
+
+The T33 (PRJ008) gates UART0..2 with CLKGR0 bits 11..13 like the T32,
+not 14..16 like the T31. The SPL cleared bit 15 for UART1, so the
+console UART stayed gated: every UART register reads 0 and the first
+t33_spl_putc() spins forever on ULSR, before DDR init (seen in the QEMU
+ingenic-t33 machine; a T33L PRJ008 module under its vendor U-Boot reads
+CLKGR0 = 0xf1b9efe0, bit 12 clear, bit 15 set; the vendor SPL clears
+bit 11 for UART0 and bit 12 for UART1). U-Boot proper's clk-t33.c
+already uses 11/12.
+
+---
+diff --git a/arch/mips/mach-xburst/include/mach/t33.h b/arch/mips/mach-xburst/include/mach/t33.h
+--- a/arch/mips/mach-xburst/include/mach/t33.h
++++ b/arch/mips/mach-xburst/include/mach/t33.h
+@@ -71,10 +71,10 @@
+ #define CPM_MESTSEL	0xec
+ #define CPM_CPVPCR	0xe0	/* VPLL (unused on T33/PRJ008) */
+ 
+-/* CLKGR0 gate bits */
+-#define CPM_CLKGR0_UART2	BIT(16)
+-#define CPM_CLKGR0_UART1	BIT(15)
+-#define CPM_CLKGR0_UART0	BIT(14)
++/* CLKGR0 gate bits (UART0..2 = 11..13 as on T32, not T31 14..16) */
++#define CPM_CLKGR0_UART2	BIT(13)
++#define CPM_CLKGR0_UART1	BIT(12)
++#define CPM_CLKGR0_UART0	BIT(11)
+ 
+ /* OST gate lives in CLKGR1 bit 7 (vendor CPM_CLKGR1_OST) */
+ #define CPM_CLKGR1_OST		BIT(7)
+diff --git a/arch/mips/mach-xburst/t33/pll.c b/arch/mips/mach-xburst/t33/pll.c
+--- a/arch/mips/mach-xburst/t33/pll.c
++++ b/arch/mips/mach-xburst/t33/pll.c
+@@ -93,7 +93,7 @@
+ 		;
+ }
+ 
+-/* Ungate the console UART (CLKGR0: UART0 = bit 14, UART1 = bit 15). */
++/* Ungate the console UART (CLKGR0: UART0 = bit 11, UART1 = bit 12). */
+ void clk_ungate_uart(unsigned int idx)
+ {
+ 	cpm_w(cpm_r(CPM_CLKGR0) & ~(CPM_CLKGR0_UART0 << idx), CPM_CLKGR0);

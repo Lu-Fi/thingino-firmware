@@ -1,0 +1,27 @@
+From cbd100d2dc78f4c120ff63dc511eabcb2a2cdbdf Mon Sep 17 00:00:00 2001
+From: Lu-Fi <lutz@fiebach.de>
+Date: Fri, 13 Nov 2026 11:44:08 +0100
+Subject: [PATCH] mips: do not build with -Werror
+
+The vendor tree fails on header-guard and similar warnings the current gcc
+reports.
+---
+ arch/mips/Kbuild | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/mips/Kbuild b/arch/mips/Kbuild
+index d2cfe45f..9126df0c 100644
+--- a/arch/mips/Kbuild
++++ b/arch/mips/Kbuild
+@@ -1,7 +1,7 @@
+ # Fail on warnings - also for files referenced in subdirs
+ # -Werror can be disabled for specific files using:
+ # CFLAGS_<file.o> := -Wno-error
+-subdir-ccflags-y := -Werror
++subdir-ccflags-y := -Wno-error
+ 
+ # platform specific definitions
+ include arch/mips/Kbuild.platforms
+-- 
+2.56.0
+

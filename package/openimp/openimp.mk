@@ -15,7 +15,7 @@ OPENIMP_SITE = https://github.com/Lu-Fi/openimp
 # THINGINO_USER_DIR) and
 # run `make rebuild-openimp`. Buildroot then rsyncs that tree, skips the
 # download/hash check, and the .hash entry below is not used.
-OPENIMP_VERSION = a7879f27673b615bb17c6a8688b755ba68665193
+OPENIMP_VERSION = 75febd26f65e8751660c49f785039d4cae1baa1a
 
 # Upstream describes OpenIMP as MIT but does not currently ship a top-level
 # license file for legal-info to collect.

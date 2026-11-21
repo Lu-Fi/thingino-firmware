@@ -16,7 +16,7 @@ OPEN_TX_ISP_SITE = https://github.com/Lu-Fi/open-tx-isp
 # run `make rebuild-open-tx-isp`. Buildroot then rsyncs that tree, skips the
 # download/hash check, and the .hash entry below is not used. With a git
 # checkout set OTX_BUILD_ID yourself if the module should print its describe.
-OPEN_TX_ISP_VERSION = c3388e99023d8b2ec13b0f2f0ed7517763871bd9
+OPEN_TX_ISP_VERSION = 28a3e96dd753b8ce2e14293bd62172ee9275ee00
 
 # Upstream identifies the project as GPLv3 but does not currently ship a
 # top-level license file for legal-info to collect.

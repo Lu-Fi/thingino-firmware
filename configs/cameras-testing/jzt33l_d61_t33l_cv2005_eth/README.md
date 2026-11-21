@@ -57,7 +57,8 @@ release tags):
   `clk_name=mpll isp_clk=325000000 clkv_name=mpll isp_clkv=325000000
   direct_mode=1 ivdc_mem_line=1080 ivdc_threshold_line=800` (the thingino
   Kconfig has no 325 MHz ISP clock; pass them via `/etc/modules.d/20-isp`;
-  the open driver runs with `direct_mode=0` until #509 is fixed).
+  the open driver runs these arguments since the #509 fix, open-tx-isp 28a3e96dd:
+  IVDC core init before the sensor stream-on; OpenIMP then needs 11428 KB, #516).
 - IR cut: none fitted. The lens holder has no IR-cut wires (checked by hand 2026-11-15) and 200 ms pulses on GPIO 66 / 67 give no click;
   the vendor HAL (`IniteIrcut` / `setIrCut`) drives 66 / 67 generically for its board family. No `ircut` entry here.
 - IR LEDs: none on this module (no `ir850` entry). The vendor HAL also initialises PWM "IrLight" pins
@@ -89,5 +90,5 @@ What is deliberately empty or open:
   `/proc/jz/sensor/sensor0/name`, so timps cannot detect the sensor), the
   `/etc/sensor -> /usr/share/sensor` link (OpenIMP T33 reads
   `/etc/sensor/cv2005-PRJ008-<mode>.bin`; with sensor "none" the SDK package
-  does not create the link) and `20-isp` with `direct_mode=0`
-  (direct_mode=1 hangs the T33L, openimp #509).
+  does not create the link) and `20-isp` with `direct_mode=1 ivdc_mem_line=1080 ivdc_threshold_line=800`
+  (needs open-tx-isp >= 28a3e96dd, openimp #509; rmem=13M, #516).

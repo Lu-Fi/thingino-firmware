@@ -1,17 +1,23 @@
 # NAME: O-KAM QC3 (T23DL, GC1084, AIC8800DC USB)
 # FRAG: soc-xburst1 core
-# Skeleton from the OEM boot log (not device-tested, GPIOs still unknown:
-# the OEM app keeps its pin table inside vp_project). OEM tx-isp-t23:
-# isp_memopt=1 direct_mode=1 isp_clk=200M isp_clka=600M ivdc_mem_line=300,
-# mem=25088K rmem=7680K. The open stack keeps direct_mode=0 (OpenIMP has no
-# T23 IVDC path) and the A12 memory split (rmem=8M).
+# PCB "QC6-V8-T23N-202404017-V1" (U-Boot banner), 32 MB T23DL, product
+# QC3-W. Values from the OEM firmware (vp_project 2025-09, tx-isp-t23
+# H20241028a): sensor gc1084 at i2c 0x37 (sinfo.ko sensor table), IQ =
+# gc1084-okam_qc3.bin (byte-identical to the OEM gc1084-t23.bin), OEM
+# tx-isp-t23 isp_memopt=1 direct_mode=1 isp_clk=200M isp_clka=600M
+# ivdc_mem_line=300 with mem=25088K rmem=7680K.
+# Open stack (open-tx-isp + OpenIMP + timps) with the OEM IVDC direct mode
+# (OpenIMP #767). rmem is whole MB here: 8M (OEM 7.5M) - 7M would be below
+# the OEM pool, 8M is the split the A12 T23DL runs in QEMU (H.264 main via
+# IVDC + sub + JPEG), Linux keeps 24M (512K less than OEM).
 BR2_INGENIC_SOC_MODEL="t23dl"
 BR2_ISP_CLKA_600MHZ=y
 BR2_ISP_CLKA_SCLKA=y
 BR2_ISP_CLK_200MHZ=y
 BR2_ISP_CLK_SCLKA=y
-BR2_ISP_DIRECT_MODE_0=y
+BR2_ISP_DIRECT_MODE_1=y
 BR2_ISP_MEMOPT_1=y
+BR2_ISP_PARAMS="ivdc_mem_line=300"
 BR2_PACKAGE_THINGINO_ISP_OPEN=y
 BR2_PACKAGE_THINGINO_KOPT_MMC0=y
 BR2_PACKAGE_THINGINO_KOPT_MMC0_PB_4BIT=y
@@ -20,8 +26,10 @@ BR2_PACKAGE_WIFI=y
 BR2_PACKAGE_WIFI_AIC8800=y
 BR2_PACKAGE_WIFI_AIC8800_USB=y
 BR2_PACKAGE_WIFI_AIC8800_USB_8800DC=y
+BR2_SENSOR_1_IQ_FILE="gc1084-okam_qc3.bin"
 BR2_SENSOR_1_NAME="gc1084"
 BR2_THINGINO_AUDIO=y
+BR2_THINGINO_AUDIO_GPIO=63
 BR2_THINGINO_BUTTON=y
 BR2_THINGINO_RMEM_MB=8
 BR2_THINGINO_SDCARD=y

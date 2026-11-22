@@ -7,7 +7,8 @@
 OPENIMP_SITE_METHOD = git
 OPENIMP_SITE = https://github.com/Lu-Fi/openimp
 # Lu-Fi open-stack fork: aperto follows the newest Lu-Fi state, so this is the
-# HEAD of Lu-Fi/openimp next (2026-11-21), not a release tag.
+# HEAD of Lu-Fi/openimp next (2026-11-22, incl. the T23 IVDC device
+# fixes), not a release tag.
 #
 # Building from a local checkout instead of the pinned commit: put
 #   OPENIMP_OVERRIDE_SRCDIR = /path/to/openimp
@@ -15,7 +16,7 @@ OPENIMP_SITE = https://github.com/Lu-Fi/openimp
 # THINGINO_USER_DIR) and
 # run `make rebuild-openimp`. Buildroot then rsyncs that tree, skips the
 # download/hash check, and the .hash entry below is not used.
-OPENIMP_VERSION = 75febd26f65e8751660c49f785039d4cae1baa1a
+OPENIMP_VERSION = 0744e6107cdb355bc5bce280912863923eebddf0
 
 # Upstream describes OpenIMP as MIT but does not currently ship a top-level
 # license file for legal-info to collect.

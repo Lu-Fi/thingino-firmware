@@ -48,13 +48,14 @@ paths the T10 driver compiles against.
 **T23** runs fully on OpenIMP, Helix encoder included; no OEM `libimp.so` is
 installed.
 
-32 MB T23DL boards (`aobocam_a12_t23dl_jxh63p_txw901u`, skeleton
+32 MB T23DL boards (`aobocam_a12_t23dl_jxh63p_txw901u`,
 `okam_qc3_t23dl_gc1084_aic8800dc`) use the OEM split mem=24M rmem=8M with
 `isp_memopt=1`. The OEM also runs `direct_mode=1 ivdc_mem_line=300`; OpenIMP
-has no T23 IVDC path, so these profiles keep `direct_mode=0`. In QEMU
-(32 MiB) the image boots and timps serves JPEG and MJPEG, but the H.264
-encoders do not fit into rmem=8M yet (Lu-Fi/openimp#767, #768); raising rmem
-to 11M starves Linux.
+drives the T23 IVDC direct mode since Lu-Fi/openimp#767 (next 442ad2cd,
+open-tx-isp d4104b8a), so the QC3 profile uses the same mode: the H.264 main
+stream reads the ISP lines through IVDC instead of full NV12 frames in rmem.
+The OEM QC3 pool is 7680K; thingino sets rmem in whole MB, and 8M keeps the
+pool at least as large as the OEM one (Linux gets 512K less).
 
 C100 is not covered by either component.
 

@@ -42,3 +42,11 @@ KERNEL_VERSION_3=y
 BR2_THINGINO_DIAG_RESETCAUSE=y
 BR2_THINGINO_DIAG_LASTPANIC=y
 BR2_THINGINO_DIAG_RESET_SLED=y
+# v5 lean set (#785): the web preview still ran out of RAM (out_of_memory
+# reset) after the rmem fix, so: timps without TLS/WebRTC (open the web UI over
+# http://), no WireGuard, and the services onvif_notify, ONVIF discovery
+# (wsd), heartbeat and mdnsd are stubbed out via 0-byte init scripts in the
+# camera overlay. AIC8800 message RX URB option stays at its default (#802).
+# BR2_PACKAGE_TIMPS_TLS is not set
+# BR2_PACKAGE_TIMPS_WEBRTC is not set
+BR2_PACKAGE_THINGINO_VPN_NONE=y

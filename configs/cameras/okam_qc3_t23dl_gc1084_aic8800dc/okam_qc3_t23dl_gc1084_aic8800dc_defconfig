@@ -13,6 +13,13 @@
 # (OpenIMP #767). rmem is whole MB here: 8M (OEM 7.5M) - 7M would be below
 # the OEM pool, 8M is the split the A12 T23DL runs in QEMU (H.264 main via
 # IVDC + sub + JPEG), Linux keeps 24M (512K less than OEM).
+# 32 MB low-memory profile (OpenIMP #785): Linux has 19.6 MB, the WebUI
+# preview pushed it into page-cache thrash and watchdog resets. Off here:
+# timps TLS/WebRTC (~450 KB; open the web UI over http://, an https://
+# page cannot load the plain timps preview), WireGuard (~130 KB module);
+# AIC8800 message RX URBs 100 -> 10 (OEM value, ~360 KB slab).
+# Reset diagnostics (#800: silent resets and an oops on ISP re-open):
+# reset cause + last panic epc in RTC + reset PC sled (no RAM reserved).
 BR2_INGENIC_SOC_MODEL="t23dl"
 BR2_ISP_CLKA_600MHZ=y
 BR2_ISP_CLKA_SCLKA=y
@@ -38,3 +45,10 @@ BR2_THINGINO_RMEM_MB=8
 BR2_THINGINO_SDCARD=y
 FLASH_SIZE_MB=8
 KERNEL_VERSION_3=y
+# BR2_PACKAGE_TIMPS_TLS is not set
+# BR2_PACKAGE_TIMPS_WEBRTC is not set
+BR2_PACKAGE_THINGINO_VPN_NONE=y
+BR2_PACKAGE_WIFI_AIC8800_USB_MSG_RX_URBS=10
+BR2_THINGINO_DIAG_RESETCAUSE=y
+BR2_THINGINO_DIAG_LASTPANIC=y
+BR2_THINGINO_DIAG_RESET_SLED=y

@@ -1,0 +1,27 @@
+#!/bin/sh
+# 32 MB low-memory tuning (BR2_THINGINO_LOWMEM, Lu-Fi/openimp#785).
+# Runs after S00sysctl, so these values win over /etc/sysctl.conf.
+
+case "$1" in
+	start)
+		# TCP buffers are unreclaimable slab: cap all sockets together at
+		# 1.5 MiB (default on 19 MB is 864 pages = 3.4 MiB), pressure from 1 MiB.
+		echo "192 256 384" > /proc/sys/net/ipv4/tcp_mem
+		# Dirty page cache (SD recording) bounded to 1 MiB instead of 4 MiB.
+		echo 262144 > /proc/sys/vm/dirty_background_bytes
+		echo 1048576 > /proc/sys/vm/dirty_bytes
+		# A killed watchdog daemon leaves /dev/watchdog armed: the board
+		# resets 60 s later. Never let the OOM killer pick it.
+		for p in $(pidof watchdog); do
+			echo -1000 > /proc/$p/oom_score_adj 2>/dev/null
+		done
+		;;
+	stop|restart|reload)
+		;;
+	*)
+		echo "Usage: $0 {start|stop}"
+		exit 1
+		;;
+esac
+
+exit 0

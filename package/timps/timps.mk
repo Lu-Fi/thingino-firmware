@@ -948,6 +948,16 @@ endef
 TIMPS_TARGET_FINALIZE_HOOKS += TIMPS_DISABLE_DAYNIGHTD
 endif
 
+# S99heartbeat (thingino-webui) writes /run/thingino/heartbeat.json every 5 s
+# for core's json-heartbeat*.cgi. timps replaces both CGIs (see above) with
+# x/timps-heartbeat.sh, which builds the payload per request, and nothing else
+# reads the cache file - so on a timps image the daemon is a ~220 KiB PSS shell
+# loop forking every 5 s for no reader (Lu-Fi/openimp#785, QC3 32 MB).
+define TIMPS_DROP_CORE_HEARTBEAT_DAEMON
+	rm -f $(TARGET_DIR)/etc/init.d/S99heartbeat
+endef
+TIMPS_TARGET_FINALIZE_HOOKS += TIMPS_DROP_CORE_HEARTBEAT_DAEMON
+
 # NOTE: ONVIF discovery script. thingino-onvif deliberately does NOT ship
 # S96onvif_discovery ("streamer-specific and installed by the selected streamer
 # package"); raptor/prudynt/strero each install their OWN raptor-flavored copy

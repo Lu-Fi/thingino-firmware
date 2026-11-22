@@ -42,3 +42,12 @@ KERNEL_VERSION_3=y
 BR2_THINGINO_DIAG_RESETCAUSE=y
 BR2_THINGINO_DIAG_LASTPANIC=y
 BR2_THINGINO_DIAG_RESET_SLED=y
+# v6 (#785): all v4 features (timps TLS+WebRTC, WireGuard, ONVIF, mDNS) plus
+# RAM savings that remove no function: 32 MB kernel tuning (log buffers, JFFS2
+# deflate workspace, TCP memory cap, OOM exemptions, SD fs modules on demand),
+# squashfs 128 KiB blocks (read caches + XZ dictionary halve, ~640 KiB) and the
+# OEM value of 10 AIC8800 message RX URBs (#802, ~360 KiB).
+BR2_THINGINO_LOWMEM=y
+# BR2_TARGET_ROOTFS_SQUASHFS_BS_256K is not set
+BR2_TARGET_ROOTFS_SQUASHFS_BS_128K=y
+BR2_PACKAGE_WIFI_AIC8800_USB_MSG_RX_URBS=10

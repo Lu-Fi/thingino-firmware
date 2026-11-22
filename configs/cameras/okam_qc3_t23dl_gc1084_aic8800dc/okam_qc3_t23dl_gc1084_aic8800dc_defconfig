@@ -17,7 +17,8 @@
 # preview pushed it into page-cache thrash and watchdog resets. Off here:
 # timps TLS/WebRTC (~450 KB; open the web UI over http://, an https://
 # page cannot load the plain timps preview), WireGuard (~130 KB module);
-# AIC8800 message RX URBs 100 -> 10 (OEM value, ~360 KB slab).
+# AIC8800 message RX URBs: the OEM driver uses 10 (~360 KB less slab
+# than 100); not set yet, it is not device-tested with this driver.
 # Reset diagnostics (#800: silent resets and an oops on ISP re-open):
 # reset cause + last panic epc in RTC + reset PC sled (no RAM reserved).
 BR2_INGENIC_SOC_MODEL="t23dl"
@@ -48,7 +49,6 @@ KERNEL_VERSION_3=y
 # BR2_PACKAGE_TIMPS_TLS is not set
 # BR2_PACKAGE_TIMPS_WEBRTC is not set
 BR2_PACKAGE_THINGINO_VPN_NONE=y
-BR2_PACKAGE_WIFI_AIC8800_USB_MSG_RX_URBS=10
 BR2_THINGINO_DIAG_RESETCAUSE=y
 BR2_THINGINO_DIAG_LASTPANIC=y
 BR2_THINGINO_DIAG_RESET_SLED=y

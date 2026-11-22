@@ -1,4 +1,4 @@
-# NAME: O-KAM QC3 (T23DL, GC1084, AIC8800D80 USB)
+# NAME: O-KAM QC3 (T23DL, GC1084, AIC8800DC USB)
 # FRAG: soc-xburst1 core
 # PCB "QC6-V8-T23N-202404017-V1" (U-Boot banner), 32 MB T23DL, product
 # QC3-W. Values from the OEM firmware (vp_project 2025-09, tx-isp-t23
@@ -6,11 +6,9 @@
 # gc1084-okam_qc3.bin (byte-identical to the OEM gc1084-t23.bin), OEM
 # tx-isp-t23 isp_memopt=1 direct_mode=1 isp_clk=200M isp_clka=600M
 # ivdc_mem_line=300 with mem=25088K rmem=7680K.
-# WiFi: the OEM loads aic_load_fw.ko (USB IDs of the D80 family only) with
-# aic_fw_path=/addfs/wifi, which holds exactly the D80 H-variant set
-# (fmacfw_8800d80_h_u02, fw_patch*_8800d80_u02, fw_adid, userconfig); the
-# aic8800DC sub-directory is only a fallback. So the chip is a D80-family
-# part, not 8800DC (first DC image: no wlan0 on the device).
+# WiFi: AIC8800DC on USB, a69c:88dc (device lsusb after the WLAN power
+# GPIO 62 is driven low). The OEM ships a D80 set in /addfs/wifi too, but
+# the DC firmware in /addfs/wifi/aic8800DC is the one this chip uses.
 # Open stack (open-tx-isp + OpenIMP + timps) with the OEM IVDC direct mode
 # (OpenIMP #767). rmem is whole MB here: 8M (OEM 7.5M) - 7M would be below
 # the OEM pool, 8M is the split the A12 T23DL runs in QEMU (H.264 main via
@@ -30,8 +28,7 @@ BR2_PACKAGE_THINGINO_STREAMER_TIMPS=y
 BR2_PACKAGE_WIFI=y
 BR2_PACKAGE_WIFI_AIC8800=y
 BR2_PACKAGE_WIFI_AIC8800_USB=y
-BR2_PACKAGE_WIFI_AIC8800_USB_8800D80=y
-BR2_PACKAGE_WIFI_AIC8800_USB_8800D80_H_FIRMWARE_ONLY=y
+BR2_PACKAGE_WIFI_AIC8800_USB_8800DC=y
 BR2_SENSOR_1_IQ_FILE="gc1084-okam_qc3.bin"
 BR2_SENSOR_1_NAME="gc1084"
 BR2_THINGINO_AUDIO=y

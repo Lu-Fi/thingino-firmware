@@ -1,4 +1,4 @@
-// O-KAM QC3 (T23DL, GC1084, AIC8800DC USB) per-board GPIO definitions.
+// O-KAM QC3 (T23DL, GC1084, AIC8800D80 USB) per-board GPIO definitions.
 // Reset key PB26 (OEM vp_gpio: input with edge irq, polled by the key thread).
 // On kernel 3.10 only the gpio-keys pins are read (scripts/button_pins.sh).
 #include <dt-bindings/gpio/gpio.h>

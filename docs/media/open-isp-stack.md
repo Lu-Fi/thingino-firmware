@@ -49,7 +49,7 @@ paths the T10 driver compiles against.
 installed.
 
 32 MB T23DL boards (`aobocam_a12_t23dl_jxh63p_txw901u`,
-`okam_qc3_t23dl_gc1084_aic8800dc`) use the OEM split mem=24M rmem=8M with
+`okam_qc3_t23dl_gc1084_aic8800d80`) use the OEM split mem=24M rmem=8M with
 `isp_memopt=1`. The OEM also runs `direct_mode=1 ivdc_mem_line=300`; OpenIMP
 drives the T23 IVDC direct mode since Lu-Fi/openimp#767 (next 442ad2cd,
 open-tx-isp d4104b8a), so the QC3 profile uses the same mode: the H.264 main

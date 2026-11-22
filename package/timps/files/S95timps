@@ -72,9 +72,11 @@ case "$1" in
 		# OOM: timpsd is the largest process, so the OOM killer picks it
 		# first, and its exit (ISP/encoder release) is slow; on a 32 MB
 		# board the watchdog fired inside out_of_memory (#800). Let the
-		# killer take a small service instead.
-		sleep 1
-		[ -f "$PIDFILE" ] && echo -500 > "/proc/$(cat "$PIDFILE")/oom_score_adj" 2>/dev/null
+		# killer take a small service instead (only with /etc/lowmem).
+		if [ -f /etc/lowmem ]; then
+			sleep 1
+			[ -f "$PIDFILE" ] && echo -500 > "/proc/$(cat "$PIDFILE")/oom_score_adj" 2>/dev/null
+		fi
 		;;
 	stop)
 		echo "Stopping timpsd..."

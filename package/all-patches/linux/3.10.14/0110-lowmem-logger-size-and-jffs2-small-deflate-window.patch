@@ -91,7 +91,7 @@ Signed-off-by: Lu-Fi <lutz@fiebach.de>
 -	if (Z_OK != zlib_deflateInit(&def_strm, 3)) {
 +	if (Z_OK != zlib_deflateInit2(&def_strm, 3, Z_DEFLATED,
 +				      JFFS2_DEFLATE_WBITS,
-+				      JFFS2_DEFLATE_MEMLEVEL,
++				      (JFFS2_DEFLATE_MEMLEVEL == MAX_MEM_LEVEL ? DEF_MEM_LEVEL : JFFS2_DEFLATE_MEMLEVEL),
 +				      Z_DEFAULT_STRATEGY)) {
  		pr_warn("deflateInit failed\n");
  		mutex_unlock(&deflate_mutex);

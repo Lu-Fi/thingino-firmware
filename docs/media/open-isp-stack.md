@@ -48,7 +48,7 @@ paths the T10 driver compiles against.
 **T23** runs fully on OpenIMP, Helix encoder included; no OEM `libimp.so` is
 installed.
 
-32 MB T23DL boards (`aobocam_a12_t23dl_jxh63p_txw901u`,
+32 MB T23DL boards (`aobocam_a12_t23dl_jxh63p_txw901u` (parked),
 `okam_qc3_t23dl_gc1084_aic8800dc`) use the OEM split mem=24M rmem=8M with
 `isp_memopt=1`. The OEM also runs `direct_mode=1 ivdc_mem_line=300`; OpenIMP
 drives the T23 IVDC direct mode since Lu-Fi/openimp#767 (next 442ad2cd,

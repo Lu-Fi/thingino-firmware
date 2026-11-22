@@ -5,23 +5,14 @@ BR2_ISP_CLKA_600MHZ=y
 BR2_ISP_CLKA_SCLKA=y
 BR2_ISP_CLK_200MHZ=y
 BR2_ISP_CLK_SCLKA=y
-# Open stack (open-tx-isp + OpenIMP + timps). 32 MB T23DL: the OEM runs
-# tx-isp-t23 with isp_memopt=1 direct_mode=1 ivdc_mem_line=300 and
-# mem=24M rmem=8M. OpenIMP does not drive the IVDC direct mode, so the
-# open stack keeps direct_mode=0 (frame buffers in rmem) with the same
-# memopt level and the vendor rmem size.
-BR2_ISP_DIRECT_MODE_0=y
-BR2_ISP_MEMOPT_1=y
-BR2_PACKAGE_THINGINO_ISP_OPEN=y
 BR2_PACKAGE_THINGINO_KOPT_MMC0=y
 BR2_PACKAGE_THINGINO_KOPT_MMC0_PB_4BIT=y
-BR2_PACKAGE_THINGINO_STREAMER_TIMPS=y
 BR2_PACKAGE_WIFI=y
 BR2_PACKAGE_WIFI_TXW901U=y
 BR2_SENSOR_1_NAME="jxh63p"
 BR2_THINGINO_AUDIO=y
 BR2_THINGINO_BUTTON=y
-BR2_THINGINO_RMEM_MB=8
+BR2_THINGINO_RMEM_MB=10
 BR2_THINGINO_SDCARD=y
 FLASH_SIZE_MB=8
 KERNEL_VERSION_3=y

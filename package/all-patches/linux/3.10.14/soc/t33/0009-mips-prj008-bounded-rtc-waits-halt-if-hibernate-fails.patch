@@ -1,0 +1,214 @@
+From: Lu-Fi <lutz@fiebach.de>
+Date: Mon, 23 Nov 2026 13:00:00 +0100
+Subject: [PATCH] mips: prj008: bounded RTC waits, halt when hibernate fails
+
+jz_hibernate() (pm_power_off) and rtc_write_reg() poll RTCCR.WRDY and
+WENR.WEN without a limit, with interrupts off. On the JZT33L D61 module
+the RTC write enable never comes after the 0xa55a unlock, so poweroff
+spun in rtc_write_reg() until the hardware watchdog reset the SoC after
+~16 s (CPM_RSR 0x2): poweroff became a reboot.
+
+Bound every RTC wait to 100 ms. If a write times out, log the register
+and the RTCCR/WENR values, stop the watchdog (jz_wdt has no shutdown
+hook, so a watchdog armed by user space is still running) and halt the
+CPU, so the board stays down until a power cycle. hibernate_restart()
+falls back to the watchdog restart. With a working RTC every wait ends
+after a few RTC cycles and the first poll is not delayed, so behaviour
+there is unchanged. Beyond the vendor kernel (openimp #824).
+
+Signed-off-by: Lu-Fi <lutz@fiebach.de>
+---
+--- a/arch/mips/xburst/soc-PRJ008/common/reset.c
++++ b/arch/mips/xburst/soc-PRJ008/common/reset.c
+@@ -77,15 +77,68 @@
+ 	outl(1 << 16,TCU_IOBASE + TCU_TSSR);
+ }
+ 
+-static void inline rtc_write_reg(int reg,int value)
++/*
++ * Bounded RTC waits. The vendor code polls RTCCR.WRDY and WENR.WEN without
++ * a limit, with interrupts off. On a board whose RTC domain never grants the
++ * write enable (JZT33L D61 module: WENR.WEN never sets after the 0xa55a
++ * unlock) jz_hibernate() spins there until the hardware watchdog resets the
++ * SoC, so poweroff turns into a reboot. With a working RTC every wait ends
++ * after a few 32 kHz RTC cycles (~31 us each), far below this limit, and the
++ * first poll happens without delay, so the timing there is unchanged.
++ */
++#define RTC_WAIT_US		100000	/* per wait: 100 ms */
++
++static int rtc_wait_set(unsigned int reg, unsigned int bit)
++{
++	unsigned int us;
++
++	for (us = 0; us < RTC_WAIT_US; us++) {
++		if (inl(RTC_IOBASE + reg) & bit)
++			return 0;
++		udelay(1);
++	}
++	return -ETIMEDOUT;
++}
++
++static int rtc_write_reg(int reg,int value)
+ {
+-	while(!(inl(RTC_IOBASE + RTC_RTCCR) & RTCCR_WRDY));
++	if (rtc_wait_set(RTC_RTCCR, RTCCR_WRDY))
++		return -ETIMEDOUT;
+ 	outl(0xa55a,(RTC_IOBASE + RTC_WENR));
+-	while(!(inl(RTC_IOBASE + RTC_RTCCR) & RTCCR_WRDY));
+-	while(!(inl(RTC_IOBASE + RTC_WENR) & WENR_WEN));
+-	while(!(inl(RTC_IOBASE + RTC_RTCCR) & RTCCR_WRDY));
++	if (rtc_wait_set(RTC_RTCCR, RTCCR_WRDY))
++		return -ETIMEDOUT;
++	if (rtc_wait_set(RTC_WENR, WENR_WEN))
++		return -ETIMEDOUT;
++	if (rtc_wait_set(RTC_RTCCR, RTCCR_WRDY))
++		return -ETIMEDOUT;
+ 	outl(value,(RTC_IOBASE + reg));
+-	while(!(inl(RTC_IOBASE + RTC_RTCCR) & RTCCR_WRDY));
++	if (rtc_wait_set(RTC_RTCCR, RTCCR_WRDY))
++		return -ETIMEDOUT;
++	return 0;
++}
++
++static void rtc_write_failed(const char *who, int reg)
++{
++	printk(KERN_EMERG "%s: RTC write of reg 0x%02x timed out "
++	       "(RTCCR 0x%08x WENR 0x%08x): RTC domain not writable\n",
++	       who, reg, inl(RTC_IOBASE + RTC_RTCCR),
++	       inl(RTC_IOBASE + RTC_WENR));
++}
++
++/*
++ * Poweroff fallback when the RTC cannot enter hibernate: halt the CPU.
++ * jz_wdt has no shutdown hook, so a watchdog that user space armed is still
++ * running here and would reset the SoC after its timeout; stop it (same
++ * register writes as jz_wdt_stop()) so the halt holds until a power cycle.
++ */
++static void __noreturn jz_poweroff_halt(void)
++{
++	printk(KERN_EMERG "jz_hibernate: hibernate not possible, "
++	       "stopping the watchdog and halting the CPU (power-cycle to restart)\n");
++	outl(0, WDT_IOBASE + WDT_TCER);
++	outl(1 << 16, TCU_IOBASE + TCU_TSSR);
++	while (1)
++		cpu_relax();
+ }
+ 
+ /*
+@@ -94,29 +147,41 @@
+  */
+ void reset_keep_power(int keep_pwr)
+ {
+-	if (keep_pwr)
+-		rtc_write_reg(RTC_PWRONCR,
+-			      inl(RTC_IOBASE + RTC_PWRONCR) & ~(1 << 0));
++	if (keep_pwr && rtc_write_reg(RTC_PWRONCR,
++				      inl(RTC_IOBASE + RTC_PWRONCR) & ~(1 << 0)))
++		rtc_write_failed("reset_keep_power", RTC_PWRONCR);
+ }
+ 
+ #define HWFCR_WAIT_TIME(x) ((x > 0x7fff ? 0x7fff: (0x7ff*(x)) / 2000) << 5)
+ 
+ void jz_hibernate(void)
+ {
++	int reg;
++
+ 	local_irq_disable();
+ 	/* Set minimum wakeup_n pin low-level assertion time for wakeup: 1000ms */
+-	rtc_write_reg(RTC_HWFCR, HWFCR_WAIT_TIME(1000));
++	reg = RTC_HWFCR;
++	if (rtc_write_reg(reg, HWFCR_WAIT_TIME(1000)))
++		goto rtc_fail;
+ 
+ 	/* Set reset pin low-level assertion time after wakeup: must  > 60ms */
+-	rtc_write_reg(RTC_HRCR, (60 << 5));
++	reg = RTC_HRCR;
++	if (rtc_write_reg(reg, (60 << 5)))
++		goto rtc_fail;
+ 
+ 	/* clear wakeup status register */
+-	rtc_write_reg(RTC_HWRSR, 0x0);
+-
+-	rtc_write_reg(RTC_HWCR, 0x8);
++	reg = RTC_HWRSR;
++	if (rtc_write_reg(reg, 0x0))
++		goto rtc_fail;
++
++	reg = RTC_HWCR;
++	if (rtc_write_reg(reg, 0x8))
++		goto rtc_fail;
+ 
+ 	/* Put CPU to hibernate mode */
+-	rtc_write_reg(RTC_HCR, 0x1);
++	reg = RTC_HCR;
++	if (rtc_write_reg(reg, 0x1))
++		goto rtc_fail;
+ 
+ 	jz_notifier_call(NOTEFY_PROI_HIGH, JZ_POST_HIBERNATION, NULL);
+ 
+@@ -124,6 +189,10 @@
+ 
+ 	while(1)
+ 		printk("We should NOT come here.%08x\n",inl(RTC_IOBASE + RTC_HCR));
++
++rtc_fail:
++	rtc_write_failed("jz_hibernate", reg);
++	jz_poweroff_halt();
+ }
+ 
+ void jz_wdt_restart(char *command)
+@@ -179,34 +248,46 @@
+ static void hibernate_restart(void) {
+ 	uint32_t rtc_rtcsr,rtc_rtccr;
+ 
+-	while(!(inl(RTC_IOBASE + RTC_RTCCR) & RTCCR_WRDY));
++	if (rtc_wait_set(RTC_RTCCR, RTCCR_WRDY))
++		goto rtc_fail;
+ 	rtc_rtcsr = inl(RTC_IOBASE + RTC_RTCSR);
+ 	rtc_rtccr = inl(RTC_IOBASE + RTC_RTCCR);
+ 
+-	rtc_write_reg(RTC_RTCSAR,rtc_rtcsr + 5);
++	if (rtc_write_reg(RTC_RTCSAR,rtc_rtcsr + 5))
++		goto rtc_fail;
+ 	rtc_rtccr &= ~(1 << 4);
+-	rtc_write_reg(RTC_RTCCR,rtc_rtccr | 0x3<<2);
++	if (rtc_write_reg(RTC_RTCCR,rtc_rtccr | 0x3<<2))
++		goto rtc_fail;
+ 
+ 	/* Clear reset status */
+ 	cpm_outl(0,CPM_RSR);
+ 
+ 	/* Set minimum wakeup_n pin low-level assertion time for wakeup: 1000ms */
+-	rtc_write_reg(RTC_HWFCR, HWFCR_WAIT_TIME(1000));
++	if (rtc_write_reg(RTC_HWFCR, HWFCR_WAIT_TIME(1000)))
++		goto rtc_fail;
+ 
+ 	/* Set reset pin low-level assertion time after wakeup: must  > 60ms */
+-	rtc_write_reg(RTC_HRCR, (60 << 5));
++	if (rtc_write_reg(RTC_HRCR, (60 << 5)))
++		goto rtc_fail;
+ 
+ 	/* clear wakeup status register */
+-	rtc_write_reg(RTC_HWRSR, 0x0);
++	if (rtc_write_reg(RTC_HWRSR, 0x0))
++		goto rtc_fail;
+ 
+-	rtc_write_reg(RTC_HWCR, 0x9);
++	if (rtc_write_reg(RTC_HWCR, 0x9))
++		goto rtc_fail;
+ 	/* Put CPU to hibernate mode */
+-	rtc_write_reg(RTC_HCR, 0x1);
++	if (rtc_write_reg(RTC_HCR, 0x1))
++		goto rtc_fail;
+ 
+ 	mdelay(200);
+ 	while(1)
+ 		printk("We should NOT come here.%08x\n",inl(RTC_IOBASE + RTC_HCR));
+ 
++rtc_fail:
++	/* RTC domain not writable: restart through the watchdog instead */
++	rtc_write_failed("hibernate_restart", -1);
++	jz_wdt_restart(NULL);
+ }
+ #ifdef CONFIG_HIBERNATE_RESET
+ void jz_hibernate_restart(char *command)

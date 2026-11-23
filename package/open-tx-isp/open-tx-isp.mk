@@ -7,7 +7,7 @@
 OPEN_TX_ISP_SITE_METHOD = git
 OPEN_TX_ISP_SITE = https://github.com/Lu-Fi/open-tx-isp
 # Lu-Fi open-stack fork: aperto follows the newest Lu-Fi state, so this is the
-# HEAD of Lu-Fi/open-tx-isp next (2026-11-22), not a release tag.
+# HEAD of Lu-Fi/open-tx-isp next (2026-11-23, QC3 merge round), not a release tag.
 #
 # Building from a local checkout instead of the pinned commit: put
 #   OPEN_TX_ISP_OVERRIDE_SRCDIR = /path/to/open-tx-isp
@@ -16,7 +16,7 @@ OPEN_TX_ISP_SITE = https://github.com/Lu-Fi/open-tx-isp
 # run `make rebuild-open-tx-isp`. Buildroot then rsyncs that tree, skips the
 # download/hash check, and the .hash entry below is not used. With a git
 # checkout set OTX_BUILD_ID yourself if the module should print its describe.
-OPEN_TX_ISP_VERSION = c16ca1c1ea0e82d5c3a294f89be0c45461343758
+OPEN_TX_ISP_VERSION = 1f39fe361516f265c21e14945ead30d22c30c7b1
 
 # Upstream identifies the project as GPLv3 but does not currently ship a
 # top-level license file for legal-info to collect.

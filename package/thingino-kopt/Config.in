@@ -605,7 +605,10 @@ config BR2_THINGINO_LOWMEM
 	    800 (a line added to auth.sh at target-finalize), uhttpd
 	    stays <= 0 and wpa_supplicant/dropbear get -500 (S61lowmem),
 	    so an overloaded board drops a WebUI request instead of
-	    thrashing into a hardware-watchdog reset.
+	    thrashing into a hardware-watchdog reset;
+	  - AIC8800 USB WLAN: 10 message-endpoint RX URBs like the OEM
+	    driver instead of the upstream 100 (~360 KiB less slab,
+	    Lu-Fi/openimp#802, BR2_PACKAGE_WIFI_AIC8800_USB_MSG_RX_URBS).
 	  Pair it with BR2_TARGET_ROOTFS_SQUASHFS_BS_128K (squashfs read
 	  caches and the XZ dictionary scale with the block size).
 

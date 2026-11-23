@@ -59,6 +59,7 @@ if BR2_PACKAGE_WIFI_AIC8800
 
 		config BR2_PACKAGE_WIFI_AIC8800_USB_MSG_RX_URBS
 			int "Message-endpoint RX URBs"
+			default 10 if BR2_THINGINO_LOWMEM
 			default 100
 			range 4 200
 			help
@@ -67,7 +68,9 @@ if BR2_PACKAGE_WIFI_AIC8800
 			  of kernel slab). The upstream driver uses 100; the OEM
 			  AIC8800DC driver of the O-KAM QC3 uses 10 (its
 			  aic8800_fdrv.ko passes 10 to the AICWF_USB_MSG_RX_URBS
-			  print). 32 MB boards set 10 and keep ~360 KiB.
+			  print). Low-memory boards (BR2_THINGINO_LOWMEM) default
+			  to the OEM 10 and keep ~360 KiB of slab
+			  (Lu-Fi/openimp#802).
 	endif
 
 	if BR2_PACKAGE_WIFI_AIC8800_SDIO

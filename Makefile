@@ -350,8 +350,11 @@ ALIGN_BLOCK := 65536
 # mkfs.jffs2 must pack nodes in the erase block size the kernel's NOR driver
 # reports, or every node crossing the boundary is discarded at mount
 # ("Perhaps the file system was created with the wrong erase size?").
-# Ingenic SFC NOR reports 32 KiB by default; only kernels whose config
-# explicitly selects CONFIG_ERASE_SIZE_64K use 64 KiB.
+# Nodes packed at 32 KiB also never cross a 64 KiB boundary, so 32 KiB is
+# kept unless the kernel config selects CONFIG_ERASE_SIZE_64K. Note that the
+# 3.10 jz_sfc driver reports the board table's erase size (64 KiB on
+# T10/T20/T21/T23/T30/T31); the image is therefore built without
+# cleanmarkers (see Makefile.utils, scripts/check-jffs2-cleanmarkers.sh).
 KERNEL_CONFIG_FILE := $(BR2_EXTERNAL)/board/ingenic/$(SOC_ARCH)/kernel/$(KERNEL_VERSION)/$(SOC_FAMILY).generic.config
 JFFS2_ERASE_BLOCK := $(shell if grep -q '^CONFIG_ERASE_SIZE_64K=y' "$(KERNEL_CONFIG_FILE)" 2>/dev/null; then echo 65536; else echo 32768; fi)
 export JFFS2_ERASE_BLOCK

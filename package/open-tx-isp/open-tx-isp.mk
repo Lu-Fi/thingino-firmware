@@ -7,7 +7,7 @@
 OPEN_TX_ISP_SITE_METHOD = git
 OPEN_TX_ISP_SITE = https://github.com/Lu-Fi/open-tx-isp
 # Lu-Fi open-stack fork: aperto follows the newest Lu-Fi state, so this is the
-# HEAD of Lu-Fi/open-tx-isp next (2026-11-23, QC3 merge round), not a release tag.
+# HEAD of Lu-Fi/open-tx-isp next (2026-11-23, T23 IVDC direct re-init for the QC3), not a release tag.
 #
 # Building from a local checkout instead of the pinned commit: put
 #   OPEN_TX_ISP_OVERRIDE_SRCDIR = /path/to/open-tx-isp
@@ -16,7 +16,7 @@ OPEN_TX_ISP_SITE = https://github.com/Lu-Fi/open-tx-isp
 # run `make rebuild-open-tx-isp`. Buildroot then rsyncs that tree, skips the
 # download/hash check, and the .hash entry below is not used. With a git
 # checkout set OTX_BUILD_ID yourself if the module should print its describe.
-OPEN_TX_ISP_VERSION = 1f39fe361516f265c21e14945ead30d22c30c7b1
+OPEN_TX_ISP_VERSION = 18601ae44c0a06dbc2e04005d2d1ad3bdcd41ba2
 
 # Upstream identifies the project as GPLv3 but does not currently ship a
 # top-level license file for legal-info to collect.
@@ -37,14 +37,9 @@ OPEN_TX_ISP_MODULE_MAKE_OPTS = \
 # module probes, otherwise "unknown") is taken from the package version.
 OPEN_TX_ISP_MODULE_MAKE_OPTS += OTX_BUILD_ID=$(OPEN_TX_ISP_VERSION)
 
-# Add XBurst platform include paths for soc headers. The T33 vendor tree names
-# its SoC directory after the project code (soc-PRJ008), not the family.
-OPEN_TX_ISP_SOC_DIR = soc-$(SOC_FAMILY)
-ifeq ($(SOC_FAMILY),t33)
-OPEN_TX_ISP_SOC_DIR = soc-PRJ008
-endif
+# Add XBurst platform include paths for soc headers
 OPEN_TX_ISP_MODULE_MAKE_OPTS += \
-	EXTRA_CFLAGS="-I$(LINUX_DIR)/arch/mips/xburst/$(OPEN_TX_ISP_SOC_DIR)/include \
+	EXTRA_CFLAGS="-I$(LINUX_DIR)/arch/mips/xburst/soc-$(SOC_FAMILY)/include \
 	-I$(LINUX_DIR)/arch/mips/xburst/core/include \
 	-I$(LINUX_DIR)/arch/mips/xburst/common/include"
 

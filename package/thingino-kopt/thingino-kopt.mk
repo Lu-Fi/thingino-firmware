@@ -851,7 +851,7 @@ endef
 define THINGINO_KOPT_INSTALL_TARGET_CMDS_LOWMEM
 	$(INSTALL) -D -m 0755 $(THINGINO_KOPT_PKGDIR)/files/S03lowmem $(TARGET_DIR)/etc/init.d/S03lowmem
 	$(INSTALL) -D -m 0755 $(THINGINO_KOPT_PKGDIR)/files/S61lowmem $(TARGET_DIR)/etc/init.d/S61lowmem
-	echo "# BR2_THINGINO_LOWMEM: 32 MB board, see S03lowmem, S09mmc" > $(TARGET_DIR)/etc/lowmem
+	echo "# BR2_THINGINO_LOWMEM: 32 MB board, see S03lowmem, S61lowmem" > $(TARGET_DIR)/etc/lowmem
 endef
 
 # Every WebUI CGI sources auth.sh first: there it raises its own

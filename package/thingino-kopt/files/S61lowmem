@@ -10,17 +10,16 @@ case "$1" in
 		# thingino-kopt), so the killer drops a heartbeat loop, a helper or
 		# a curl, never the server and never the streamer.
 		for p in $(pidof uhttpd); do
-			a=$(cat /proc/$p/oom_score_adj 2>/dev/null)
-			[ "${a:-0}" -gt 0 ] && echo 0 > /proc/$p/oom_score_adj 2>/dev/null
+			a=$(cat "/proc/$p/oom_score_adj" 2>/dev/null)
+			[ "${a:-0}" -gt 0 ] && echo 0 >"/proc/$p/oom_score_adj" 2>/dev/null
 		done
 		# Losing Wi-Fi or ssh makes the camera useless: keep them away from
 		# both killers.
 		for p in $(pidof wpa_supplicant) $(pidof dropbear); do
-			echo -500 > /proc/$p/oom_score_adj 2>/dev/null
+			echo -500 >"/proc/$p/oom_score_adj" 2>/dev/null
 		done
 		;;
-	stop|restart|reload)
-		;;
+	stop | restart | reload) ;;
 	*)
 		echo "Usage: $0 {start|stop}"
 		exit 1

@@ -283,6 +283,17 @@ GENERIC_OUTPUT_DIR = $(OUTPUT_BASE_DIR)
 
 HOST_DIR = $(OUTPUT_DIR)/host
 
+# board.mk read only the camera defconfig; thingino.mk derives the ISP module
+# parameters (direct_mode, isp_memopt, clocks, ...) from those BR2_ values.
+# Read the user local.fragment files on top, as the .config gets them, so a
+# fragment choice (e.g. BR2_ISP_DIRECT_MODE_1=y with
+# "# BR2_ISP_DIRECT_MODE_0 is not set") reaches /etc/modules.d too.
+ifeq ($(SKIP_CAMERA_SELECTION),)
+$(foreach _f,$(THINGINO_USER_FRAGMENT_FILES),\
+  $(foreach _v,$(shell sed -n 's/^# \(BR2_[A-Za-z0-9_]*\) is not set$$/\1/p' $(_f)),$(eval undefine $(_v)))\
+  $(eval include $(_f)))
+endif
+
 # include thingino makefile only when board configuration is available
 ifeq ($(SKIP_CAMERA_SELECTION),)
 include $(BR2_EXTERNAL)/thingino.mk

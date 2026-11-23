@@ -184,8 +184,12 @@ load_module() {
 	# which only tries filesystems already listed in /proc/filesystems, so
 	# they have to be resident before a card shows up. No-ops when built in.
 	modprobe mmc_block 2>/dev/null || true
-	modprobe vfat 2>/dev/null || true
-	modprobe exfat 2>/dev/null || true
+	# Low-memory boards (BR2_THINGINO_LOWMEM, /etc/lowmem): /lib/mdev/automount
+	# loads them when a card is inserted instead (fat+vfat+exfat ~150 KiB).
+	if [ ! -f /etc/lowmem ]; then
+		modprobe vfat 2>/dev/null || true
+		modprobe exfat 2>/dev/null || true
+	fi
 
 	set_power
 }

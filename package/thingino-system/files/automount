@@ -75,6 +75,12 @@ do_mount() {
 		return 1
 	fi
 
+	# "mount -t auto" only tries filesystems listed in /proc/filesystems.
+	# S09mmc preloads vfat/exfat, except on low-memory boards (/etc/lowmem),
+	# where they are loaded here, only once a card shows up (~150 KiB).
+	grep -qw vfat /proc/filesystems || modprobe vfat 2>/dev/null
+	grep -qw exfat /proc/filesystems || modprobe exfat 2>/dev/null
+
 	if mount -t auto -o "$mount_options" "$device_node" "$mount_point"; then
 		echo -c 240 -e "- Mounted $device_node to $mount_point"
 	else

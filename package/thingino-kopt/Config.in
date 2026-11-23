@@ -579,6 +579,23 @@ config BR2_THINGINO_DIAG_KDEBUG
 	  slub_debug at boot). Costs CPU on every preempt/IRQ and kernel
 	  size. Test images only.
 
+config BR2_THINGINO_LOWMEM
+	bool "32 MB low-memory tuning"
+	depends on KERNEL_VERSION_3
+	help
+	  For boards with ~19 MB of Linux RAM (32 MB DDR, 8 MB rmem),
+	  Lu-Fi/openimp#785. No feature is removed:
+	  - kernel log buffer 64 KiB (LOG_BUF_SHIFT=16 instead of the
+	    diagnostics' 17), Android log_main ring 64 KiB instead of
+	    256 KiB, JFFS2 deflate workspace ~48 KiB instead of 268 KiB
+	    (kernel patch 0110);
+	  - S03lowmem: TCP memory capped (tcp_mem 192/256/384 pages),
+	    dirty page cache limit 1 MiB, the watchdog daemon and the ssh
+	    listener exempt from the OOM killer (a killed watchdog daemon
+	    means a hardware reset 60 s later).
+	  Pair it with BR2_TARGET_ROOTFS_SQUASHFS_BS_128K (squashfs read
+	  caches and the XZ dictionary scale with the block size).
+
 endmenu
 
 endmenu

@@ -151,12 +151,7 @@ endif
 # branch; a1 and t40 keep the custom git tree.
 # All other versions: use custom git repo (github.com/gtxaspec/thingino-linux).
 ifeq ($(KERNEL_VERSION),3.10.14)
-# The T33 (PRJ008) has no vanilla-based tree: its 3.10.14 comes from the
-# vendor tree in thingino-linux (branch T33-2.0.2.1-3.10.14), patched under
-# package/all-patches/linux/3.10.14/soc/t33/.
-ifneq ($(SOC_FAMILY),t33)
 KERNEL_OFFICIAL_TARBALL := y
-endif
 else ifeq ($(KERNEL_VERSION),4.4.94)
 ifneq ($(filter t23 t31 t32 t41 c100,$(SOC_FAMILY)),)
 KERNEL_OFFICIAL_TARBALL := y
@@ -191,9 +186,6 @@ else ifeq ($(SOC_FAMILY),t31)
 	KERNEL_BRANCH := ingenic-t31
 else ifeq ($(SOC_FAMILY),t32)
 	KERNEL_BRANCH := ingenic-t32
-else ifeq ($(SOC_FAMILY),t33)
-	KERNEL_BRANCH := T33-2.0.2.1-3.10.14
-	KERNEL_SOC := t33
 else ifeq ($(SOC_FAMILY),t23)
 	KERNEL_BRANCH := ingenic-t31
 else
@@ -212,8 +204,6 @@ else ifeq ($(KERNEL_BRANCH),ingenic-t40)
 	KERNEL_HASH := e7f9a7439d40a539fad1525bd46a75bcdabffb17
 else ifeq ($(KERNEL_BRANCH),ingenic-t32)
 	KERNEL_HASH := 26fca510ab2dd6cfb9383ecc1b8932647556e6f1
-else ifeq ($(KERNEL_BRANCH),T33-2.0.2.1-3.10.14)
-	KERNEL_HASH := e10b0f77fae67147a24176716d43e991a401caa1
 endif
 
 # Fall back to the live branch tip for anything not mapped above.
@@ -527,18 +517,23 @@ ifeq ($(FLASH_SIZE_MB),)
 endif
 export FLASH_SIZE_MB
 
-# Effective layout size. FLASH_SIZE_MB stays the physical chip size; the cap
-# makes the partition table and the image end at 8 MB so the OTA payload fits
-# in RAM on 64 MB devices. The flag may come from the camera defconfig, a
-# config fragment, or a user fragment, so resolve it like the U-Boot version.
-FLASH_CAP_8M := $(or $(filter y,$(BR2_THINGINO_FLASH_CAP_8M)),$(shell \
-	for f in $(foreach f,$(EARLY_TOOLCHAIN_INPUT_FILES),'$(f)'); do \
-		[ -f "$$f" ] && sed -n 's/^BR2_THINGINO_FLASH_CAP_8M=y$$/y/p' "$$f"; \
-	done | tail -n1))
-ifeq ($(FLASH_CAP_8M),y)
-	FLASH_LAYOUT_MB := $(shell echo $$(( $(FLASH_SIZE_MB) > 8 ? 8 : $(FLASH_SIZE_MB) )))
-else
+# Effective layout size. FLASH_SIZE_MB stays the physical chip size; a cap
+# makes the partition table and the image end at 8 or 16 MB so the OTA payload
+# fits in RAM on 64 or 128 MB devices. The flags may come from the camera
+# defconfig, a config fragment, or a user fragment, so resolve them like the
+# U-Boot version, last assignment wins. When both caps are on, the 8 MB cap
+# wins, matching the FLASH_LAYOUT_MB default.
+FLASH_CAP_MB := $(shell awk '\
+	/^BR2_THINGINO_FLASH_CAP_8M=y$$/ { cap8=1 } \
+	/^# BR2_THINGINO_FLASH_CAP_8M is not set$$/ { cap8=0 } \
+	/^BR2_THINGINO_FLASH_CAP_16M=y$$/ { cap16=1 } \
+	/^# BR2_THINGINO_FLASH_CAP_16M is not set$$/ { cap16=0 } \
+	END { if (cap8) print 8; else if (cap16) print 16 }' \
+	$(or $(EARLY_TOOLCHAIN_INPUT_FILES),/dev/null) 2>/dev/null)
+ifeq ($(FLASH_CAP_MB),)
 	FLASH_LAYOUT_MB := $(FLASH_SIZE_MB)
+else
+	FLASH_LAYOUT_MB := $(shell echo $$(( $(FLASH_SIZE_MB) > $(FLASH_CAP_MB) ? $(FLASH_CAP_MB) : $(FLASH_SIZE_MB) )))
 endif
 export FLASH_LAYOUT_MB
 

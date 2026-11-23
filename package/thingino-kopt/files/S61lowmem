@@ -4,11 +4,14 @@
 
 case "$1" in
 	start)
-		# WebUI requests are the first thing to drop under memory pressure:
-		# every CGI inherits this score from uhttpd, so the low-memory killer
-		# (adj >= 800) takes a heartbeat loop or a curl, never the streamer.
+		# uhttpd itself must stay up (if the low-memory killer takes it the
+		# WebUI is gone until reboot): keep it at 0 or below. Its CGIs raise
+		# themselves to 800 in auth.sh (patched at build time by
+		# thingino-kopt), so the killer drops a heartbeat loop, a helper or
+		# a curl, never the server and never the streamer.
 		for p in $(pidof uhttpd); do
-			echo 800 > /proc/$p/oom_score_adj 2>/dev/null
+			a=$(cat /proc/$p/oom_score_adj 2>/dev/null)
+			[ "${a:-0}" -gt 0 ] && echo 0 > /proc/$p/oom_score_adj 2>/dev/null
 		done
 		# Losing Wi-Fi or ssh makes the camera useless: keep them away from
 		# both killers.

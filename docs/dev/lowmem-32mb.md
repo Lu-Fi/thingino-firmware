@@ -23,7 +23,8 @@ to feed `/dev/watchdog` for 60 s, and the board reset (reset PCs inside
 | kernel | LOG_BUF_SHIFT 16, logger 64 KiB, JFFS2 small deflate window (#785); ZRAM + LZ4, VM event counters, Android low-memory killer (STAGING, ANDROID; staging dwc2 off, the SoC USB is USB_JZ_DWC2) |
 | busybox | mkswap, swapon, swapoff |
 | S03lowmem | tcp_mem 192/256/384, dirty 256 KiB/1 MiB, watchdog daemon oom_score_adj -1000; 4 MiB `/dev/zram0` swap (LZ4, priority 100), swappiness 100, page-cluster 0, min_free_kbytes 768; LMK: kill oom_score_adj >= 800 below 896 pages (3.5 MiB) of file cache |
-| S61lowmem | uhttpd (and so every WebUI CGI) oom_score_adj 800; wpa_supplicant and dropbear -500 |
+| auth.sh (target-finalize) | every WebUI CGI sets its own oom_score_adj to 800 (helpers and curl inherit it) |
+| S61lowmem | uhttpd kept at <= 0 (the killer must never take the server: WebUI gone until reboot); wpa_supplicant and dropbear -500 |
 | S95timps | timpsd oom_score_adj -500 (only with /etc/lowmem) |
 
 The QC3 profile also moves 1 MiB from rmem to Linux (`BR2_THINGINO_RMEM_MB=7`,

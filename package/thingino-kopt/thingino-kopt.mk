@@ -853,6 +853,20 @@ define THINGINO_KOPT_INSTALL_TARGET_CMDS_LOWMEM
 	$(INSTALL) -D -m 0755 $(THINGINO_KOPT_PKGDIR)/files/S61lowmem $(TARGET_DIR)/etc/init.d/S61lowmem
 	echo "# BR2_THINGINO_LOWMEM: 32 MB board, see S03lowmem, S09mmc" > $(TARGET_DIR)/etc/lowmem
 endef
+
+# Every WebUI CGI sources auth.sh first: there it raises its own
+# oom_score_adj to 800 (inherited by its helpers and curl), so the
+# low-memory killer (S03lowmem) takes WebUI requests, never uhttpd itself.
+# Done after all packages installed, so the webui file is not edited in
+# its own package.
+define THINGINO_KOPT_LOWMEM_CGI_OOM
+	if [ -f $(TARGET_DIR)/var/www/x/auth.sh ] && \
+	   ! grep -q 'lowmem_cgi_oom' $(TARGET_DIR)/var/www/x/auth.sh; then \
+		sed -i '1a # lowmem_cgi_oom (BR2_THINGINO_LOWMEM, Lu-Fi/openimp#800)\n[ -f /etc/lowmem ] \&\& echo 800 > /proc/self/oom_score_adj 2>/dev/null' \
+			$(TARGET_DIR)/var/www/x/auth.sh; \
+	fi
+endef
+TARGET_FINALIZE_HOOKS += THINGINO_KOPT_LOWMEM_CGI_OOM
 endif
 
 # pstore/ramoops; the RAM carve-out is done by thingino-uboot (ramoops-env.sh).

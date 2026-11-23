@@ -833,10 +833,24 @@ define THINGINO_KOPT_LINUX_CONFIG_FIXUPS_LOWMEM
 	$(call KCONFIG_SET_OPT,CONFIG_LOG_BUF_SHIFT,16)
 	$(call KCONFIG_SET_OPT,CONFIG_LOGGER_MAIN_SIZE_KB,64)
 	$(call KCONFIG_ENABLE_OPT,CONFIG_JFFS2_ZLIB_SMALL_WINDOW)
+	$(call KCONFIG_ENABLE_OPT,CONFIG_SWAP)
+	$(call KCONFIG_ENABLE_OPT,CONFIG_ZSMALLOC)
+	$(call KCONFIG_ENABLE_OPT,CONFIG_ZRAM)
+	$(call KCONFIG_ENABLE_OPT,CONFIG_ZRAM_LZ4_COMPRESS)
+	$(call KCONFIG_DISABLE_OPT,CONFIG_ZRAM_DEBUG)
+	$(call KCONFIG_ENABLE_OPT,CONFIG_VM_EVENT_COUNTERS)
+	$(call KCONFIG_ENABLE_OPT,CONFIG_STAGING)
+	$(call KCONFIG_ENABLE_OPT,CONFIG_ANDROID)
+	$(call KCONFIG_ENABLE_OPT,CONFIG_ANDROID_LOW_MEMORY_KILLER)
+	$(call KCONFIG_DISABLE_OPT,CONFIG_ANDROID_TIMED_OUTPUT)
+	# USB_DWC2 is the staging dwc2 driver; the SoC USB is USB_JZ_DWC2.
+	# With STAGING on it would be built too and clash at link time.
+	$(call KCONFIG_DISABLE_OPT,CONFIG_USB_DWC2)
 endef
 
 define THINGINO_KOPT_INSTALL_TARGET_CMDS_LOWMEM
 	$(INSTALL) -D -m 0755 $(THINGINO_KOPT_PKGDIR)/files/S03lowmem $(TARGET_DIR)/etc/init.d/S03lowmem
+	$(INSTALL) -D -m 0755 $(THINGINO_KOPT_PKGDIR)/files/S61lowmem $(TARGET_DIR)/etc/init.d/S61lowmem
 	echo "# BR2_THINGINO_LOWMEM: 32 MB board, see S03lowmem, S09mmc" > $(TARGET_DIR)/etc/lowmem
 endef
 endif
@@ -946,9 +960,14 @@ define THINGINO_KOPT_INSTALL_TARGET_CMDS
 endef
 
 # The SLIP line discipline is attached from userspace; busybox carries the
-# applet only when the kopt asks for it.
+# applet only when the kopt asks for it. LOWMEM boards need mkswap/swapon
+# for the zram swap S03lowmem sets up (Lu-Fi/openimp#800).
 define THINGINO_KOPT_BUSYBOX_CONFIG_FIXUPS
 	$(if $(filter y,$(BR2_PACKAGE_THINGINO_KOPT_SLIP)),$(call KCONFIG_ENABLE_OPT,CONFIG_SLATTACH))
+	$(if $(filter y,$(BR2_THINGINO_LOWMEM)),$(call KCONFIG_ENABLE_OPT,CONFIG_MKSWAP))
+	$(if $(filter y,$(BR2_THINGINO_LOWMEM)),$(call KCONFIG_ENABLE_OPT,CONFIG_SWAPON))
+	$(if $(filter y,$(BR2_THINGINO_LOWMEM)),$(call KCONFIG_ENABLE_OPT,CONFIG_SWAPOFF))
+	$(if $(filter y,$(BR2_THINGINO_LOWMEM)),$(call KCONFIG_ENABLE_OPT,CONFIG_FEATURE_SWAPON_PRI))
 endef
 
 $(eval $(generic-package))

@@ -1,0 +1,27 @@
+#!/bin/sh
+# 32 MB low-memory tuning, late part (BR2_THINGINO_LOWMEM, Lu-Fi/openimp#800).
+# Runs right after S60uhttpd. See S03lowmem for the low-memory killer levels.
+
+case "$1" in
+	start)
+		# WebUI requests are the first thing to drop under memory pressure:
+		# every CGI inherits this score from uhttpd, so the low-memory killer
+		# (adj >= 800) takes a heartbeat loop or a curl, never the streamer.
+		for p in $(pidof uhttpd); do
+			echo 800 > /proc/$p/oom_score_adj 2>/dev/null
+		done
+		# Losing Wi-Fi or ssh makes the camera useless: keep them away from
+		# both killers.
+		for p in $(pidof wpa_supplicant) $(pidof dropbear); do
+			echo -500 > /proc/$p/oom_score_adj 2>/dev/null
+		done
+		;;
+	stop|restart|reload)
+		;;
+	*)
+		echo "Usage: $0 {start|stop}"
+		exit 1
+		;;
+esac
+
+exit 0

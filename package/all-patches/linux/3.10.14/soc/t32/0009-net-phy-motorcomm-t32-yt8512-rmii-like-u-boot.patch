@@ -1,0 +1,71 @@
+From: Lu-Fi <lutz@fiebach.de>
+Date: Tue, 24 Nov 2026 19:00:00 +0100
+Subject: [PATCH] net: phy: motorcomm: T32 PRJ007 YT8512 in RMII like U-Boot
+
+The PRJ007 module's PHY reads id 0x00000128 (YT8512, driver "sz18201").
+Its config_init cleared ext reg 0x50 bit 6 and left Rmii_en to the strap,
+and Linux got no carrier, while the thingino U-Boot (motorcomm.c
+yt8512_config: ext 0x4000 Rmii_en|RX_DV_sel, ext 0x50 bit 6 set, soft
+reset) gets a 100/full link and a DHCP lease on the same cable
+(openimp #849). Do the same on PRJ007; other SoCs are unchanged.
+
+Signed-off-by: Lu-Fi <lutz@fiebach.de>
+---
+--- a/drivers/net/phy/motorcomm.c
++++ b/drivers/net/phy/motorcomm.c
+@@ -61,15 +61,27 @@
+ 
+ 	phy_write(phydev, 0x1e, 0x50);
+ 	reg = phy_read(phydev, 0x1f);
+-	/* bit6, 1:50M 0:25M */
++	/*
++	 * bit6: PLL reference select. T32 PRJ007 (YT8512, id 0x128, RMII
++	 * with the 50 MHz REF_CLK from the MAC): the thingino U-Boot sets it
++	 * (motorcomm.c yt8512_config) and gets a link; cleared the PHY never
++	 * negotiates (openimp #849).
++	 */
++#ifdef CONFIG_SOC_PRJ007
++	reg |= 0x40;
++#else
+ 	reg &= ~0x40;
+-	// reg |= 0x40;
++#endif
+ 	phy_write(phydev, 0x1f, reg);
+ 
+ 	phy_write(phydev, 0x1e, 0x4000);
+ 	reg = phy_read(phydev, 0x1f);
+ 	// reg = 0x13;
+ 	reg |= 0x10;
++#ifdef CONFIG_SOC_PRJ007
++	/* Rmii_en: do not trust the RX_DV strap (MII on a weak pull-up). */
++	reg |= 0x02;
++#endif
+ 	phy_write(phydev, 0x1f, reg);
+ #if 1 // Drive
+ 	phy_write(phydev, 0x1e, 0x2012);
+@@ -93,6 +105,25 @@
+ 	reg |= 0x10;
+ 	phy_write(phydev, 0x1f, reg);
+ 
++#ifdef CONFIG_SOC_PRJ007
++	/*
++	 * Interface and PLL settings take effect after a soft reset; the
++	 * extended registers survive it (as U-Boot yt8512_config does).
++	 */
++	{
++		int i;
++
++		phy_write(phydev, MII_BMCR, BMCR_RESET);
++		for (i = 0; i < 100; i++) {
++			reg = phy_read(phydev, MII_BMCR);
++			if (reg >= 0 && !(reg & BMCR_RESET))
++				break;
++			mdelay(5);
++		}
++		phy_write(phydev, MII_BMCR, 0x3100);
++	}
++#endif
++
+ 	return 0;
+ }
+ 

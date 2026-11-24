@@ -1,1 +1,1 @@
-gpio_default=21O 66o 67o 72o 73o
+gpio_default=21O 57i 59o 66o 67o 72o 73o

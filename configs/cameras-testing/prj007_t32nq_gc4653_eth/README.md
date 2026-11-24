@@ -88,3 +88,17 @@ built against the vendor 2.x driver headers (NDA). The module's own vendor
 (`struct tx_isp_sensor` without `fsync_flag`, scalar again/dgain/integration
 fields) while open-tx-isp `driver/t32` implements 2.x. The user overlay lands
 in the data partition.
+
+## GPIOs (vendor HAL, board JZT32N_D41_Q38 = HAL type 5)
+
+From the vendor app ovfs_boardsystem (HalPerip_Init / InitIrLight). Vendor GPIO numbers are 32 * port + pin.
+
+| GPIO | pin | vendor use | here |
+|---|---|---|---|
+| 66, 67 | PC02, PC03 | IR-cut H-bridge, 200 ms pulse, then both low | `ircut "66 67"` |
+| 73 | PC09 | light 0, PWM, 50 us period | `ir850` |
+| 72 | PC08 | light 1 (board type Ir_Warm: IR + warm LED) | `white` |
+| 57 | PB25 | light sensor, plain input | `gpio_default 57i` (no thingino consumer yet) |
+| 59 | PB27 | output, vendor drives 0 at init (aux, purpose unknown) | `gpio_default 59o` |
+
+Still to prove on the device: which IR-cut pulse is day, and which light is IR and which is the warm LED.

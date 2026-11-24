@@ -95,10 +95,10 @@ From the vendor app ovfs_boardsystem (HalPerip_Init / InitIrLight). Vendor GPIO 
 
 | GPIO | pin | vendor use | here |
 |---|---|---|---|
-| 66, 67 | PC02, PC03 | IR-cut H-bridge, 200 ms pulse, then both low | `ircut "66 67"` |
-| 73 | PC09 | light 0, PWM, 50 us period | `ir850` |
-| 72 | PC08 | light 1 (board type Ir_Warm: IR + warm LED) | `white` |
+| 66, 67 | PC02, PC03 | IR-cut H-bridge, 200 ms pulse, then both low | `ircut "66 67"`: device check 2026-11-24, the filter clicks; 66 = filter in (day), 67 = out (night) |
+| 73 | PC09 | light 0, PWM, 50 us period | no entry: no IR LED fitted on PRJ007 (device check 2026-11-24) |
+| 72 | PC08 | light 1 (vendor board type Ir_Warm) | no entry: nothing lit, not fitted on PRJ007 |
 | 57 | PB25 | light sensor, plain input | `gpio_default 57i` (no thingino consumer yet) |
 | 59 | PB27 | output, vendor drives 0 at init (aux, purpose unknown) | `gpio_default 59o` |
 
-Still to prove on the device: which IR-cut pulse is day, and which light is IR and which is the warm LED.
+Day/night on this module is the IR-cut filter only. A night picture needs external IR light.

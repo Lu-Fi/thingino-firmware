@@ -1,0 +1,24 @@
+From: Lu-Fi <lutz@fiebach.de>
+Date: Tue, 24 Nov 2026 22:40:00 +0100
+Subject: [PATCH] sound: oss3: PRJ007 module build: fix the as-fmtcov object path
+
+With CONFIG_COMPILE_JZSOUND_OSS3_INTO_KO=m the audio.ko object list names
+host/dmic/as-fmtcov/as-fmtcov.o, which does not exist; the source is in
+host/PRJ007/dmic/as-fmtcov (the built-in list already uses that path).
+
+Signed-off-by: Lu-Fi <lutz@fiebach.de>
+---
+ sound/oss3/Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+--- a/sound/oss3/Makefile
++++ b/sound/oss3/Makefile
+@@ -6,7 +6,7 @@
+ audio-objs := audio_dsp.o audio_debug.o
+ audio-objs += host/PRJ007/audio_aic.o
+ audio-objs += inner_codecs/PRJ007/codec.o
+-audio-objs += host/dmic/as-fmtcov/as-fmtcov.o
++audio-objs += host/PRJ007/dmic/as-fmtcov/as-fmtcov.o
+ audio-objs += host/PRJ007/dmic/as-dbus/as-dbus.o
+ audio-objs += host/PRJ007/dmic/as-dma/as-dma.o
+ audio-objs += host/PRJ007/dmic/as-dmic/as-dmic.o

@@ -4,7 +4,7 @@ Bring-up profile for the T32 test module: board PRJ007 (vendor hardware string
 `JZT32N_D41_Q38`, project `T32N_FULL_ALARM`), T32NQ per eFuse, 128 MB DDR,
 16 MB SPI NOR (PY25Q128HA), GC4653 sensor, on-board Ethernet (RMII PHY,
 DP83825 or SZ18201), secure boot off. Planned, not a release gate
-(openimp #99). Nothing in this profile has run on the module yet.
+(openimp #99). The thingino image boots on the module (2026-11-24); the open stack has not run on it yet.
 
 Full thingino boot (2026-11-14, user decision): thingino U-Boot 2026.07
 (`isvp_t32nq_sfcnor`, TPL + SPL + U-Boot) and the standard thingino 16 MiB
@@ -36,7 +36,13 @@ partitions are overwritten; they exist only in the flash backup.
 
 The vendor kernel always runs the GMAC divider at 50 MHz (RMII reference);
 this tree set 25 MHz (kernel patch soc/t32/0008). PHY at MDIO address 0,
-DP83825 (id 0x282000) or SZ18201 per the vendor driver checks; not measured.
+DP83825 (id 0x282000) or SZ18201 per the vendor driver checks. The module
+reads id 0x00000128 (Motorcomm YT8512, kernel driver "sz18201"): U-Boot got a
+100/full link and a DHCP lease, Linux had no carrier (openimp #849). Kernel
+patch soc/t32/0009 programs the PHY like U-Boot's yt8512_config (ext 0x4000
+Rmii_en|RX_DV_sel, ext 0x50 bit 6 set, soft reset); the stock driver cleared
+bit 6. CONFIG_JZGPIO_PHY_RESET is off on T32 (thingino-kopt): the SDK default
+pulses PB26, the vendor kernel and U-Boot use no reset line.
 The vendor firmware sets no fixed MAC (NetWork.json has none; its script
 falls back to a random one). The local overlay sets ethaddr / eth.mac.
 
@@ -47,11 +53,16 @@ falls back to a random one). The local overlay sets ethaddr / eth.mac.
   set plus an export of `__stack_chk_guard`/`__stack_chk_fail`, which the
   vendor kernel exports and SDK sensor modules import).
 - ISP: open-tx-isp `driver/t32` (`tx-isp-t32.ko`), libimp: OpenIMP T32
-  (`build-t32.sh`), libsysutils/libalog: ingenic-system-libs-neo.
-- ISP module arguments of the vendor `loadko.sh` (T32NQ branch):
+  (`build-t32.sh`); timps needs no libsysutils/libalog.
+- ISP module arguments of the vendor `loadko.sh` (T32NQ branch), set with
+  `BR2_ISP_PARAMS` (no overlay `20-isp` needed):
   `clk_name=sclka clks_name=sclka clka_name=sclka clkv_name=sclka
   isp_clk=300000000 isp_clka=600000000 isp_clks=600000000 isp_clkv=600000000`.
-- No streamer yet (`BR2_PACKAGE_THINGINO_STREAMER_NONE`).
+- Streamer: timps (`BR2_PACKAGE_THINGINO_STREAMER_TIMPS`, T32/T33 pin
+  e56ae34 like the JZT33L module) on OpenIMP libimp; `timps.conf` here sets
+  gc4653 @ 0x29, MCLK0, 2560x1440@25 main + 640x360 sub (the open sinfo does
+  not fill `/proc/jz/sensor` for timps auto-detection, openimp #513).
+  ingenic-lib no longer stages the vendor libimp.so when OpenIMP is built.
 
 ## Board facts (from the vendor firmware, not measured on the module)
 

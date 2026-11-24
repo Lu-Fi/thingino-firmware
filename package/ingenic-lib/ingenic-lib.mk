@@ -78,8 +78,10 @@ ACCEL_DIR = $(@D)/acceleration-modules
 
 # Staging: install core libs for linking (skip libsysutils on a1)
 define INGENIC_LIB_INSTALL_STAGING_CMDS
-	$(INSTALL) -D -m 0644 $(SDK_LIB_DIR)/libimp.so \
-		$(STAGING_DIR)/usr/lib/libimp.so
+	$(if $(BR2_PACKAGE_OPENIMP),,\
+		$(INSTALL) -D -m 0644 $(SDK_LIB_DIR)/libimp.so \
+			$(STAGING_DIR)/usr/lib/libimp.so \
+	)
 	$(INSTALL) -D -m 0644 $(LIBALOG_FILE) \
 		$(STAGING_DIR)/usr/lib/libalog.so
 	$(if $(filter-out a1,$(SOC_FAMILY)),\

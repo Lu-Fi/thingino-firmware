@@ -3,7 +3,11 @@
 BR2_ETHERNET=y
 BR2_INGENIC_SOC_MODEL="t32nq"
 BR2_PACKAGE_THINGINO_KOPT_JZ_MAC_V13=y
-BR2_PACKAGE_THINGINO_STREAMER_NONE=y
+# The open-stack streamer of the fleet (timps on OpenIMP libimp; T32/T33 builds since
+# timps e56ae34, same pin as the JZT33L module). Sensor model / address / MCLK0 come
+# from timps.conf in this directory (as on the T33L module, the open sinfo does not
+# fill /proc/jz/sensor for timps auto-detection, openimp #513).
+BR2_PACKAGE_THINGINO_STREAMER_TIMPS=y
 # Full thingino boot: U-Boot 2026.07 isvp_t32nq_sfcnor (TPL + SPL + U-Boot,
 # PRJ007 vendor clocks and DDR3 timings, uboot patch 0006) and the standard
 # 16 MiB layout. The vendor kernel 3.10 SFC driver registers its MTD as sfc0_nor.
@@ -13,5 +17,9 @@ BR2_SENSOR_1_NAME="gc4653"
 # Vendor bootargs: mem=73728K@0x0 rmem=57344K@0x4800000 (= 72M / 56M).
 BR2_THINGINO_RMEM_MB=56
 BR2_THINGINO_UBOOT_VERSION_2026_07=y
+# ISP module args of the vendor loadko.sh, T32NQ single-sensor branch (appfs ko/loadko.sh:45):
+# all ISP clocks from sclka, 300 MHz core, 600 MHz a/s/v. The generated line puts these
+# last, so they win over the generic ISP_CLK defaults (was a local overlay 20-isp before).
+BR2_ISP_PARAMS="clk_name=sclka clks_name=sclka clka_name=sclka clkv_name=sclka isp_clk=300000000 isp_clka=600000000 isp_clks=600000000 isp_clkv=600000000"
 FLASH_SIZE_MB=16
 KERNEL_VERSION_3=y

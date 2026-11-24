@@ -689,6 +689,16 @@ endef
 endif
 
 ifeq ($(BR2_THINGINO_AUDIO),y)
+ifneq ($(filter t32 t33,$(SOC_FAMILY)),)
+# T32 (PRJ007) / T33 (PRJ008): the audio driver is the kernel's own jzsound oss3
+# (sound/oss3, PRJ00x host + inner codec), built as audio.ko like the vendor stack
+# ships it (insmod audio.ko spk_gpio=-1 ...), openimp #99 / #674.
+define THINGINO_KOPT_LINUX_CONFIG_FIXUPS_AUDIO
+	$(call KCONFIG_ENABLE_OPT,CONFIG_SOUND)
+	$(call KCONFIG_SET_OPT,CONFIG_SOUND_OSS3,m)
+	$(call KCONFIG_SET_OPT,CONFIG_COMPILE_JZSOUND_OSS3_INTO_KO,m)
+endef
+else
 # SOUND is the sound-core parent the audio path expects. SOUND_OSS3 (the
 # jzsound oss3 driver) is PRJ007/PRJ008-only and does not compile for t31,
 # and it defaults to y under SOUND, so force it off.
@@ -696,6 +706,7 @@ define THINGINO_KOPT_LINUX_CONFIG_FIXUPS_AUDIO
 	$(call KCONFIG_ENABLE_OPT,CONFIG_SOUND)
 	$(call KCONFIG_DISABLE_OPT,CONFIG_SOUND_OSS3)
 endef
+endif
 endif
 
 ################### IPV6 ##############################

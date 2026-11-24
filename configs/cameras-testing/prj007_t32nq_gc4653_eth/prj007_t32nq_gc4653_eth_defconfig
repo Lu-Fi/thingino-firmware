@@ -23,3 +23,9 @@ BR2_THINGINO_UBOOT_VERSION_2026_07=y
 BR2_ISP_PARAMS="clk_name=sclka clks_name=sclka clka_name=sclka clkv_name=sclka isp_clk=300000000 isp_clka=600000000 isp_clks=600000000 isp_clkv=600000000"
 FLASH_SIZE_MB=16
 KERNEL_VERSION_3=y
+# Audio: in-SoC codec on the kernel's jzsound oss3 audio.ko (PRJ007), no speaker amp GPIO, like
+# the T33L module (openimp #99, #674). Bench module: no mic, no speaker, no boot / portal sounds.
+BR2_THINGINO_AUDIO=y
+BR2_THINGINO_AUDIO_PARAMS="spk_gpio=-1"
+BR2_PACKAGE_THINGINO_SOUNDS_STARTUP=n
+BR2_PACKAGE_THINGINO_SOUNDS_CHIMES=n

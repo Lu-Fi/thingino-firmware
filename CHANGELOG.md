@@ -4,6 +4,10 @@ please refer to https://github.com/themactep/thingino-firmware/activity
 
 ## Unreleased (Lu-Fi fork)
 
+- kernel 3.10 IPU (jz_ipu_v13, all xburst1 SoCs): the wedge retry now
+  re-programs the op after its stop/reset (patch 0010). Before, the retry
+  fired an empty op, logged "recovered after reset+retry" and returned
+  success although nothing was blended (Lu-Fi/openimp#875).
 - thingino-button / kernel 3.10: a lost key release can no longer arm the
   20 s factory reset. XBurst1 GPIO both-edge emulation re-arms until the pin
   level is stable, gpio-keys re-checks a pressed key every 50 ms, and

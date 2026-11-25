@@ -4,6 +4,12 @@ please refer to https://github.com/themactep/thingino-firmware/activity
 
 ## Unreleased (Lu-Fi fork)
 
+- libaudioprocess-neo: pinned to the Lu-Fi fork (branch aperto, 9f71acc). The
+  WebRTC AEC no longer starts with the 12 ms far-end rewind of its startup
+  phase; the Ingenic driver reference is already time-aligned. Before, about
+  half of the AEC sessions on the T10 never locked (flat ~20 dB instead of
+  33-41 dB echo reduction), on both the vendor and the open stack. Beyond
+  vendor (Lu-Fi/openimp#640).
 - kernel 3.10 IPU (jz_ipu_v13): hold the AHB1 clock gate during each op on
   every SoC that has one (T21/T30, T31 already did; patch 0011). Before, an
   OSD blend without an open encoder (first frame after idle) stalled until

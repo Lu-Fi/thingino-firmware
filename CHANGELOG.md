@@ -15,6 +15,9 @@ please refer to https://github.com/themactep/thingino-firmware/activity
   OSD blend without an open encoder (first frame after idle) stalled until
   the 100 ms timeout. Beyond vendor (vendor enables AHB1 only on T31)
   (Lu-Fi/openimp#875).
+- kernel 3.10 IPU patch 0011: the AHB1 hold is compiled out on T23 (the IPU sits on AHB0
+  there and struct jz_ipu has no ahb1_gate member); the first version broke the T23 kernel build
+  (Lu-Fi/openimp#901).
 - kernel 3.10 IPU (jz_ipu_v13, all xburst1 SoCs): the wedge retry now
   re-programs the op after its stop/reset (patch 0010). Before, the retry
   fired an empty op, logged "recovered after reset+retry" and returned

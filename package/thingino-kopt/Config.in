@@ -477,12 +477,12 @@ config BR2_PACKAGE_THINGINO_KOPT_SLUB_DEBUG
 menu "Diagnostics (reset / crash analysis)"
 	depends on BR2_PACKAGE_THINGINO_KOPT
 
-comment "Reset/crash diagnostics need kernel 3.10"
-	depends on !KERNEL_VERSION_3
+comment "Reset/crash diagnostics need kernel 3.10 (T41: kernel 4.4.94)"
+	depends on !KERNEL_VERSION_3 && !(KERNEL_VERSION_4 && BR2_SOC_FAMILY = "t41")
 
 config BR2_THINGINO_DIAG_RESETCAUSE
 	bool "Reset cause log, panic on oops and hung task"
-	depends on KERNEL_VERSION_3
+	depends on KERNEL_VERSION_3 || (KERNEL_VERSION_4 && BR2_SOC_FAMILY = "t41")
 	help
 	  Makes every kernel death end in a defined restart and logs why
 	  the previous boot ended:
@@ -498,7 +498,8 @@ config BR2_THINGINO_DIAG_RESETCAUSE
 config BR2_THINGINO_DIAG_LASTPANIC
 	bool "Last panic record in reset-surviving registers"
 	depends on BR2_THINGINO_DIAG_RESETCAUSE
-	depends on BR2_SOC_FAMILY = "t23" || BR2_SOC_FAMILY = "t31"
+	depends on (KERNEL_VERSION_3 && (BR2_SOC_FAMILY = "t23" || BR2_SOC_FAMILY = "t31")) || \
+		(KERNEL_VERSION_4 && BR2_SOC_FAMILY = "t41")
 	help
 	  Kernel option JZ_DIAG_LASTPANIC (T23 and T31, proven on T31L
 	  and T23N): on oops, panic, hung task, lockup or restart the
@@ -506,6 +507,10 @@ config BR2_THINGINO_DIAG_LASTPANIC
 	  RTCSAR, which survives the watchdog reset (DRAM and CPM CPSPR
 	  do not). /proc/diag_lastpanic shows the record of the previous
 	  boot; S02resetcause logs it.
+
+	  T41 (kernel 4.4.94, Lu-Fi/openimp#952): ported with the RTCSAR
+	  channel only (no CP0 copy, no reset-PC sled); whether RTCSAR
+	  survives the T41 watchdog reset is still to be measured.
 
 	  KALLSYMS stays off (it changes sizeof(struct module) and breaks
 	  every prebuilt module). Resolve the logged addresses on the host

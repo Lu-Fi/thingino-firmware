@@ -4,6 +4,21 @@ please refer to https://github.com/themactep/thingino-firmware/activity
 
 ## Unreleased (Lu-Fi fork)
 
+- kernel 4.4.94 T32 (sdhci-ingenic): the same leak as on T41 fixed
+  (patch soc/t32/0003). sdhci_ingenic_set_clock() called devm_clk_get() on
+  every clock change; the mux clock is already held from probe, so the lookup
+  is dropped. Only compile-checked (no T32 4.4.94 image exists yet,
+  Lu-Fi/openimp#953).
+
+- kernel 4.4.94 T41: reset-surviving last-panic record (patch soc/t41/0003,
+  kernel option JZ_DIAG_LASTPANIC). Oops, panic, hung task and restart reason,
+  uptime bucket and epc/comm are kept in RTC RTCSAR and shown as
+  /proc/diag_lastpanic after the next boot; jz_wdt_restart() commits the
+  record. BR2_THINGINO_DIAG_RESETCAUSE and BR2_THINGINO_DIAG_LASTPANIC now
+  also accept T41 on kernel 4.4.94 (S02resetcause logs the record to syslog).
+  Off by default. RTCSAR channel only; build-checked, not yet measured on T41
+  hardware (Lu-Fi/openimp#952).
+
 - kernel 4.4.94 T41 (sdhci-ingenic): the MSC mux clock is looked up once in
   probe instead of with a clk_get() on every clock change (patch
   soc/t41/0002). Each call left a 128 byte struct clk behind. A polled SD slot

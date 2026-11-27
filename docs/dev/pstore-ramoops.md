@@ -27,7 +27,8 @@ An existing device keeps its old U-Boot environment; a full OTA that rewrites th
 
 All default off; upstream defconfigs set none of them. Enable them per camera in a
 user fragment (`THINGINO_USER_DIR/<camera>/local.fragment`) or your own defconfig.
-Kernel 3.10 only.
+Kernel 3.10; `RESETCAUSE` and `LASTPANIC` also on T41 with kernel 4.4.94 (RTCSAR channel only,
+no CP0 copy, no sled; not yet measured on T41 hardware, Lu-Fi/openimp#952).
 
 | Option | SoC | Kernel options / files | Cost |
 |---|---|---|---|

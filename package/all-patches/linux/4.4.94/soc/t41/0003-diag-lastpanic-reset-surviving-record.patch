@@ -1,0 +1,421 @@
+From: Lu-Fi <lutz@fiebach.de>
+Subject: [PATCH] diag: last panic record in RTC RTCSAR (T41, 4.4.94)
+
+Port of the 3.10 JZ_DIAG_LASTPANIC (T23/T31) to the T41 xburst2 tree,
+Lu-Fi/openimp#952. Diagnostics only (CONFIG_JZ_DIAG_LASTPANIC, default n):
+the reason, uptime bucket and epc/comm of the last oops, panic, hung task or
+restart go to RTC RTCSAR, which survived the WDT reset on T31L, and are
+shown as /proc/diag_lastpanic after the next boot. jz_wdt_restart() commits
+the record before it arms the watchdog. RTCSAR channel only; the unproven
+CP0 second channel of the 3.10 version is not ported. Not yet measured on
+T41 hardware.
+
+Signed-off-by: Lu-Fi <lutz@fiebach.de>
+---
+--- a/arch/mips/xburst2/common/Makefile
++++ b/arch/mips/xburst2/common/Makefile
+@@ -8,3 +8,4 @@
+ obj-y += mxuv3.o
+ obj-y += jz_notifier.o
+ obj-$(CONFIG_XBURST2_CPU_TEST) += cpu_ddr_test/
++obj-$(CONFIG_JZ_DIAG_LASTPANIC) += diag_lastpanic.o
+--- a/arch/mips/xburst2/Kconfig
++++ b/arch/mips/xburst2/Kconfig
+@@ -90,6 +90,15 @@
+ 	bool "FPGA_TEST"
+ 	default n
+ 
++config JZ_DIAG_LASTPANIC
++	depends on MACH_XBURST2
++	bool "Diagnostics: last panic record in RTC RTCSAR (reset-surviving)"
++	default n
++	help
++	  Keep the reason, uptime bucket and epc of the last oops, panic,
++	  hung task or restart in RTC RTCSAR and show it as
++	  /proc/diag_lastpanic after the next boot. Diagnostics only.
++
+ endmenu
+ 
+ endif
+--- a/arch/mips/xburst2/soc-t41/reset.c
++++ b/arch/mips/xburst2/soc-t41/reset.c
+@@ -144,10 +144,17 @@
+ 		printk("%s:We should NOT come here.%08x\n",__func__, inl(RTC_IOBASE + RTC_HCR));
+ }
+ 
++#ifdef CONFIG_JZ_DIAG_LASTPANIC
++extern void diag_lastpanic_commit(void);
++#endif
++
+ void jz_wdt_restart(char *command)
+ {
+ 	printk("Restarting after 500 ms\n");
+ 	local_irq_disable();
++#ifdef CONFIG_JZ_DIAG_LASTPANIC
++	diag_lastpanic_commit();
++#endif
+ 	if ((command != NULL) && !strcmp(command, "recovery")) {
+ 		while(cpm_inl(CPM_CPSPR) != RECOVERY_SIGNATURE) {
+ 			printk("set RECOVERY_SIGNATURE\n");
+--- /dev/null
++++ b/arch/mips/xburst2/common/diag_lastpanic.c
+@@ -0,0 +1,359 @@
++/*
++ * Reset-surviving record of the last kernel death (diagnostics only,
++ * CONFIG_JZ_DIAG_LASTPANIC, T41 kernel 4.4.94). Port of the 3.10 T23/T31
++ * driver (RTCSAR channel only; the unproven CP0 second channel is left out).
++ *
++ * DRAM does not survive the WDT reset; RTC RTCSAR (0x10003008, RTC domain)
++ * does (measured on T31L, NOT yet measured on T41: see /proc/diag_lastpanic
++ * "raw" and "lastwrite" lines). The T41 build has no RTC_CLASS, so the alarm
++ * register is unused.
++ *
++ * RTCSAR, one 32-bit word, 0 = no record:
++ *   [31:28] reason (1..8)
++ *   [27]    jz_wdt_restart() was reached (clean restart after the record)
++ *   [26:24] uptime bucket: <1m <10m <1h <6h <24h <3d <7d >=7d
++ *   [23:0]  oops: [23] kseg2 (module) flag, [22:0] epc word offset in the
++ *           32 MB window at 0x80000000 / 0xc0000000;
++ *           panic/reboot/restart: first 3 chars of current->comm
++ *
++ * /proc/diag_lastpanic: read = decoded previous record; write "oops",
++ * "panic", "selftest" (store a known record, no reset; then reboot -f).
++ */
++#include <linux/kernel.h>
++#include <linux/init.h>
++#include <linux/notifier.h>
++#include <linux/kdebug.h>
++#include <linux/reboot.h>
++#include <linux/proc_fs.h>
++#include <linux/seq_file.h>
++#include <linux/sched.h>
++#include <linux/jiffies.h>
++#include <linux/hardirq.h>
++#include <linux/string.h>
++#include <linux/uaccess.h>
++#include <linux/irqflags.h>
++#include <asm/addrspace.h>
++#include <asm/mipsregs.h>
++#include <asm/ptrace.h>
++
++#define DREG(a)		(*(volatile u32 *)CKSEG1ADDR(a))
++#define D_RSR		0x10000008
++#define D_RTCCR		0x10003000
++#define D_RTCSAR	0x10003008
++#define D_WENR		0x1000303c
++
++#define RTCCR_WRDY	(1 << 7)
++#define WENR_WEN	(1u << 31)
++#define W_RESTART	(1u << 27)
++
++enum {
++	R_NONE = 0, R_OOPS, R_PANIC, R_HUNG, R_LOCKUP, R_REBOOT, R_RESTART,
++	R_OOPS_IRQ, R_SELFTEST,
++};
++static const char *const reason_name[16] = {
++	"none", "oops", "panic", "hung_task", "lockup", "reboot", "restart",
++	"oops_in_irq", "selftest",
++};
++static const char *const up_name[8] = {
++	"<1m", "1m-10m", "10m-1h", "1h-6h", "6h-24h", "1d-3d", "3d-7d", ">=7d",
++};
++
++static struct {
++	int valid;
++	u32 reason, up_s, word;
++} rec;
++
++static struct {
++	u32 errorepc, rtcsar, rtccr, rsr;
++	int clr_rc;
++	u32 clr_rb;
++} boot;
++
++/* status of the last RTC write attempt (shown in /proc, no console needed) */
++static struct {
++	u32 stage, rtccr0, rtccr1, wenr, rb, reg, val;
++	int rc;
++	u32 ok, fail, n;
++} lw;
++
++static u32 up_bucket(u32 s)
++{
++	static const u32 lim[7] = { 60, 600, 3600, 21600, 86400, 259200, 604800 };
++	u32 i;
++
++	for (i = 0; i < 7; i++)
++		if (s < lim[i])
++			return i;
++	return 7;
++}
++
++static u32 enc_epc23(u32 a)	/* [23] kseg2, [22:0] word offset (32 MB) */
++{
++	u32 v = (a & 0x01fffffc) >> 2;
++
++	if ((a & 0xe0000000) == 0xc0000000)
++		v |= 1 << 23;
++	return v;
++}
++
++static u32 dec_epc23(u32 v)
++{
++	return ((v & (1 << 23)) ? 0xc0000000 : 0x80000000) | ((v & 0x7fffff) << 2);
++}
++
++static u32 pack3(const char *s)
++{
++	u32 v = 0;
++	int i;
++
++	for (i = 0; i < 3; i++) {
++		v <<= 8;
++		if (*s)
++			v |= (u8)*s++;
++	}
++	return v;
++}
++
++static u32 uptime_s(void)
++{
++	return (u32)((jiffies - INITIAL_JIFFIES) / HZ);
++}
++
++static int rtc_ready(void)
++{
++	int i;
++
++	for (i = 0; i < 200000; i++)
++		if (DREG(D_RTCCR) & RTCCR_WRDY)
++			return 1;
++	return 0;
++}
++
++static int rtc_write(u32 reg, u32 val)
++{
++	int i;
++
++	lw.n++;
++	lw.reg = reg;
++	lw.val = val;
++	lw.rtccr0 = DREG(D_RTCCR);
++	lw.stage = 1;
++	if (!rtc_ready())
++		goto fail;
++	DREG(D_WENR) = 0xa55a;
++	lw.stage = 2;
++	if (!rtc_ready())
++		goto fail;
++	for (i = 0; i < 200000; i++)
++		if (DREG(D_WENR) & WENR_WEN)
++			break;
++	lw.wenr = DREG(D_WENR);
++	if (!(lw.wenr & WENR_WEN))
++		goto fail;
++	lw.stage = 3;
++	if (!rtc_ready())
++		goto fail;
++	DREG(reg) = val;
++	lw.stage = 4;
++	if (!rtc_ready())
++		goto fail;
++	lw.stage = 5;
++	lw.rb = DREG(reg);
++	lw.rtccr1 = DREG(D_RTCCR);
++	if (lw.rb != val)
++		goto fail;
++	lw.stage = 0;
++	lw.rc = 0;
++	lw.ok++;
++	return 0;
++fail:
++	lw.rc = -1;
++	lw.fail++;
++	return -1;
++}
++
++static void make_word(u32 payload24)
++{
++	rec.word = ((rec.reason & 0xf) << 28) | (up_bucket(rec.up_s) << 24) |
++		   (payload24 & 0xffffff) | (rec.word & W_RESTART);
++}
++
++static void fill_comm(u32 reason)
++{
++	rec.reason = reason;
++	rec.up_s = uptime_s();
++	make_word(pack3(current->comm));
++	rec.valid = 1;
++}
++
++/* called from jz_wdt_restart() right before the WDT is armed */
++void diag_lastpanic_commit(void)
++{
++	local_irq_disable();
++	if (!rec.valid)
++		fill_comm(R_RESTART);
++	rec.word |= W_RESTART;
++	rtc_write(D_RTCSAR, rec.word);
++}
++
++static int diag_die(struct notifier_block *nb, unsigned long val, void *data)
++{
++	struct die_args *args = data;
++	struct pt_regs *regs = args ? args->regs : NULL;
++
++	if (val != DIE_OOPS || !regs || (rec.valid && rec.reason != R_REBOOT))
++		return NOTIFY_DONE;
++	rec.reason = in_interrupt() ? R_OOPS_IRQ : R_OOPS;
++	rec.up_s = uptime_s();
++	rec.word = 0;
++	make_word(enc_epc23(regs->cp0_epc));
++	rec.valid = 1;
++	rtc_write(D_RTCSAR, rec.word);
++	return NOTIFY_DONE;
++}
++
++static int diag_panic(struct notifier_block *nb, unsigned long ev, void *buf)
++{
++	const char *msg = buf ? buf : "";
++
++	if (!rec.valid || rec.reason == R_REBOOT || rec.reason == R_RESTART) {
++		u32 r = R_PANIC;
++
++		if (strstr(msg, "hung_task"))
++			r = R_HUNG;
++		else if (strstr(msg, "lockup") || strstr(msg, "LOCKUP"))
++			r = R_LOCKUP;
++		rec.word = 0;
++		fill_comm(r);
++	}
++	rtc_write(D_RTCSAR, rec.word);
++	return NOTIFY_DONE;
++}
++
++static int diag_reboot(struct notifier_block *nb, unsigned long ev, void *cmd)
++{
++	if (!rec.valid) {
++		fill_comm(R_REBOOT);
++		rtc_write(D_RTCSAR, rec.word);
++	}
++	return NOTIFY_DONE;
++}
++
++static struct notifier_block diag_die_nb = { .notifier_call = diag_die, .priority = INT_MAX };
++static struct notifier_block diag_panic_nb = { .notifier_call = diag_panic, .priority = INT_MAX };
++static struct notifier_block diag_reboot_nb = { .notifier_call = diag_reboot, .priority = INT_MAX };
++
++static void get_chars(char *s, u32 w, int n)
++{
++	char *s0 = s;
++	int i, any = 0;
++
++	for (i = 0; i < n; i++) {
++		u8 c = (w >> (8 * (n - 1 - i))) & 0xff;
++
++		if (!c)
++			break;
++		if (c >= 0x20 && c < 0x7f && c != '"')
++			any = 1;
++		*s++ = (c >= 0x20 && c < 0x7f && c != '"') ? c : '.';
++	}
++	*s = '\0';
++	if (!any)
++		strcpy(s0, "-");
++}
++
++static int diag_show(struct seq_file *m, void *v)
++{
++	u32 w = boot.rtcsar, reason = w >> 28;
++	int valid = reason >= R_OOPS && reason <= R_SELFTEST;
++	int is_oops = reason == R_OOPS || reason == R_OOPS_IRQ || reason == R_SELFTEST;
++
++	seq_printf(m, "raw rtcsar=0x%08x rtccr=0x%08x rsr=0x%08x errorepc=0x%08x\n",
++		   boot.rtcsar, boot.rtccr, boot.rsr, boot.errorepc);
++	seq_printf(m, "lastwrite n=%u ok=%u fail=%u stage=%u rc=%d reg=0x%08x val=0x%08x rb=0x%08x cr0=0x%08x cr1=0x%08x wenr=0x%08x now_sar=0x%08x clear_rc=%d clear_rb=0x%08x\n",
++		   lw.n, lw.ok, lw.fail, lw.stage, lw.rc, lw.reg, lw.val,
++		   lw.rb, lw.rtccr0, lw.rtccr1, lw.wenr, DREG(D_RTCSAR),
++		   boot.clr_rc, boot.clr_rb);
++	seq_printf(m, "errorepc %pS\n", (void *)boot.errorepc);
++	if (!valid) {
++		seq_printf(m, "record none\n");
++		return 0;
++	}
++	seq_printf(m, "record reason=%s reached_restart=%d uptime=%s cp0_ok=0\n",
++		   reason_name[reason], !!(w & W_RESTART), up_name[(w >> 24) & 7]);
++	if (is_oops) {
++		u32 epc = dec_epc23(w & 0xffffff);
++
++		seq_printf(m, "epc=0x%08x\nepc %pS\n", epc, (void *)epc);
++	} else {
++		char c[8];
++
++		get_chars(c, w & 0xffffff, 3);
++		seq_printf(m, "comm=\"%s\"\n", c);
++	}
++	return 0;
++}
++
++static int diag_open(struct inode *inode, struct file *file)
++{
++	return single_open(file, diag_show, NULL);
++}
++
++static int *volatile diag_null;
++
++static ssize_t diag_write(struct file *file, const char __user *ubuf,
++			  size_t count, loff_t *ppos)
++{
++	char b[16] = { 0 };
++
++	if (copy_from_user(b, ubuf, min(count, sizeof(b) - 1)))
++		return -EFAULT;
++	if (!strncmp(b, "oops", 4)) {
++		pr_emerg("diag_lastpanic: test oops (NULL dereference) requested\n");
++		*diag_null = 0xd1a9;
++	} else if (!strncmp(b, "panic", 5)) {
++		panic("diag_lastpanic test panic");
++	} else if (!strncmp(b, "selftest", 8)) {
++		rec.reason = R_SELFTEST;
++		rec.up_s = uptime_s();
++		rec.word = 0;
++		make_word(enc_epc23(0x8012345c));
++		rec.valid = 1;
++		rtc_write(D_RTCSAR, rec.word);
++		pr_info("diag_lastpanic: selftest word 0x%08x, rtcsar readback 0x%08x rc=%d; now reboot -f\n",
++			rec.word, DREG(D_RTCSAR), lw.rc);
++	} else {
++		return -EINVAL;
++	}
++	return count;
++}
++
++static const struct file_operations diag_fops = {
++	.open = diag_open,
++	.read = seq_read,
++	.write = diag_write,
++	.llseek = seq_lseek,
++	.release = single_release,
++};
++
++static int __init diag_lastpanic_init(void)
++{
++	/* consume the previous record so a later reset without one reads 0 */
++	rtc_ready();
++	boot.errorepc = read_c0_errorepc();
++	boot.rtccr = DREG(D_RTCCR);
++	boot.rtcsar = DREG(D_RTCSAR);
++	boot.rsr = DREG(D_RSR);
++	if (boot.rtcsar) {
++		boot.clr_rc = rtc_write(D_RTCSAR, 0);
++		boot.clr_rb = DREG(D_RTCSAR);
++	}
++	register_die_notifier(&diag_die_nb);
++	atomic_notifier_chain_register(&panic_notifier_list, &diag_panic_nb);
++	register_reboot_notifier(&diag_reboot_nb);
++	proc_create("diag_lastpanic", 0600, NULL, &diag_fops);
++	pr_info("diag_lastpanic: prev rtcsar=0x%08x rtccr=0x%08x rsr=0x%08x clear_rc=%d\n",
++		boot.rtcsar, boot.rtccr, boot.rsr, boot.clr_rc);
++	return 0;
++}
++core_initcall(diag_lastpanic_init);

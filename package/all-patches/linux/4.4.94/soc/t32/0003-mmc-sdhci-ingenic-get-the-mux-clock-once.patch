@@ -1,0 +1,39 @@
+From: Lu-Fi <lutz@fiebach.de>
+Subject: [PATCH] mmc: sdhci-ingenic: do not look up the mux clock on every clock change
+
+sdhci_ingenic_set_clock() called devm_clk_get(dev, "mux_mscN") on every
+clock change although probe already holds that clock in sdhci_ing->clk_mux.
+Each call allocates a devres node and a struct clk that are only freed on
+unbind. A host polled for a card (broken-cd) with an empty slot rescans
+once a second and runs set_clock() ~16 times per rescan; the same pattern
+leaked 120 KB/min on T41 (Lu-Fi/openimp#950).
+
+Use the clock probe already looked up. Compile-checked only.
+
+Signed-off-by: Lu-Fi <lutz@fiebach.de>
+---
+--- a/drivers/mmc/host/sdhci-ingenic.c
++++ b/drivers/mmc/host/sdhci-ingenic.c
+@@ -174,7 +174,6 @@
+ 	unsigned long pll_rate = 0;
+ 
+ 	const char *parent_name;
+-	char clkname[16];
+ #ifdef CONFIG_SOC_PRJ008
+ 	char *pll_name[4] = {"sclka", "mpll", "ext", "ext"};
+ #else
+@@ -186,9 +185,12 @@
+ 
+ 	sdhci_set_clock(host, clock);
+ 
++	/*
++	 * clk_mux is looked up once in probe. A devm_clk_get() here allocated a
++	 * devres node and a struct clk on every call and kept them until unbind:
++	 * with a polled slot (broken-cd) and no card that is ~16 calls/s.
++	 */
+ 	spin_unlock_irq(&host->lock);
+-	sprintf(clkname, "mux_msc%d", sdhci_ing->pdev->id);
+-	sdhci_ing->clk_mux = devm_clk_get(sdhci_ing->dev, clkname);
+ 
+ 	ingenic_mmc_clk_switch_onoff(host, sdhci_ing, 0);
+ 

@@ -4,6 +4,15 @@ please refer to https://github.com/themactep/thingino-firmware/activity
 
 ## Unreleased (Lu-Fi fork)
 
+- kernel 4.4.94 T41 (sdhci-ingenic): the MSC mux clock is looked up once in
+  probe instead of with a clk_get() on every clock change (patch
+  soc/t41/0002). Each call left a 128 byte struct clk behind. A polled SD slot
+  without a card (broken-cd, e.g. Cinnado D1 T41NQ) rescans every second and
+  lost about 120 KB of kernel slab per minute, which ended in an OOM and a
+  watchdog reset after about 4 h. Measured on the camera with a call counter:
+  940 calls/min before and after, SUnreclaim +114 KB/min before, flat after.
+  The vendor driver has the same leak (Lu-Fi/openimp#950, #949).
+
 - libaudioprocess-neo: pinned to the Lu-Fi fork (branch aperto, 9f71acc). The
   WebRTC AEC no longer starts with the 12 ms far-end rewind of its startup
   phase; the Ingenic driver reference is already time-aligned. Before, about

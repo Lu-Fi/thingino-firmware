@@ -3,11 +3,14 @@
 // LEDs and the reset key come from thingino-leds / gpio-userkeys (defconfig,
 // thingino.json), so this fragment carries only the SD card-detect override.
 
-// No SD card-detect pin on this board: msc0 drops the family card-detect
-// gpio and cd-inverted (the driver then waits for a pin that does not exist
-// and never probes the card) and is polled instead (broken-cd).
+// SD card detect is PB26 (gpio 58), active low, on this board. The family
+// tree (marmot) uses PB27, which is not wired here, so a card was never seen.
+// The stock firmware (kernel 3.10, jz_mmc0_pdata) uses cd_type GPIO with
+// ext_cd_gpio 58, LOW_ENABLE. With the right pin the host no longer polls an
+// empty slot (broken-cd did: ~47 mmc0 IRQ/s plus CMD5/CMD1 answers from line
+// noise, Lu-Fi/openimp#951). cd-inverted (from the family tree) selects the
+// GPIO card-detect path in sdhci-ingenic. The pull-up keeps the state U-Boot
+// leaves (PxPUEN bit 26 set); NOBIAS would clear it and leave the pin floating.
 &msc0 {
-	/delete-property/ cd-inverted;
-	/delete-property/ ingenic,cd-gpios;
-	broken-cd;
+	ingenic,cd-gpios = <&gpb 26 GPIO_ACTIVE_LOW INGENIC_GPIO_PULLUP>;
 };

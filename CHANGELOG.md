@@ -4,6 +4,15 @@ please refer to https://github.com/themactep/thingino-firmware/activity
 
 ## Unreleased (Lu-Fi fork)
 
+- Cinnado D1 T41NQ: SD card detect on PB26 (active low, pull-up), the pin
+  the stock firmware uses (kernel 3.10 jz_mmc0_pdata: cd_type GPIO,
+  ext_cd_gpio 58). The family tree pin PB27 is not wired on this board, and
+  the broken-cd polling used instead rescanned the empty slot every second:
+  ~47 mmc0 IRQ/s, "Got command interrupt ... no command operation" about
+  every 10 s and "error -22 whilst initialising SDIO/MMC card" (CMD5/CMD1
+  answers from line noise) about every 45 s. With the GPIO the host stays
+  idle until a card is inserted, like the vendor (Lu-Fi/openimp#951).
+
 - kernel 4.4.94 T41 (sdhci-ingenic): the MSC mux clock is looked up once in
   probe instead of with a clk_get() on every clock change (patch
   soc/t41/0002). Each call left a 128 byte struct clk behind. A polled SD slot

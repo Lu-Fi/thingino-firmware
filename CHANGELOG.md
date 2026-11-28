@@ -11,7 +11,9 @@ please refer to https://github.com/themactep/thingino-firmware/activity
   register clock (CPM_CLKGR bit 29; RTC registers then read 0), and the
   WRDY wait was a 200000-read loop that ends before the RTC write completes.
   The diag code now keeps gate_rtc enabled and waits up to 200 ms
-  (udelay-bounded). Device check: a value written to RTCSAR survives the
+  (udelay-bounded) for WRDY and for WEN (the first WENR unlock after a
+  reset is slow; the count-bounded WEN loop failed the boot-time clear and
+  the restart-time write). Device check: a value written to RTCSAR survives the
   watchdog restart (reboot -f).
 - Cinnado D1 T41NQ: SD card detect on PB26 (active low, pull-up), the pin
   the stock firmware uses (kernel 3.10 jz_mmc0_pdata: cd_type GPIO,

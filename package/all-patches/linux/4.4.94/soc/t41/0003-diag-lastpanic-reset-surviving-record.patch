@@ -59,7 +59,7 @@ Signed-off-by: Lu-Fi <lutz@fiebach.de>
  			printk("set RECOVERY_SIGNATURE\n");
 --- /dev/null
 +++ b/arch/mips/xburst2/common/diag_lastpanic.c
-@@ -0,0 +1,380 @@
+@@ -0,0 +1,383 @@
 +/*
 + * Reset-surviving record of the last kernel death (diagnostics only,
 + * CONFIG_JZ_DIAG_LASTPANIC, T41 kernel 4.4.94). Port of the 3.10 T23/T31
@@ -217,9 +217,12 @@ Signed-off-by: Lu-Fi <lutz@fiebach.de>
 +	lw.stage = 2;
 +	if (!rtc_ready())
 +		goto fail;
-+	for (i = 0; i < 200000; i++)
++	/* time-bounded too: the first unlock after a reset is slow on T41 */
++	for (i = 0; i < 20000; i++) {
 +		if (DREG(D_WENR) & WENR_WEN)
 +			break;
++		udelay(10);
++	}
 +	lw.wenr = DREG(D_WENR);
 +	if (!(lw.wenr & WENR_WEN))
 +		goto fail;

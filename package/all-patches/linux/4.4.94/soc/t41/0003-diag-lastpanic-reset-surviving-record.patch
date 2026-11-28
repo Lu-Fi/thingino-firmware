@@ -59,7 +59,7 @@ Signed-off-by: Lu-Fi <lutz@fiebach.de>
  			printk("set RECOVERY_SIGNATURE\n");
 --- /dev/null
 +++ b/arch/mips/xburst2/common/diag_lastpanic.c
-@@ -0,0 +1,359 @@
+@@ -0,0 +1,380 @@
 +/*
 + * Reset-surviving record of the last kernel death (diagnostics only,
 + * CONFIG_JZ_DIAG_LASTPANIC, T41 kernel 4.4.94). Port of the 3.10 T23/T31
@@ -94,6 +94,9 @@ Signed-off-by: Lu-Fi <lutz@fiebach.de>
 +#include <linux/string.h>
 +#include <linux/uaccess.h>
 +#include <linux/irqflags.h>
++#include <linux/clk.h>
++#include <linux/delay.h>
++#include <linux/err.h>
 +#include <asm/addrspace.h>
 +#include <asm/mipsregs.h>
 +#include <asm/ptrace.h>
@@ -181,13 +184,21 @@ Signed-off-by: Lu-Fi <lutz@fiebach.de>
 +	return (u32)((jiffies - INITIAL_JIFFIES) / HZ);
 +}
 +
++/*
++ * Bounded by time, not by loop count: on T41 (Cinnado .34, #952) WRDY took
++ * longer than 200000 register reads after a WENR/RTCSAR write, so every
++ * write failed; jz_hibernate()'s own rtc_write_reg() waits unbounded.
++ * Up to 200 ms here (udelay works in panic/restart context).
++ */
 +static int rtc_ready(void)
 +{
 +	int i;
 +
-+	for (i = 0; i < 200000; i++)
++	for (i = 0; i < 20000; i++) {
 +		if (DREG(D_RTCCR) & RTCCR_WRDY)
 +			return 1;
++		udelay(10);
++	}
 +	return 0;
 +}
 +
@@ -398,6 +409,8 @@ Signed-off-by: Lu-Fi <lutz@fiebach.de>
 +	.release = single_release,
 +};
 +
++static struct clk *rtc_clk;
++
 +static int __init diag_lastpanic_init(void)
 +{
 +	/* consume the previous record so a later reset without one reads 0 */
@@ -410,8 +423,16 @@ Signed-off-by: Lu-Fi <lutz@fiebach.de>
 +		boot.clr_rc = rtc_write(D_RTCSAR, 0);
 +		boot.clr_rb = DREG(D_RTCSAR);
 +	}
++	/*
++	 * Keep the RTC register clock on: no RTC driver claims gate_rtc on the
++	 * T41 4.4 images (RTC_CLASS off), so clk_disable_unused() gates it
++	 * (CPM_CLKGR bit 29) and RTC reads return 0 / writes never complete.
++	 */
++	rtc_clk = clk_get(NULL, "gate_rtc");
++	if (!IS_ERR(rtc_clk))
++		clk_prepare_enable(rtc_clk);
 +	register_die_notifier(&diag_die_nb);
-+	atomic_notifier_chain_register(&panic_notifier_list, &diag_panic_nb);
+++	atomic_notifier_chain_register(&panic_notifier_list, &diag_panic_nb);
 +	register_reboot_notifier(&diag_reboot_nb);
 +	proc_create("diag_lastpanic", 0600, NULL, &diag_fops);
 +	pr_info("diag_lastpanic: prev rtcsar=0x%08x rtccr=0x%08x rsr=0x%08x clear_rc=%d\n",

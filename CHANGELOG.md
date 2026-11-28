@@ -4,6 +4,15 @@ please refer to https://github.com/themactep/thingino-firmware/activity
 
 ## Unreleased (Lu-Fi fork)
 
+- kernel 4.4.94 T41 last-panic record (JZ_DIAG_LASTPANIC, Lu-Fi/openimp#952):
+  every RTCSAR write failed on the Cinnado D1 T41NQ (selftest readback 0,
+  boot clear_rc -1), so no record was ever stored. Two causes: no RTC driver
+  claims gate_rtc on the 4.4 images, so clk_disable_unused() gates the RTC
+  register clock (CPM_CLKGR bit 29; RTC registers then read 0), and the
+  WRDY wait was a 200000-read loop that ends before the RTC write completes.
+  The diag code now keeps gate_rtc enabled and waits up to 200 ms
+  (udelay-bounded). Device check: a value written to RTCSAR survives the
+  watchdog restart (reboot -f).
 - Cinnado D1 T41NQ: SD card detect on PB26 (active low, pull-up), the pin
   the stock firmware uses (kernel 3.10 jz_mmc0_pdata: cd_type GPIO,
   ext_cd_gpio 58). The family tree pin PB27 is not wired on this board, and

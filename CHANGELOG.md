@@ -4,6 +4,15 @@ please refer to https://github.com/themactep/thingino-firmware/activity
 
 ## Unreleased (Lu-Fi fork)
 
+- kernel rmem (/dev/rmem flush ioctl): the 3.10.14 range/direction check
+  (0101) ported to the kernels that never got it: T33 vendor 3.10.14
+  (soc/t33/0010) and 4.4.94 T32 / T31 / T23 (soc/t32/0004, soc/t31/0002,
+  soc/t23/0002). A NULL or unmapped user address no longer oopses the
+  kernel (T33L oops 2026-11-28 with the vendor libimp and
+  IMP_Encoder_InputJpege(NULL), Lu-Fi/openimp#996): -EFAULT, unknown
+  direction -EINVAL. Compile-checked (T33 on its own tree, the 4.4 copies
+  against a 4.4.94 tree); device proof needs a new image.
+
 - T33 (JZT33L profile): restored the PRJ008 kernel mapping (vendor tree
   T33-2.0.2.1-3.10.14 e10b0f77 + soc/t33 patches, KERNEL_SOC=t33) and the
   soc-PRJ008 include dir of open-tx-isp, both lost in the fork merge

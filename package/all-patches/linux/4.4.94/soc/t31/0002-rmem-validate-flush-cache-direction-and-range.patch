@@ -1,0 +1,76 @@
+From: Lu-Fi <lutz@fiebach.de>
+Subject: [PATCH] rmem: validate direction and range of RMEN_CMD_FLUSH_CACHE (t31)
+
+On top of soc/t31 0001.
+
+Port of package/all-patches/linux/3.10.14/0101 to the 4.4.94 T31 rmem driver,
+which never received it (t31 kernels do not apply the 3.10.14 cumulative
+patch set).  The /dev/rmem flush ioctl handed the user's {addr, len, dir}
+straight to dma_cache_sync(): a NULL / unmapped / kernel address made the
+cache instructions fault in kernel mode without a fixup (T33L oops
+2026-11-28: "Unable to handle kernel paging request at virtual address
+00000000, epc mips_sc_wback_inv, ra r4k_dma_cache_wback_inv", call trace
+rmem_ioctl <- vfs_ioctl, triggered by the vendor libimp 2.0.2.1 with
+IMP_Encoder_InputJpege(NULL source); Lu-Fi/openimp#996), and dir 3 / >= 4
+hit BUG().  Now: unknown direction -EINVAL, len 0 no-op, overflowing or
+above-TASK_SIZE range or an unmapped start -EFAULT; the flush is clamped
+to the accessible mappings that follow the start contiguously.  Valid
+callers (libimp/OpenIMP: rmem VA, dir 1/2, inside the arena) see no change.
+
+Signed-off-by: Lu-Fi <lutz@fiebach.de>
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+--- a/drivers/misc/rmem.c
++++ b/drivers/misc/rmem.c
+@@ -54,14 +54,49 @@
+ static long rmem_cmd_flush_cache(long arg)
+ {
+ 	struct rmem_flush_cache_info info;
+-	long ret = 0;
++	struct mm_struct *mm = current->mm;
++	struct vm_area_struct *vma;
++	unsigned long addr, end;
++
+ 	if (copy_from_user(&info, (void *)arg, sizeof(info))) {
+ 		return -EFAULT;
+ 	}
+ 
++	/* dma_cache_sync() hits BUG_ON() for DMA_NONE (3) and BUG() for any
++	 * other unknown direction. */
++	if (!valid_dma_direction(info.dir))
++		return -EINVAL;
++	if (!info.len)
++		return 0;
++
++	addr = info.addr;
++	end = addr + info.len;
++	if (end < addr || end > TASK_SIZE || !mm)
++		return -EFAULT;
++
++	/* The cache instructions run on the caller's virtual address. A hole,
++	 * a PROT_NONE mapping or a kernel address faults in kernel mode without
++	 * a fixup and oopses, so flush only the accessible mappings that run
++	 * contiguously from the start address and refuse a start that is not
++	 * mapped. mmap_sem is dropped before the cache operation because a
++	 * page fault there takes it again. */
++	down_read(&mm->mmap_sem);
++	while (addr < end) {
++		vma = find_vma(mm, addr);
++		if (!vma || vma->vm_start > addr ||
++		    !(vma->vm_flags & (VM_READ | VM_WRITE)))
++			break;
++		addr = vma->vm_end;
++	}
++	up_read(&mm->mmap_sem);
++	if (addr == info.addr)
++		return -EFAULT;
++	if (addr < end)
++		info.len = addr - info.addr;
++
+ 	dma_cache_sync(NULL, (void *)info.addr, info.len, info.dir);
+ 
+-	return ret;
++	return 0;
+ }
+ 
+ static long rmem_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)

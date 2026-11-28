@@ -59,7 +59,7 @@ Signed-off-by: Lu-Fi <lutz@fiebach.de>
  			printk("set RECOVERY_SIGNATURE\n");
 --- /dev/null
 +++ b/arch/mips/xburst2/common/diag_lastpanic.c
-@@ -0,0 +1,383 @@
+@@ -0,0 +1,396 @@
 +/*
 + * Reset-surviving record of the last kernel death (diagnostics only,
 + * CONFIG_JZ_DIAG_LASTPANIC, T41 kernel 4.4.94). Port of the 3.10 T23/T31
@@ -97,6 +97,7 @@ Signed-off-by: Lu-Fi <lutz@fiebach.de>
 +#include <linux/clk.h>
 +#include <linux/delay.h>
 +#include <linux/err.h>
++#include <linux/workqueue.h>
 +#include <asm/addrspace.h>
 +#include <asm/mipsregs.h>
 +#include <asm/ptrace.h>
@@ -188,13 +189,15 @@ Signed-off-by: Lu-Fi <lutz@fiebach.de>
 + * Bounded by time, not by loop count: on T41 (Cinnado .34, #952) WRDY took
 + * longer than 200000 register reads after a WENR/RTCSAR write, so every
 + * write failed; jz_hibernate()'s own rtc_write_reg() waits unbounded.
-+ * Up to 200 ms here (udelay works in panic/restart context).
++ * Measured at run time: unlock 2-26 ms, write 1-17 ms; the boot-time and
++ * restart-time writes still failed with 200 ms, so up to 1 s here (udelay
++ * works in panic/restart context, the watchdog is armed only afterwards).
 + */
 +static int rtc_ready(void)
 +{
 +	int i;
 +
-+	for (i = 0; i < 20000; i++) {
++	for (i = 0; i < 100000; i++) {
 +		if (DREG(D_RTCCR) & RTCCR_WRDY)
 +			return 1;
 +		udelay(10);
@@ -218,7 +221,7 @@ Signed-off-by: Lu-Fi <lutz@fiebach.de>
 +	if (!rtc_ready())
 +		goto fail;
 +	/* time-bounded too: the first unlock after a reset is slow on T41 */
-+	for (i = 0; i < 20000; i++) {
++	for (i = 0; i < 100000; i++) {
 +		if (DREG(D_WENR) & WENR_WEN)
 +			break;
 +		udelay(10);
@@ -414,6 +417,17 @@ Signed-off-by: Lu-Fi <lutz@fiebach.de>
 +
 +static struct clk *rtc_clk;
 +
++static void diag_clear_fn(struct work_struct *w)
++{
++	if (rec.valid)
++		return;	/* a new record was written meanwhile */
++	boot.clr_rc = rtc_write(D_RTCSAR, 0);
++	boot.clr_rb = DREG(D_RTCSAR);
++	pr_info("diag_lastpanic: previous record cleared rc=%d rtcsar=0x%08x\n",
++		boot.clr_rc, boot.clr_rb);
++}
++static DECLARE_DELAYED_WORK(diag_clear_work, diag_clear_fn);
++
 +static int __init diag_lastpanic_init(void)
 +{
 +	/* consume the previous record so a later reset without one reads 0 */
@@ -422,10 +436,9 @@ Signed-off-by: Lu-Fi <lutz@fiebach.de>
 +	boot.rtccr = DREG(D_RTCCR);
 +	boot.rtcsar = DREG(D_RTCSAR);
 +	boot.rsr = DREG(D_RSR);
-+	if (boot.rtcsar) {
-+		boot.clr_rc = rtc_write(D_RTCSAR, 0);
-+		boot.clr_rb = DREG(D_RTCSAR);
-+	}
++	/* clear later, off the boot path (the write can take up to 1 s) */
++	if (boot.rtcsar)
++		schedule_delayed_work(&diag_clear_work, 5 * HZ);
 +	/*
 +	 * Keep the RTC register clock on: no RTC driver claims gate_rtc on the
 +	 * T41 4.4 images (RTC_CLASS off), so clk_disable_unused() gates it

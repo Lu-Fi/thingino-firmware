@@ -94,6 +94,13 @@ define OPENIMP_INSTALL_STAGING_CMDS
 		$(@D)/include/openimp/*.h
 endef
 
+# T32/T33: libimp only (build-t32.sh / build-t33.sh build no tuning daemon).
+ifneq ($(filter t32 t33,$(SOC_FAMILY)),)
+define OPENIMP_INSTALL_TARGET_CMDS
+	$(INSTALL) -D -m 0755 $(OPENIMP_OUTPUT_DIR)/libimp.so \
+		$(TARGET_DIR)/usr/lib/libimp.so
+endef
+else
 define OPENIMP_INSTALL_TARGET_CMDS
 	$(INSTALL) -D -m 0755 $(OPENIMP_OUTPUT_DIR)/libimp.so \
 		$(TARGET_DIR)/usr/lib/libimp.so
@@ -104,6 +111,7 @@ define OPENIMP_INSTALL_TARGET_CMDS
 	$(INSTALL) -D -m 0644 $(OPENIMP_PKGDIR)/files/openimp-tuning.conf \
 		$(TARGET_DIR)/etc/openimp-tuning.conf
 endef
+endif
 
 define OPENIMP_FINALIZE_TARGET
 	$(INSTALL) -D -m 0755 $(OPENIMP_BUILT_LIB) \

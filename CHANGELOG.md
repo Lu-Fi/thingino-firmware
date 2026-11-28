@@ -8,7 +8,9 @@ please refer to https://github.com/themactep/thingino-firmware/activity
   T33-2.0.2.1-3.10.14 e10b0f77 + soc/t33 patches, KERNEL_SOC=t33) and the
   soc-PRJ008 include dir of open-tx-isp, both lost in the fork merge
   b9bf30b76; without them the T33 image built the vanilla 3.10.14 and
-  failed (Lu-Fi/openimp#992).
+  failed (Lu-Fi/openimp#992). openimp on T32/T33 installs libimp only again
+  (build-t32.sh / build-t33.sh build no openimp-tuningd; the target install
+  failed on the missing daemon).
 
 - kernel 4.4.94 T32 (sdhci-ingenic): the same leak as on T41 fixed
   (patch soc/t32/0003). sdhci_ingenic_set_clock() called devm_clk_get() on
